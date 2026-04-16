@@ -2,10 +2,10 @@
 
 ## Problem We Are Actually Solving
 
-The immediate goal is not to build a complete RPG worldbuilding platform. The goal is to produce a working, demoable tool in about two weeks that:
+The immediate goal is not to build a complete RPG worldbuilding platform. The goal is to produce a working, demoable tool that:
 - stores campaign data in a structured way
-- ingests free text such as session notes
-- extracts candidate entities from that text
+- ingests source assets such as text documents, spreadsheets, and images
+- extracts candidate entities from parsed asset content
 - lets the user review those candidates before saving them
 - supports search over saved information
 
@@ -15,7 +15,7 @@ At the same time, the project should remain a base for future learning in:
 - model training
 - broader backend and architecture skills
 
-The plan is designed to hit the short-term milestone without blocking those longer-term directions.
+The plan is designed to support the current milestone without blocking those longer-term directions.
 
 ## Why We Chose A Modular Monolith
 
@@ -94,8 +94,30 @@ Reasoning:
 
 The plan still leaves room for later expansion:
 - JSONB can hold flexible metadata without replacing the relational core
-- raw note and document text is preserved for future embeddings or training
+- parsed text and structured content can be preserved for future embeddings or training
 - search lives behind a service boundary so vector search can be added later
+
+## Why Backend-Owned Asset Ingestion Is Now Worth It
+
+The earlier plan assumed a smaller text-first workflow. That assumption no longer holds once v1 includes:
+
+- text documents
+- spreadsheets
+- images and maps as storable assets
+
+At that point, letting the frontend be the canonical parser becomes the weaker design.
+
+Reasoning:
+- spreadsheets and tables carry structure that should not be flattened away in the browser
+- original uploaded files need a backend-owned storage and provenance path anyway
+- canonical parsing should behave the same for web UI, future batch imports, and later multi-user deployment
+- entities and relationships need provenance back to stable backend-owned assets, not frontend-only parse guesses
+
+What we take instead:
+- backend-owned upload and storage of original assets
+- backend-owned parsing
+- lazy parse with cached results
+- a hybrid parsed-cache model so small outputs stay in Postgres and large outputs go to storage
 
 ## Why Search Is Keyword Search First
 
@@ -107,7 +129,7 @@ Reasoning:
 - Good structured data plus good provenance and review is more valuable early than weak semantic search over noisy auto-generated records.
 
 The design still prepares for semantic search later by:
-- storing raw text
+- storing parsed text and structured content
 - preserving provenance
 - isolating search logic behind a service
 
@@ -126,6 +148,114 @@ What we chose:
 - a future-compatible path for an optional LLM-backed implementation
 
 This keeps the demo stable while preserving the future learning path.
+
+## Why Sessions And Source Assets Stay Separate
+
+There was an important terminology correction during planning:
+
+- a `session` is a timeline event in the campaign
+- a `source_asset` is an uploaded artifact or evidence record
+
+This matters because a session is not just a text blob. One session can have multiple attached artifacts such as:
+
+- GM recap text
+- player notes
+- spreadsheets
+- maps or reference images
+
+Keeping these separate makes the model more durable:
+- sessions stay useful even when no text has been parsed yet
+- assets can exist without being tied to one play session
+- provenance points to the specific asset that supported extraction
+
+## Why Original Binaries Should Not Live In PostgreSQL
+
+Images, spreadsheets, and other uploaded binaries are better stored outside the relational database.
+
+Reasoning:
+- large binary blobs bloat the database and backups
+- local filesystem storage is simpler in the current local-first deployment
+- object storage can replace local storage later without changing the core domain model much
+- PostgreSQL should hold queryable metadata and relationships, not be the primary binary file store
+
+So the v1 direction is:
+- original uploaded files in backend-managed storage
+- metadata in PostgreSQL
+- parsed outputs in PostgreSQL or storage depending on size
+
+## Why Parsing Should Be Lazy But Cached
+
+Always parsing on upload is wasteful for assets that may never be searched or extracted. Parsing on every use without caching is also wasteful.
+
+So the chosen tradeoff is:
+- upload first
+- keep ordinary asset metadata reads cheap
+- parse only on first real parse-dependent consumer need such as preview, search, or extraction
+- reuse cached results until the source checksum or parser version changes
+
+This avoids unnecessary work while keeping parsing canonical and reusable.
+
+## Why We Did Not Add A Public Parse Endpoint
+
+The design considered whether v1 should expose a dedicated parse endpoint.
+
+We rejected that for now.
+
+Reasoning:
+- extraction, search, and preview already provide natural parse trigger points
+- a public parse endpoint would add another contract, more tests, and more state transitions to explain
+- the real requirement is visible parse status and reusable parse output, not manual parse ceremony
+
+So the chosen rule is:
+- parsing stays implicit in v1
+- but only parse-dependent flows may trigger it
+- ordinary asset list/detail reads should not parse
+
+## Why The Frontend Can Use One Form But The Backend Should Stay Two Calls
+
+The product may still want one UI flow where a GM can create a session and attach an asset without thinking about API boundaries.
+
+That does not require one backend endpoint.
+
+Reasoning:
+- `POST /assets` should stay responsible for asset upload and asset metadata only
+- mixing session creation into a multipart upload endpoint would increase validation and transaction complexity
+- the frontend can still present one form and orchestrate:
+  1. `POST /sessions`
+  2. `POST /assets`
+
+This keeps the UX smooth without making the backend contract do two jobs.
+
+## Why This Became A Compatibility Migration
+
+By the time the sessions/assets work was revisited, the repo already had migrations, models, and provenance fields built around `session_notes` and `source_documents`.
+
+That changes the nature of the work.
+
+Reasoning:
+- the main risk is no longer choosing a schema from scratch
+- the main risk is preserving provenance and extraction links while moving to better names and a broader asset model
+- resetting the schema would hide the hard part instead of solving it
+
+So the correct direction is:
+- in-place migration
+- preserve IDs and provenance
+- backfill parse cache rows from existing document text before removing the old main-row text field
+
+## Why Parsed Cache Storage Is Hybrid
+
+Not all parse output should be stored the same way.
+
+Reasoning:
+- small parsed text is convenient to keep inline in PostgreSQL
+- large structured parse output from spreadsheets or complex documents can bloat rows if kept inline
+- storage-backed artifacts are better for larger derived payloads
+
+So the cache should be hybrid:
+- small outputs inline in the database
+- larger outputs in storage, referenced from the database
+
+The threshold should be configurable in backend settings rather than fixed only by code constants.
 
 ## Why Kanka Is Deferred
 
@@ -196,13 +326,14 @@ These were intentionally excluded because they add complexity without helping th
 - separate NoSQL storage
 - Kanka export and sync
 - fully automatic write-back from extracted notes without review
+- audio and video parsing
 
 Deferring these is not avoidance. It is how the plan stays coherent and achievable.
 
 ## Why This Plan Is A Good Fit
 
 This plan is a good fit because it balances four things that usually conflict:
-- a demoable product in two weeks
+- a demoable product
 - one meaningful new technology to learn
 - a backend and data model you still own
 - a clean path toward more advanced future features

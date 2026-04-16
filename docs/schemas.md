@@ -33,7 +33,7 @@ Notes:
 Constraints:
 - Unique `(owner_id, name)`
 
-## Session Notes
+## Sessions
 
 - `id UUID PK`
 - `campaign_id UUID not null FK -> campaigns.id`
@@ -49,17 +49,23 @@ Constraints:
 - `session_number` is unique per campaign when present.
 
 Meaning:
-- `session_notes` represents an actual play session in the campaign timeline.
+- `sessions` represents an actual play session in the campaign timeline.
 - It does not store the raw source text itself.
 
-## Source Documents
+## Source Assets
 
 - `id UUID PK`
 - `campaign_id UUID not null FK -> campaigns.id`
-- `session_note_id UUID nullable FK -> session_notes.id`
+- `session_id UUID nullable FK -> sessions.id`
 - `title text nullable`
 - `truth_status text not null`
-- `raw_text text not null`
+- `media_type text not null`
+- `original_filename text nullable`
+- `file_size_bytes bigint not null`
+- `checksum text not null`
+- `storage_key text not null`
+- `parse_status text not null`
+- `last_parsed_at timestamptz nullable`
 - `metadata JSONB not null default '{}'`
 - `created_at timestamptz not null`
 - `updated_at timestamptz not null`
@@ -70,15 +76,46 @@ Allowed `truth_status` values in backend code:
 - `subjective`
 
 Meaning:
-- `source_documents` stores textual evidence or source material only.
-- A document may be linked to a session note, but world material can exist without a session link.
-- Images and other binary assets are explicitly deferred.
+- `source_assets` stores uploaded source artifacts such as text documents, spreadsheets, and images.
+- An asset may be linked to a session, but world material can exist without a session link.
+- Original binary files are stored outside PostgreSQL in backend-managed storage.
+
+## Asset Parse Results
+
+- `id UUID PK`
+- `asset_id UUID not null FK -> source_assets.id`
+- `parser_kind text not null`
+- `parser_version text not null`
+- `source_checksum text not null`
+- `parse_status text not null`
+- `inline_raw_text text nullable`
+- `inline_structured_content JSONB nullable`
+- `artifact_storage_key text nullable`
+- `artifact_size_bytes bigint nullable`
+- `warnings JSONB not null default '[]'`
+- `error_message text nullable`
+- `parsed_at timestamptz nullable`
+
+Meaning:
+- `asset_parse_results` stores cached parse output derived from a source asset.
+- Parsing is backend-owned and lazy: the app can create parse results on first preview, search, or extraction need.
+- Small parse outputs can be stored inline in PostgreSQL.
+- Large parse outputs can be stored in backend-managed storage and referenced from the DB.
+- Asset list/detail metadata reads should stay cheap and should not trigger parsing by themselves.
+
+Expected cache reuse key in v1:
+- `(asset_id, parser_kind, parser_version, source_checksum)`
+
+Retention direction in v1:
+- keep parse-result history per reuse key rather than overwriting one mutable row
+- allow pruning of superseded cache rows and derived artifacts by policy
+- do not prune the latest successful reusable parse result for an asset/parser pair
 
 ## Extraction Jobs
 
 - `id UUID PK`
 - `campaign_id UUID not null FK -> campaigns.id`
-- `source_document_id UUID not null FK -> source_documents.id`
+- `source_asset_id UUID not null FK -> source_assets.id`
 - `status text not null`
 - `extractor_kind text not null`
 - `error_message text nullable`
@@ -90,7 +127,7 @@ Allowed values in backend code:
 - `extractor_kind`: `rules`
 
 Meaning:
-- One extraction job represents one extraction run over one source document.
+- One extraction job represents one extraction run over one parsed source asset.
 - Keep this lightweight in v1; `started_at` and generic `updated_at` were intentionally deferred.
 
 ## Extraction Candidates
@@ -123,7 +160,7 @@ Meaning:
 - `name text not null`
 - `summary text nullable`
 - `metadata JSONB not null default '{}'`
-- `source_document_id UUID nullable FK -> source_documents.id`
+- `source_asset_id UUID nullable FK -> source_assets.id`
 - `provenance_excerpt text nullable`
 - `provenance_data JSONB not null default '{}'`
 - `created_at timestamptz not null`
@@ -145,7 +182,7 @@ Database table: `entity_relationships`
 - `relationship_type text not null`
 - `notes text nullable`
 - `confidence numeric nullable`
-- `source_document_id UUID nullable FK -> source_documents.id`
+- `source_asset_id UUID nullable FK -> source_assets.id`
 - `provenance_excerpt text nullable`
 - `provenance_data JSONB not null default '{}'`
 - `created_at timestamptz not null`
@@ -163,6 +200,7 @@ Constraints:
 
 - `kanka_export_jobs`
 - PostgreSQL search vector columns and search indexes
-- image or binary asset storage
 - DB check constraints for controlled text vocabularies
 - a `relationship_types` table
+- a public manual parse endpoint
+- audio or video parsing

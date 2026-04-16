@@ -2,7 +2,7 @@
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build a single-user, local-first RPG GM helper that stores campaign data, ingests notes, extracts candidate entities for review, and supports keyword search.
+**Goal:** Build a single-user, local-first RPG GM helper that stores campaign data, ingests source assets, extracts candidate entities for review, and supports keyword search.
 
 **Architecture:** Use a modular monolith with a Python FastAPI backend, PostgreSQL as the source of truth, and a separate TypeScript React frontend in the same repository. Keep the frontend thin and isolated behind a plain typed API boundary so business rules stay in FastAPI services and the UI remains cheap to replace if early framework choices change. Keep extraction and external sync behind clear interfaces so semantic search, model-assisted extraction, and future auth can be added without rewriting core workflows.
 
@@ -12,13 +12,13 @@
 
 ## Delivery Target
 
-Deliver a demoable 2-week milestone with these user-visible capabilities:
+Deliver a demoable first milestone with these user-visible capabilities:
 - Create and manage campaigns
-- Create and edit entities and session notes
-- Paste or upload source text
+- Create and edit entities and sessions
+- Upload and manage source assets such as text documents, spreadsheets, and images
 - Run extraction to generate candidate entities and relationships
 - Review and accept or reject candidates before persistence
-- Search entities and notes with PostgreSQL full-text search
+- Search entities, sessions, and parsed asset text with PostgreSQL full-text search
 
 ## Core Product Decisions
 
@@ -37,8 +37,8 @@ Implement these API groups:
 - `/campaigns`
 - `/entities`
 - `/relationships`
-- `/session-notes`
-- `/documents`
+- `/sessions`
+- `/assets`
 - `/extraction-jobs`
 - `/search`
 
@@ -56,8 +56,9 @@ Define these initial records:
 - `Campaign`
 - `Entity`
 - `Relationship`
-- `SessionNote`
-- `SourceDocument`
+- `Session`
+- `SourceAsset`
+- `AssetParseResult`
 - `ExtractionJob`
 - `ExtractionCandidate`
 
@@ -65,8 +66,9 @@ Schema defaults:
 - Use one generic `Entity` table in v1.
 - `Entity` has `type`, `name`, `summary`, `metadata JSONB`, provenance fields, and timestamps.
 - `Relationship` maps to the `entity_relationships` table and stores source entity, target entity, relationship type, optional notes, provenance, and confidence.
-- `SessionNote` represents an actual play session and is distinct from raw source text.
-- `SourceDocument` stores textual source material and may optionally link back to a session note.
+- `Session` represents an actual play session and is distinct from uploaded source artifacts.
+- `SourceAsset` stores uploaded evidence or artifacts and may optionally link back to a session.
+- `AssetParseResult` stores cached parse output so text and structure can be reused without reparsing unchanged assets.
 - `Owner` exists as a placeholder for future auth and tenancy even though v1 is single-user.
 
 ## Implementation Tasks
@@ -112,7 +114,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Create: `backend/tests/test_models.py`
 
 **Steps:**
-1. Define models for owner, campaign, entity, relationship, session note, source document, extraction job, and extraction candidate.
+1. Define models for owner, campaign, entity, relationship, session, source asset, asset parse result, extraction job, and extraction candidate.
 2. Add an initial Alembic migration for the full v1 schema.
 3. Defer PostgreSQL full-text search columns and indexes until the search task.
 4. Add tests that persist and retrieve the core records.
@@ -185,26 +187,32 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Which relationship types should be constrained choices in v1 versus flexible free text?
 - What relationship summary should be available on entity lists and quick-look panels without requiring full-page navigation?
 
-### Task 8: Notes and documents backend and frontend
+### Task 8: Sessions and source assets backend and frontend
 
 **Files:**
-- Create: `backend/app/api/session_notes.py`
-- Create: `backend/app/api/documents.py`
-- Create: `backend/tests/test_notes_and_documents_api.py`
-- Create: `frontend/src/pages/NotesPage.tsx`
-- Create: `frontend/src/pages/DocumentsPage.tsx`
+- Create: `backend/app/api/sessions.py`
+- Create: `backend/app/api/assets.py`
+- Create: `backend/tests/test_sessions_api.py`
+- Create: `backend/tests/test_assets_api.py`
+- Create: `frontend/src/pages/SessionsPage.tsx`
+- Create: `frontend/src/pages/AssetsPage.tsx`
 
 **Steps:**
-1. Implement CRUD for session notes.
-2. Implement document creation via pasted text first, with file upload optional if time allows.
-3. Add tests covering raw text storage and note/document CRUD behavior.
-4. Build session note and document list and edit flows in the frontend.
-5. Connect note and document screens to the typed API client without moving validation rules into React.
-6. Verify the note and document flow is usable end-to-end before starting extraction work.
+1. Implement CRUD for sessions.
+2. Implement source asset upload and CRUD with backend-managed original-file storage.
+3. Keep parsing backend-owned and implicit, but only for parse-dependent reads such as extraction, search, and preview; ordinary asset metadata reads must stay cheap and must not trigger parsing.
+4. Add backend-owned lazy parsing with cached parse results for text documents and spreadsheets, while allowing images to be stored without parse output.
+5. Use an in-place compatibility migration from the older `session_notes + source_documents` shape when this task is applied to an existing branch or database state.
+6. Add tests covering session CRUD, asset upload, parse cache behavior, asset-session linking, parse failure and retry behavior, and migration-safe provenance preservation.
+7. Keep the backend upload contract single-purpose. If the UI offers one form for creating a session and uploading an asset, the frontend should orchestrate two API calls rather than adding a combined backend endpoint in this task.
+8. Verify the session and asset flow is usable end-to-end before starting extraction work.
+9. Build session and asset list and detail flows in the frontend.
+10. Connect session and asset screens to the typed API client without moving validation rules into React.
 
 **Design decisions to revisit in this task:**
-- Which note and document facts belong in quick inspection surfaces versus full editing pages?
-- How should campaign context remain visible while working inside notes/documents so users do not lose orientation?
+- Which session and asset facts belong in quick inspection surfaces versus full editing pages?
+- How should campaign context remain visible while working inside sessions/assets so users do not lose orientation?
+- Which parsed asset details should be exposed in asset detail views without surfacing parser internals too early?
 
 ### Task 9: Extraction pipeline contract and rules-based implementation
 
@@ -216,11 +224,11 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Create: `backend/tests/test_extraction_api.py`
 
 **Steps:**
-1. Define an extraction service interface that accepts text and campaign context and returns candidate entities and relationships.
-2. Implement a rules-based extractor that targets obvious named entities and simple relationships from curated sample notes.
+1. Define an extraction service interface that accepts parsed asset content and campaign context and returns candidate entities and relationships.
+2. Implement a rules-based extractor that targets obvious named entities and simple relationships from curated sample notes and spreadsheet-derived structure.
 3. Add extraction job and extraction candidate persistence.
 4. Expose API endpoints to start an extraction job and fetch its candidates.
-5. Add tests against fixed sample notes so the behavior is stable and demoable.
+5. Add tests against fixed sample assets so the behavior is stable and demoable.
 
 ### Task 10: Candidate review and approval workflow backend
 
@@ -232,7 +240,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 **Steps:**
 1. Implement endpoints to approve, reject, or edit extraction candidates.
 2. Persist approved candidates as canonical entities and relationships.
-3. Preserve provenance from the source document and extraction job.
+3. Preserve provenance from the source asset and extraction job.
 4. Add tests for approve, reject, edit, and duplicate-name review paths.
 
 ### Task 11: Extraction review frontend
@@ -241,7 +249,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Create: `frontend/src/pages/ExtractionReviewPage.tsx`
 
 **Steps:**
-1. Add a view to trigger extraction jobs from stored source documents.
+1. Add a view to trigger extraction jobs from stored source assets.
 2. Show candidate entities and relationships with their source context.
 3. Add approve, reject, and edit actions wired to the review endpoints.
 4. Verify the extraction-to-review flow works visually from raw text through approved records.
@@ -258,8 +266,8 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Create: `backend/tests/test_search.py`
 
 **Steps:**
-1. Implement PostgreSQL full-text search over entity names, summaries, notes, and documents.
-2. Return grouped results for entities and notes.
+1. Implement PostgreSQL full-text search over entity names, summaries, sessions, and parsed source asset text.
+2. Return grouped results for entities, sessions, and source assets.
 3. Add campaign filtering to search queries.
 4. Add tests for keyword hits and empty-result behavior.
 
@@ -270,7 +278,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 
 **Steps:**
 1. Add a search page that calls the backend search API.
-2. Display grouped results for entities and notes.
+2. Display grouped results for entities, sessions, and source assets.
 3. Support campaign-scoped filtering in the UI using backend-provided contracts.
 4. Verify search works end-to-end against the seeded demo data and sample notes.
 
@@ -295,15 +303,17 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 ## Test Plan
 
 Backend automated tests:
-- CRUD for campaigns, entities, relationships, notes, and documents
+- CRUD for campaigns, entities, relationships, sessions, and source assets
 - extraction job creation and candidate generation
 - candidate approval and rejection flows
-- search queries over entities and notes
+- search queries over entities, sessions, and source assets
 - cross-campaign validation failures
+- migration-safe provenance preservation for source assets
+- parse failure, retry, and stale-cache invalidation behavior
 
 Frontend verification:
 - campaign list/detail loads from the API
-- entity and note forms submit successfully
+- entity, session, and asset forms submit successfully
 - extraction review actions update candidate state
 - search page displays grouped results
 - error and loading states are visible and understandable
@@ -319,6 +329,8 @@ Manual acceptance flow:
 
 - v1 is a single-user local-first app.
 - Auth is deferred but schema and APIs leave room for it later.
-- File upload can be reduced to pasted text if time becomes tight.
 - Extraction quality can be modest if the review loop is solid.
 - Search schema and indexing are intentionally deferred from Task 3 until search work starts.
+- Backend parsing is canonical.
+- Original uploaded assets live outside Postgres in backend-managed storage.
+- Large parsed outputs may live outside Postgres while small outputs stay inline in the parse cache.

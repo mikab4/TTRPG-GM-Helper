@@ -10,7 +10,7 @@ Show the end-to-end workflow from free-text notes to searchable structured campa
 
 1. Create a campaign.
 2. Open the campaign detail page and show that it starts empty.
-3. Paste a session summary into the source document or note input.
+3. Upload a source asset or paste/import session material into the asset ingestion flow.
 4. Run extraction on that text.
 5. Review the extracted candidate entities and relationships.
 6. Approve a subset of candidates and reject or edit one candidate to show human review.

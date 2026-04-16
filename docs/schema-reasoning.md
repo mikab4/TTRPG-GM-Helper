@@ -22,18 +22,18 @@ UUIDs were chosen for all primary keys to keep identifiers stable across future 
 
 The product is still single-user in v1, but the schema keeps an `owners` table so campaigns already have a future auth and tenancy anchor. The current assumption is one seeded local owner row rather than full auth flows.
 
-## Why `session_notes` And `source_documents` Are Separate
+## Why `sessions` And `source_assets` Are Separate
 
 There was an important terminology correction during planning:
 
-- `session_notes` represents an actual game session in the campaign timeline
-- `source_documents` represents textual evidence or source material
+- `sessions` represents an actual game session in the campaign timeline
+- `source_assets` represents uploaded evidence or source artifacts
 
-This matters because session notes in RPG play are often incomplete, biased, or subjective. A session is not just a blob of text; it is a real event in the campaign. The text artifacts about that session belong in `source_documents`, optionally linked back to a `session_notes` row.
+This matters because a session is not just a blob of text; it is a real event in the campaign. The uploaded artifacts about that session belong in `source_assets`, optionally linked back to a `sessions` row.
 
-This model also lets a session have multiple attached documents, such as player notes, GM recap text, or a cleaned-up summary.
+This model also lets a session have multiple attached assets, such as player notes, GM recap text, a cleaned-up summary, a spreadsheet, or a map image.
 
-## Why `source_documents` Stores Truth Status Instead Of Document Genre
+## Why `source_assets` Stores Truth Status Instead Of Document Genre
 
 The early idea of `document_kind` was too focused on file category. The more important distinction for this product is whether a source text is treated as:
 
@@ -41,11 +41,21 @@ The early idea of `document_kind` was too focused on file category. The more imp
 - uncertain
 - subjective
 
-That matches the actual tabletop use case better than labels like `session_note` or `reference`, because the workflow depends on whether the text should be treated as reliable world truth or only as evidence that needs interpretation.
+That matches the actual tabletop use case better than labels like `session_note` or `reference`, because the workflow depends on whether the asset should be treated as reliable world truth or only as evidence that needs interpretation.
 
-## Why Images Are Deferred
+## Why Original Binaries Are Stored Outside The Database
 
-The user identified valid future image use cases such as city maps, continent art, or timeline graphics. Those are real source materials, but they are out of scope for the initial schema because Task 3 is centered on text ingestion, extraction, and review. Keeping `source_documents` text-only avoids overloading the first schema with binary or media concerns before there is a concrete v1 need.
+Images, spreadsheets, and other uploaded binaries should not be stored as Postgres blobs by default.
+
+Reasoning:
+- large binary data bloats the relational database and backups
+- local filesystem storage is simpler for the current local-first deployment
+- a storage abstraction keeps the future path to object storage open
+- PostgreSQL is better used for metadata, provenance, and queryable derived content
+
+So the intended v1 split is:
+- original binary file in backend-managed storage
+- asset metadata in PostgreSQL
 
 ## Why Extraction Jobs And Candidates Are Separate
 
@@ -87,9 +97,73 @@ Relationships are stored in the `entity_relationships` table as directed asserti
 
 This supports both one-way relationships like `lives_in` and symmetric semantics like `sibling_of` without duplicating rows. Symmetry and reverse-language handling stay in backend code rather than in extra schema tables for v1.
 
+## Why Parsed Asset Content Is Cached Separately
+
+The app needs a place to cache parsed asset output without forcing every asset row to hold large text or structured payloads directly.
+
+That cache is separate because:
+- the original asset and the parse result have different lifecycles
+- parse results may need invalidation when parser code changes
+- the same asset may later need different parser kinds
+- cached parse output can be reused for extraction, preview, and search
+
+The intended reuse key in v1 is:
+- `asset_id`
+- `parser_kind`
+- `parser_version`
+- `source_checksum`
+
+## Why Parsing Is Lazy But Cached
+
+Always parsing on upload wastes work for assets that may never be searched or extracted. Parsing from scratch every time wastes work in the opposite direction.
+
+The chosen compromise is:
+- upload and store the asset first
+- keep ordinary asset metadata reads cheap
+- parse on first real parse-dependent consumer need such as preview, search, or extraction
+- cache the parse result
+- invalidate when the source checksum or parser version changes
+
+This keeps parsing backend-owned and reusable without paying the cost for every uploaded file immediately.
+
+The related API contract choice is:
+- do not add a public manual parse endpoint in v1
+- let parse-dependent flows trigger parsing implicitly
+- keep normal asset list/detail reads from doing hidden parse work
+
+## Why Parsed Cache Storage Is Hybrid
+
+Not all parse results should be stored inline in PostgreSQL.
+
+Reasoning:
+- small text or compact structured fragments are convenient to keep inline
+- large structured output from spreadsheets or rich documents can bloat rows
+- storage-backed derived artifacts are a better fit for larger payloads
+
+So the parse cache should be hybrid:
+- small outputs inline in the database
+- large outputs in storage, referenced from the database
+
+The threshold should be configurable in backend settings rather than fixed only by code constants.
+
+## Why Parse Results Keep History Instead Of One Mutable Row
+
+The cache should not behave like a single mutable blob attached to the asset.
+
+Reasoning:
+- parser version changes matter
+- file checksum changes matter
+- failed parses and prior successful parses are useful debugging signals
+- future extraction and search work will depend on predictable parse reuse rules
+
+So the intended direction is:
+- keep parse-result rows keyed by `asset_id + parser_kind + parser_version + source_checksum`
+- reuse a matching successful parse result when available
+- prune superseded cache rows and derived artifacts by policy rather than overwriting history blindly
+
 ## Why Controlled Vocabularies Stay In Backend Code
 
-For `entities.type`, `entity_relationships.relationship_type`, and `source_documents.truth_status`, the agreed choice was:
+For `entities.type`, `entity_relationships.relationship_type`, and `source_assets.truth_status`, the agreed choice was:
 
 - store plain text in the database
 - validate allowed values in backend code
