@@ -119,6 +119,42 @@ What we take instead:
 - lazy parse with cached results
 - a hybrid parsed-cache model so small outputs stay in Postgres and large outputs go to storage
 
+## Why Parsing Is Separate From Extraction
+
+Parsing and extraction solve different problems.
+
+Parsing is the canonical representation step:
+- take an uploaded file format such as text, spreadsheet, or image
+- decode it into normalized backend-owned content
+- preserve reusable text, structure, and parse metadata for later consumers
+
+Extraction is the interpretation step:
+- read parsed content
+- propose entities, relationships, or other candidate campaign facts
+- require review before those proposals become canonical records
+
+This separation is deliberate:
+- one parse result can support preview, search, and extraction
+- parse output should be stable and reusable when the source file and parser version have not changed
+- extraction logic may change independently as rules improve or future model-backed approaches are added
+
+If these were collapsed into one step, the system would tie asset ingestion to one downstream workflow and make search, debugging, and provenance harder.
+
+## Why Search And Extraction Should Not Operate On Raw Files
+
+The original file is the source artifact, not the application's working representation.
+
+Reasoning:
+- a `.docx`, spreadsheet, image, or text upload does not expose content in one uniform way
+- keyword search over raw container bytes is not meaningful
+- letting each consumer open and interpret the file separately would duplicate file-format logic and create inconsistent behavior between preview, search, and extraction
+- parsed content is easier to cache, version, inspect, and debug than ad hoc file reads buried inside feature code
+
+So the correct boundary is:
+- the file remains the preserved source artifact
+- parsing produces canonical backend-owned content
+- search and extraction consume that parsed content rather than the raw file container
+
 ## Why Search Is Keyword Search First
 
 Semantic search is a future goal, but it was intentionally deferred.
@@ -133,6 +169,13 @@ The design still prepares for semantic search later by:
 - preserving provenance
 - isolating search logic behind a service
 
+Future model-assisted search does not remove the need for parsing.
+
+Reasoning:
+- models still work better with normalized text, structure, chunk boundaries, and metadata than with arbitrary file containers
+- parsed content remains useful for preview, keyword search, provenance, caching, and repeatable reprocessing
+- direct file-to-model calls may be useful in some future workflows, but they should be an optional consumer path, not the system's primary abstraction
+
 ## Why Extraction Is Rules-First With An LLM Interface
 
 The product idea depends on turning free text into structured records, so extraction is part of v1. But full LLM dependence was rejected as the center of the first milestone.
@@ -146,6 +189,7 @@ What we chose:
 - a clean extraction interface
 - a rules-based implementation as the default
 - a future-compatible path for an optional LLM-backed implementation
+- model-backed extraction would still consume parsed, normalized asset content rather than replacing parsing itself
 
 This keeps the demo stable while preserving the future learning path.
 
