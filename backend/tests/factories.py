@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import factory
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,7 @@ from app.models.campaign import Campaign
 from app.models.entity import Entity
 from app.models.owner import Owner
 from app.models.relationship import Relationship
+from app.models.session import Session as CampaignSession
 
 
 class SQLAlchemyModelFactory(factory.Factory):
@@ -66,3 +69,14 @@ class RelationshipFactory(SQLAlchemyModelFactory):
     source_asset_id = None
     provenance_excerpt = None
     provenance_data = factory.LazyFunction(dict)
+
+
+class SessionFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = CampaignSession
+
+    campaign_id = None
+    session_number = factory.Sequence(lambda n: n + 1)
+    session_label = None
+    played_on = date(2026, 4, 1)
+    summary = None

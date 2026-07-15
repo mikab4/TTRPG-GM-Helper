@@ -20,7 +20,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.dependencies import get_db_session
 from app.config import Settings
 from app.models import Base
-from tests.factories import CampaignFactory, EntityFactory, OwnerFactory, RelationshipFactory
+from tests.factories import (
+    CampaignFactory,
+    EntityFactory,
+    OwnerFactory,
+    RelationshipFactory,
+    SessionFactory,
+)
 from tests.pg_test_support import (
     PostgresTestContainer,
     ensure_postgres_test_container,
@@ -192,6 +198,27 @@ def relationship_factory(db_session_factory):
             return stored_relationship
 
     return create_relationship
+
+
+@pytest.fixture
+def session_factory(db_session_factory):
+    def create_session(**kwargs):
+        campaign = kwargs.get("campaign")
+        if campaign is not None and "campaign_id" not in kwargs:
+            kwargs["campaign_id"] = campaign.id
+
+        existing_session = kwargs.pop("db_session", None)
+        if existing_session is not None:
+            return SessionFactory.create_in_session(existing_session, **kwargs)
+
+        with db_session_factory() as db_session:
+            stored_session = SessionFactory.create_in_session(db_session, **kwargs)
+            db_session.commit()
+            db_session.refresh(stored_session)
+            db_session.expunge(stored_session)
+            return stored_session
+
+    return create_session
 
 
 @pytest.fixture

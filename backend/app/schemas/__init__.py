@@ -8,6 +8,7 @@ from app.schemas.relationship_types import (
     RelationshipTypeUpdate,
 )
 from app.schemas.relationships import RelationshipCreate, RelationshipResponse, RelationshipUpdate
+from app.schemas.sessions import SessionCreate, SessionResponse, SessionUpdate
 
 __all__ = [
     "CampaignCreate",
@@ -24,4 +25,7 @@ __all__ = [
     "RelationshipTypeResponse",
     "RelationshipTypeUpdate",
     "RelationshipUpdate",
+    "SessionCreate",
+    "SessionResponse",
+    "SessionUpdate",
 ]

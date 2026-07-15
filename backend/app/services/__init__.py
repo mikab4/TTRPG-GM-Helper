@@ -6,6 +6,7 @@ from app.services import (
     relationship_mapper,
     relationship_service,
     relationship_type_service,
+    session_service,
 )
 from app.services.errors import ConflictError, NotFoundError
 
@@ -19,4 +20,5 @@ __all__ = [
     "relationship_mapper",
     "relationship_service",
     "relationship_type_service",
+    "session_service",
 ]

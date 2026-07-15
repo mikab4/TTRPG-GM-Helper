@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -19,6 +20,8 @@ from app.schemas import (
     EntityUpdate,
     RelationshipCreate,
     RelationshipTypeCreate,
+    SessionCreate,
+    SessionUpdate,
 )
 
 
@@ -180,3 +183,22 @@ def test_entity_request_models_reject_unknown_entity_types(invalid_entity_type: 
 
     with pytest.raises(ValidationError):
         EntityUpdate(type=invalid_entity_type, summary="Updated")
+
+
+def test_session_create_requires_number_or_label() -> None:
+    with pytest.raises(ValidationError):
+        SessionCreate(
+            played_on=date(2026, 4, 17),
+            summary="The party reached the observatory.",
+        )
+
+
+def test_session_update_rejects_empty_payload() -> None:
+    with pytest.raises(ValidationError):
+        SessionUpdate()
+
+
+def test_session_update_allows_identity_fields_to_be_cleared_in_payload() -> None:
+    session_update = SessionUpdate(session_number=None)
+
+    assert session_update.session_number is None
