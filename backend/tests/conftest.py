@@ -26,6 +26,7 @@ from tests.factories import (
     OwnerFactory,
     RelationshipFactory,
     SessionFactory,
+    SourceAssetFactory,
 )
 from tests.pg_test_support import (
     PostgresTestContainer,
@@ -219,6 +220,33 @@ def session_factory(db_session_factory):
             return stored_session
 
     return create_session
+
+
+@pytest.fixture
+def source_asset_factory(db_session_factory):
+    def create_source_asset(**kwargs):
+        campaign = kwargs.get("campaign")
+        linked_session = kwargs.get("session")
+
+        if campaign is not None and "campaign_id" not in kwargs:
+            kwargs["campaign_id"] = campaign.id
+        if linked_session is not None and "session_id" not in kwargs:
+            kwargs["session_id"] = linked_session.id
+        if linked_session is not None and "campaign_id" not in kwargs:
+            kwargs["campaign_id"] = linked_session.campaign_id
+
+        existing_session = kwargs.pop("db_session", None)
+        if existing_session is not None:
+            return SourceAssetFactory.create_in_session(existing_session, **kwargs)
+
+        with db_session_factory() as db_session:
+            stored_source_asset = SourceAssetFactory.create_in_session(db_session, **kwargs)
+            db_session.commit()
+            db_session.refresh(stored_source_asset)
+            db_session.expunge(stored_source_asset)
+            return stored_source_asset
+
+    return create_source_asset
 
 
 @pytest.fixture

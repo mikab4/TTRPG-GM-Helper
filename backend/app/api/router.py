@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.assets import router as assets_router
 from app.api.routes.campaigns import router as campaigns_router
 from app.api.routes.compatibility import router as compatibility_router
 from app.api.routes.entities import router as entities_router
@@ -10,6 +11,7 @@ from app.api.routes.relationships import router as relationships_router
 from app.api.routes.sessions import router as sessions_router
 
 api_router = APIRouter()
+api_router.include_router(assets_router, tags=["assets"])
 api_router.include_router(campaigns_router, tags=["campaigns"])
 api_router.include_router(compatibility_router, tags=["compatibility"])
 api_router.include_router(entities_router, tags=["entities"])

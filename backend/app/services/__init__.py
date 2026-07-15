@@ -1,4 +1,5 @@
 from app.services import (
+    asset_service,
     campaign_service,
     entity_service,
     owner_service,
@@ -8,11 +9,19 @@ from app.services import (
     relationship_type_service,
     session_service,
 )
-from app.services.errors import ConflictError, NotFoundError
+from app.services.errors import (
+    AssetUploadTooLargeError,
+    ConflictError,
+    NotFoundError,
+    UnsupportedMediaTypeError,
+)
 
 __all__ = [
+    "AssetUploadTooLargeError",
     "ConflictError",
     "NotFoundError",
+    "UnsupportedMediaTypeError",
+    "asset_service",
     "campaign_service",
     "entity_service",
     "owner_service",

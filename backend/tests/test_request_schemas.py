@@ -12,8 +12,11 @@ from app.enums import (
     RelationshipFamily,
     RelationshipLifecycleStatus,
     RelationshipVisibilityStatus,
+    SourceAssetTruthStatus,
 )
 from app.schemas import (
+    AssetCreateFormData,
+    AssetUpdate,
     CampaignCreate,
     CampaignUpdate,
     EntityCreate,
@@ -202,3 +205,32 @@ def test_session_update_allows_identity_fields_to_be_cleared_in_payload() -> Non
     session_update = SessionUpdate(session_number=None)
 
     assert session_update.session_number is None
+
+
+def test_asset_request_models_normalize_truth_status_and_trim_text() -> None:
+    asset_create = AssetCreateFormData(
+        title="  Session Recap  ",
+        truth_status=" subjective ",
+        session_id=uuid4(),
+    )
+    asset_update = AssetUpdate(
+        title="  Updated Recap  ",
+        truth_status=" canonical ",
+        metadata={"source": "gm"},
+    )
+
+    assert asset_create.title == "Session Recap"
+    assert asset_create.truth_status is SourceAssetTruthStatus.SUBJECTIVE
+    assert asset_update.title == "Updated Recap"
+    assert asset_update.truth_status is SourceAssetTruthStatus.CANONICAL
+
+
+def test_asset_update_rejects_empty_payload() -> None:
+    with pytest.raises(ValidationError):
+        AssetUpdate()
+
+
+def test_asset_update_allows_null_session_to_clear_link() -> None:
+    asset_update = AssetUpdate(session_id=None)
+
+    assert asset_update.session_id is None

@@ -10,6 +10,7 @@ from app.models.entity import Entity
 from app.models.owner import Owner
 from app.models.relationship import Relationship
 from app.models.session import Session as CampaignSession
+from app.models.source_asset import SourceAsset
 
 
 class SQLAlchemyModelFactory(factory.Factory):
@@ -80,3 +81,21 @@ class SessionFactory(SQLAlchemyModelFactory):
     session_label = None
     played_on = date(2026, 4, 1)
     summary = None
+
+
+class SourceAssetFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = SourceAsset
+
+    campaign_id = None
+    session_id = None
+    title = factory.Sequence(lambda n: f"Asset {n}")
+    truth_status = "uncertain"
+    media_type = "text/plain"
+    original_filename = factory.Sequence(lambda n: f"asset-{n}.txt")
+    file_size_bytes = 12
+    checksum = factory.Sequence(lambda n: f"sha256:test-{n}")
+    storage_key = factory.Sequence(lambda n: f"test-assets/{n}.txt")
+    parse_status = "pending"
+    last_parsed_at = None
+    metadata_ = factory.LazyFunction(dict)
