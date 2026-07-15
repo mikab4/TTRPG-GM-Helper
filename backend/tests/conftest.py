@@ -18,7 +18,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_db_session
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.models import Base
 from tests.factories import (
     CampaignFactory,
@@ -222,20 +222,29 @@ def session_factory(db_session_factory):
 
 
 @pytest.fixture
-def test_app(sqlite_engine: Engine, monkeypatch: pytest.MonkeyPatch):
+def test_app(sqlite_engine: Engine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///unused-for-tests.db")
 
     from app.main import create_app
 
+    test_settings = Settings(
+        _env_file=None,
+        database_url="sqlite+pysqlite:///unused-for-tests.db",
+        asset_storage_root=tmp_path / "asset-storage",
+    )
     app = create_app(
-        settings=None,
+        settings=test_settings,
     )
 
     def override_get_db_session():
         with Session(sqlite_engine, expire_on_commit=False) as db_session:
             yield db_session
 
+    def override_get_settings() -> Settings:
+        return test_settings
+
     app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_settings] = override_get_settings
 
     try:
         yield app

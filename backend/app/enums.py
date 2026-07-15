@@ -67,6 +67,10 @@ class AssetParserKind(StrEnum):
     IMAGE = "image"
 
 
+class AssetStorageBackend(StrEnum):
+    LOCAL = "local"
+
+
 class ExtractionJobStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
