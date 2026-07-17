@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.enums import SourceAssetLifecycleStatus, SourceAssetStorageStatus
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, json_document
 
 if TYPE_CHECKING:
@@ -55,8 +56,16 @@ class SourceAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     checksum: Mapped[str] = mapped_column(Text, nullable=False)
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
-    lifecycle_status: Mapped[str] = mapped_column(Text, nullable=False)
-    storage_status: Mapped[str] = mapped_column(Text, nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(
+        Text,
+        default=SourceAssetLifecycleStatus.ACTIVE.value,
+        nullable=False,
+    )
+    storage_status: Mapped[str] = mapped_column(
+        Text,
+        default=SourceAssetStorageStatus.AVAILABLE.value,
+        nullable=False,
+    )
     delete_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delete_last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delete_last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

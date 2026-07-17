@@ -280,6 +280,34 @@ def test_orm_inserts_apply_json_defaults_consistently(postgres_session: DBSessio
     assert stored_relationship.certainty_status == "confirmed"
 
 
+def test_source_asset_orm_inserts_apply_required_status_defaults(postgres_session: DBSession) -> None:
+    # Arrange
+    owner = Owner(email="gm@example.com")
+    campaign = Campaign(owner=owner, name="Shadows of Glass")
+    source_asset = SourceAsset(
+        campaign=campaign,
+        media_type="text/plain",
+        original_filename="gm-recap.txt",
+        file_size_bytes=128,
+        checksum="sha256:gm-recap",
+        storage_key="assets/gm-recap.txt",
+        parse_status="pending",
+        truth_status="canonical",
+    )
+
+    postgres_session.add_all([owner, campaign, source_asset])
+
+    # Act
+    postgres_session.commit()
+
+    stored_asset = postgres_session.get(SourceAsset, source_asset.id)
+
+    # Assert
+    assert stored_asset is not None
+    assert stored_asset.lifecycle_status == "active"
+    assert stored_asset.storage_status == "available"
+
+
 def test_updated_at_changes_on_orm_update(postgres_session: DBSession) -> None:
     # Arrange
     owner = Owner(email="gm@example.com")
