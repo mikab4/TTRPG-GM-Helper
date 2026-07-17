@@ -1,4 +1,4 @@
-# Backend Design Plan For Task 8: Sessions, Source Assets, And Hybrid Parsed Cache
+# Backend Design Plan For Task 8: Sessions, Source Assets, And Parse-Cache Groundwork
 
 ## Summary
 
@@ -7,12 +7,10 @@ This task replaces the current text-only `session_notes + source_documents` shap
 - `sessions` as campaign timeline records
 - `source_assets` as uploaded source artifacts
 - backend-managed storage for original files
-- lazy backend parsing with reusable cached parse results
-- hybrid parse-output storage:
-  - small parsed outputs inline in Postgres
-  - large parsed outputs in storage with DB pointers
+- schema groundwork for later backend parsing and reusable cached parse results
+- compatibility-safe storage for future hybrid parse-output handling
 
-This is the active plan for the `add_documents_support` branch. The earlier March v1 plan is background context only.
+This is the active groundwork plan for the `add_documents_support` branch. The earlier March v1 plan is background context only. Parse orchestration itself is the next branch after this reshape lands.
 
 ## Current State
 
@@ -62,8 +60,8 @@ Rename and reshape the current persistence model to this target:
     - `delete_started_at`
     - `delete_last_error_at`
     - `delete_last_error_message`
-    - `parse_status`
-    - `last_parsed_at`
+    - `parse_status` for internal groundwork only in this branch
+    - `last_parsed_at` for internal groundwork only in this branch
   - keep:
     - `campaign_id`
     - `title`
@@ -132,7 +130,7 @@ Use an in-place compatibility migration. Do not reset the database and do not ke
 - Cross-campaign ownership protections must remain enforced.
 - Existing data must stay queryable through the new model names without a manual data reset.
 
-## Storage And Parsing Contract
+## Storage Contract And Deferred Parsing Follow-Up
 
 ### Storage
 
@@ -142,7 +140,13 @@ Use an in-place compatibility migration. Do not reset the database and do not ke
   - future object storage implementation later
 - Parsed artifacts larger than inline thresholds also use that storage backend.
 
-### Parsing
+### Parsing in this branch
+
+- This branch does not implement parse-dependent reads, parse lookup/reuse, parse retry behavior, or stale-cache cleanup.
+- New uploads may carry internal parse-groundwork fields in storage, but asset list/detail APIs must not present those fields as active user-facing behavior.
+- Ordinary asset metadata reads must stay cheap and must not trigger parsing.
+
+### Parsing in the next branch
 
 - Parsing is backend-owned and canonical.
 - Parsing is implicit only. There is no public `POST /assets/{id}/parse` endpoint in v1.
@@ -152,7 +156,7 @@ Use an in-place compatibility migration. Do not reset the database and do not ke
   - preview or parsed-content inspection flows
 - Ordinary asset metadata reads must not trigger parsing.
 
-### Parse-result lifecycle
+### Next-branch parse-result lifecycle
 
 - On a parse-dependent read:
   - find a reusable parse result by `(asset_id, parser_kind, parser_version, source_checksum)`
@@ -164,7 +168,7 @@ Use an in-place compatibility migration. Do not reset the database and do not ke
   - never prune the latest successful reusable parse row for an asset/parser pair
   - never delete data still needed for provenance or current feature behavior
 
-### Parse storage thresholds
+### Next-branch parse storage thresholds
 
 The inline-vs-storage decision must be configurable in backend settings:
 
@@ -178,7 +182,7 @@ Rules:
 - if either text or structured content exceeds the configured thresholds, store the derived artifact outside Postgres and persist only metadata plus storage pointer
 - document defaults in config and README
 
-### Parser behavior by asset family
+### Next-branch parser behavior by asset family
 
 - text documents:
   - produce reusable raw text
@@ -215,6 +219,7 @@ Asset response semantics:
 
 - asset list and detail responses must include `lifecycle_status`
 - asset list and detail responses must include `storage_status`
+- asset list and detail responses in this branch must not expose `parse_status` or `last_parsed_at` until parse orchestration exists
 - `lifecycle_status=active` means the asset may accept new provenance references
 - `lifecycle_status=deleting` means delete coordination is in progress and new writes carrying `source_asset_id` must be rejected
 - `storage_status=available` means the original backing file is expected to exist
@@ -246,16 +251,14 @@ Keep the service shape small.
 - one asset workflow service that owns:
   - upload flow
   - asset metadata persistence
-  - parse-result lookup
-  - parse invocation
-  - storage-mode choice
   - cleanup/compensation paths
+  - future parse integration points for the next branch
 
 ### Internal helpers under the asset workflow
 
-- parser modules by asset family
-- parse serialization helpers
-- stale-cache pruning helpers
+- parser modules by asset family in the next branch
+- parse serialization helpers in the next branch
+- stale-cache pruning helpers in the next branch
 
 Do not introduce a separate top-level parse service yet. If later tasks produce multiple independent callers with enough separate policy, that boundary can be extracted then.
 
@@ -370,7 +373,7 @@ Update all source-of-truth docs that still describe the old shape:
 - unsupported media types or corrupt uploads fail clearly
 - asset list/detail reads do not trigger parsing
 
-### Parse workflow tests
+### Next-branch parse workflow tests
 
 - parse cache miss triggers parse and persistence
 - reusable parse result is selected by checksum and parser version

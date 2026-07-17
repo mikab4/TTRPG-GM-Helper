@@ -50,8 +50,8 @@ def test_create_asset_upload_returns_created_record(
     assert asset_data["file_size_bytes"] == 27
     assert asset_data["lifecycle_status"] == "active"
     assert asset_data["storage_status"] == "available"
-    assert asset_data["parse_status"] == "pending"
-    assert asset_data["last_parsed_at"] is None
+    assert "parse_status" not in asset_data
+    assert "last_parsed_at" not in asset_data
 
 
 def test_create_asset_upload_returns_not_found_for_unknown_campaign(api_request) -> None:
@@ -226,8 +226,6 @@ def test_list_assets_returns_campaign_assets_without_triggering_parse(
             "file_size_bytes": 12,
             "lifecycle_status": "active",
             "storage_status": "available",
-            "parse_status": "pending",
-            "last_parsed_at": None,
             "metadata": {},
             "created_at": response.json()[0]["created_at"],
             "updated_at": response.json()[0]["updated_at"],
@@ -261,8 +259,8 @@ def test_get_asset_returns_stored_record_without_triggering_parse(
     assert asset_data["title"] == "Harbor Recap"
     assert asset_data["lifecycle_status"] == "active"
     assert asset_data["storage_status"] == "available"
-    assert asset_data["parse_status"] == "pending"
-    assert asset_data["last_parsed_at"] is None
+    assert "parse_status" not in asset_data
+    assert "last_parsed_at" not in asset_data
 
 
 def test_update_asset_returns_updated_fields(

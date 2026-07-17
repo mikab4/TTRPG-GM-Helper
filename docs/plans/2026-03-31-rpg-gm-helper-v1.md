@@ -68,7 +68,7 @@ Schema defaults:
 - `Relationship` maps to the `entity_relationships` table and stores source entity, target entity, relationship type, optional notes, provenance, and confidence.
 - `Session` represents an actual play session and is distinct from uploaded source artifacts.
 - `SourceAsset` stores uploaded evidence or artifacts and may optionally link back to a session.
-- `AssetParseResult` stores cached parse output so text and structure can be reused without reparsing unchanged assets.
+- `AssetParseResult` stores backend-owned parse-cache groundwork so later branches can add reusable parsed text and structure without another schema reshape.
 - `Owner` exists as a placeholder for future auth and tenancy even though v1 is single-user.
 
 ## Implementation Tasks
@@ -200,12 +200,12 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 **Steps:**
 1. Implement CRUD for sessions.
 2. Implement source asset upload and CRUD with backend-managed original-file storage.
-3. Keep parsing backend-owned and implicit, but only for parse-dependent reads such as extraction, search, and preview; ordinary asset metadata reads must stay cheap and must not trigger parsing.
-4. Add backend-owned lazy parsing with cached parse results for text documents and spreadsheets, while allowing images to be stored without parse output.
+3. Keep parsing backend-owned and prepare the asset model for later implicit parse-dependent reads such as extraction, search, and preview; ordinary asset metadata reads must stay cheap and must not trigger parsing in this task.
+4. Land the schema, storage, and compatibility groundwork for cached parse results now, while deferring parse lookup/reuse, thresholds, retry handling, and stale-cache cleanup to the next parsing-focused branch.
 5. Use an in-place compatibility migration from the older `session_notes + source_documents` shape when this task is applied to an existing branch or database state.
-6. Add tests covering session CRUD, asset upload, parse cache behavior, asset-session linking, parse failure and retry behavior, and migration-safe provenance preservation.
+6. Add tests covering session CRUD, asset upload, asset-session linking, groundwork migration safety for future parse caching, and migration-safe provenance preservation.
 7. Keep the backend upload contract single-purpose. If the UI offers one form for creating a session and uploading an asset, the frontend should orchestrate two API calls rather than adding a combined backend endpoint in this task.
-8. Verify the session and asset flow is usable end-to-end before starting extraction work.
+8. Verify the session and asset groundwork flow is usable end-to-end before starting the next parsing-focused branch.
 9. Build session and asset list and detail flows in the frontend.
 10. Connect session and asset screens to the typed API client without moving validation rules into React.
 
@@ -214,7 +214,21 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - How should campaign context remain visible while working inside sessions/assets so users do not lose orientation?
 - Which parsed asset details should be exposed in asset detail views without surfacing parser internals too early?
 
-### Task 9: Extraction pipeline contract and rules-based implementation
+### Task 9: Parsing implementation and parse-cache behavior
+
+**Files:**
+- Create: `backend/app/services/asset_parsing.py`
+- Create: `backend/tests/test_asset_parsing.py`
+- Modify: `backend/app/config.py`
+
+**Steps:**
+1. Implement backend-owned parse-dependent reads for supported text documents and spreadsheets.
+2. Reuse cached parse results by `(asset_id, parser_kind, parser_version, source_checksum)` before reparsing.
+3. Add configurable inline-versus-storage thresholds for parsed outputs.
+4. Implement parse failure, retry, and stale-cache handling needed for extraction, preview, and search.
+5. Add tests covering parse cache hits, misses, retries, threshold behavior, and stale-cache invalidation.
+
+### Task 10: Extraction pipeline contract and rules-based implementation
 
 **Files:**
 - Create: `backend/app/services/extraction/base.py`
@@ -230,7 +244,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 4. Expose API endpoints to start an extraction job and fetch its candidates.
 5. Add tests against fixed sample assets so the behavior is stable and demoable.
 
-### Task 10: Candidate review and approval workflow backend
+### Task 11: Candidate review and approval workflow backend
 
 **Files:**
 - Create: `backend/app/api/extraction_review.py`
@@ -243,7 +257,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 3. Preserve provenance from the source asset and extraction job.
 4. Add tests for approve, reject, edit, and duplicate-name review paths.
 
-### Task 11: Extraction review frontend
+### Task 12: Extraction review frontend
 
 **Files:**
 - Create: `frontend/src/pages/ExtractionReviewPage.tsx`
@@ -258,7 +272,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Should extraction review expose quick-look side panels so users can compare a candidate against existing records without leaving the review queue?
 - Which candidate fields should be editable inline versus requiring a dedicated edit surface?
 
-### Task 12: Search backend
+### Task 13: Search backend
 
 **Files:**
 - Create: `backend/app/api/search.py`
@@ -271,7 +285,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 3. Add campaign filtering to search queries.
 4. Add tests for keyword hits and empty-result behavior.
 
-### Task 13: Search frontend
+### Task 14: Search frontend
 
 **Files:**
 - Create: `frontend/src/pages/SearchPage.tsx`
@@ -287,7 +301,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Campaign and type filters should narrow results after users begin foraging for a fact, not force a form-like sequence before discovery.
 - Search result rows should expose enough relationship scent to reduce unnecessary page visits.
 
-### Task 14: Demo polish and documentation
+### Task 15: Demo polish and documentation
 
 **Files:**
 - Modify: `README.md`
@@ -309,7 +323,7 @@ Backend automated tests:
 - search queries over entities, sessions, and source assets
 - cross-campaign validation failures
 - migration-safe provenance preservation for source assets
-- parse failure, retry, and stale-cache invalidation behavior
+- in the follow-up parsing branch: parse failure, retry, and stale-cache invalidation behavior
 
 Frontend verification:
 - campaign list/detail loads from the API

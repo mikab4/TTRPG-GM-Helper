@@ -73,8 +73,6 @@ class AssetResponse(BaseModel):
     file_size_bytes: int
     lifecycle_status: SourceAssetLifecycleStatus
     storage_status: SourceAssetStorageStatus
-    parse_status: str
-    last_parsed_at: datetime | None
     metadata: dict[str, object] = Field(
         validation_alias="metadata_",
         serialization_alias="metadata",
