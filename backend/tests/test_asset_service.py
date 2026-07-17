@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.datastructures import Headers
 
+from app.models import ExtractionJob
 from app.schemas import AssetCreateFormData
-from app.services import AssetUploadTooLargeError, NotFoundError, asset_service
+from app.services import AssetUploadTooLargeError, ConflictError, NotFoundError, asset_service
 from app.services.asset_storage import LocalAssetStorage, StoredUploadMetadata
 
 
@@ -64,8 +65,18 @@ class RecordingAssetStorage:
         self._delegate_storage.delete(storage_key=storage_key)
 
 
+class DeleteFailingAssetStorage(RecordingAssetStorage):
+    def delete(self, *, storage_key: str) -> None:
+        self.deleted_keys.append(storage_key)
+        raise OSError("storage delete failed")
+
+
 def build_recording_asset_storage(*, storage_root: Path) -> RecordingAssetStorage:
     return RecordingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
+
+
+def build_delete_failing_asset_storage(*, storage_root: Path) -> DeleteFailingAssetStorage:
+    return DeleteFailingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
 
 
 def build_upload_file(
@@ -257,6 +268,324 @@ def test_delete_asset_removes_stored_file_and_database_row(
 
         # Assert
         assert asset_storage.deleted_keys == [created_asset.storage_key]
+        assert not stored_asset_path.exists()
+        with pytest.raises(NotFoundError):
+            asset_service.get_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+            )
+
+
+def test_delete_asset_leaves_row_unchanged_when_storage_delete_fails(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    create_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    delete_storage = build_delete_failing_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_payload = b"broken-delete"
+    upload_file = build_upload_file(
+        file_obj=BytesIO(upload_payload),
+        filename="broken-delete.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=create_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Source asset delete could not remove the backing file."):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=delete_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.storage_status == "available"
+        assert reloaded_asset.delete_started_at is not None
+        assert reloaded_asset.delete_last_error_at is not None
+        assert reloaded_asset.delete_last_error_message == "Source asset delete could not remove the backing file."
+        assert stored_asset_path.is_file()
+
+
+def test_delete_asset_rejects_existing_extraction_job_before_storage_delete(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"job-blocked-delete"),
+        filename="job-blocked-delete.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        db_session.add(
+            ExtractionJob(
+                campaign_id=stored_campaign.id,
+                source_asset_id=created_asset.id,
+                status="pending",
+                extractor_kind="rules",
+            )
+        )
+        db_session.commit()
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+
+        # Act / Assert
+        with pytest.raises(
+            ConflictError,
+            match="Source asset cannot be deleted while dependent records still reference it.",
+        ):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=asset_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "active"
+        assert asset_storage.deleted_keys == []
+        assert stored_asset_path.is_file()
+
+
+def test_delete_asset_marks_asset_missing_when_database_delete_fails_after_storage_delete(
+    db_session_factory,
+    campaign_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_payload = b"repair-me"
+    upload_file = build_upload_file(
+        file_obj=BytesIO(upload_payload),
+        filename="repair-me.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        monkeypatch.setattr(
+            asset_service,
+            "_finalize_asset_delete",
+            lambda *args, **kwargs: (_ for _ in ()).throw(SQLAlchemyError("database delete failed")),
+        )
+
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Asset file is unavailable."):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=asset_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.storage_status == "missing"
+        assert not stored_asset_path.exists()
+
+
+def test_delete_asset_marks_asset_missing_when_database_integrity_error_happens_after_storage_delete(
+    db_session_factory,
+    campaign_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"integrity-repair"),
+        filename="integrity-repair.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        monkeypatch.setattr(
+            asset_service,
+            "_finalize_asset_delete",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                IntegrityError("DELETE FROM source_assets", params=None, orig=Exception("fk violation"))
+            ),
+        )
+
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Asset file is unavailable."):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=asset_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.storage_status == "missing"
+        assert not stored_asset_path.exists()
+
+
+def test_require_asset_file_available_rejects_missing_storage_state(
+    campaign_factory,
+    source_asset_factory,
+    db_session_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    stored_asset = source_asset_factory(
+        campaign=stored_campaign,
+        storage_status="missing",
+    )
+
+    with db_session_factory() as db_session:
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Asset file is unavailable."):
+            asset_service.require_asset_file_available(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=stored_asset.id,
+            )
+
+
+def test_delete_asset_returns_conflict_when_storage_delete_succeeds_but_repair_cannot_mark_asset(
+    db_session_factory,
+    campaign_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"repair-fails"),
+        filename="repair-fails.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        monkeypatch.setattr(
+            asset_service,
+            "_finalize_asset_delete",
+            lambda *args, **kwargs: (_ for _ in ()).throw(SQLAlchemyError("database delete failed")),
+        )
+        monkeypatch.setattr(asset_service, "_mark_asset_delete_state", lambda *args, **kwargs: False)
+
+        # Act / Assert
+        with pytest.raises(
+            ConflictError,
+            match="Source asset delete removed the backing file but could not mark the asset for recovery.",
+        ):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=asset_storage,
+            )
+
+
+def test_retry_deleting_assets_removes_asset_after_storage_delete_succeeds(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"retry-delete"),
+        filename="retry-delete.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        stored_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        stored_asset.lifecycle_status = "deleting"
+        stored_asset.delete_started_at = stored_asset.created_at
+        db_session.commit()
+
+        # Act
+        deleted_asset_count = asset_service.retry_deleting_assets(
+            db_session,
+            asset_storage=asset_storage,
+        )
+
+        # Assert
+        assert deleted_asset_count == 1
         assert not stored_asset_path.exists()
         with pytest.raises(NotFoundError):
             asset_service.get_asset(

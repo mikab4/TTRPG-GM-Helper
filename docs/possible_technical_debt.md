@@ -182,3 +182,58 @@ App Logic: Stays blocking/standard. No changes.
 Tests: Become async def. This is a standard practice in the FastAPI ecosystem.
 
 You are effectively replacing a fragile, custom hack (the shim) with a standard, robust pattern (async test runner). That is how you pay down technical debt while keeping your architecture "Clean."
+
+## Periodic retry for asset delete maintenance
+
+Current implementation includes an explicit maintenance command for retrying assets left in `lifecycle_status='deleting'` after partial delete failures.
+
+A stronger operational follow-up is to run that maintenance command periodically rather than relying only on manual execution or optional startup hooks.
+
+Why this may be worth doing later:
+- It would keep failed asset deletes from lingering indefinitely in long-running deployments.
+- It would make recovery from transient filesystem or environment issues more automatic.
+- It would bound the amount of temporary delete-recovery state that accumulates in `source_assets`.
+
+Why it was deferred now:
+- The current branch only needs the explicit retry path to make delete failures recoverable and observable.
+- Adding a scheduler or background maintenance runner now would increase operational complexity beyond the current v1 needs.
+- A periodic trigger mechanism is better chosen once the project decides how backend maintenance tasks should be hosted and scheduled.
+
+## Maintenance command row claiming for asset deletes
+
+Current implementation lets the retry maintenance command scan all assets in `lifecycle_status='deleting'` and attempt storage cleanup immediately.
+
+That is acceptable for the current local filesystem backend because storage delete is idempotent, so a live delete request and the maintenance command can both try to delete the same file without usually corrupting state.
+
+Why this may be worth tightening later:
+- It currently allows duplicate work between an in-flight delete request and the maintenance command.
+- It relies on storage-delete idempotency instead of making ownership explicit in the database.
+- Future storage backends may not have the same harmless double-delete semantics as the current local filesystem implementation.
+
+A stronger long-term alternative is to make the maintenance path claim rows before acting, for example with `SELECT ... FOR UPDATE SKIP LOCKED` and an age threshold on `delete_started_at` or `delete_last_error_at`.
+
+Why it was deferred now:
+- The current local storage delete implementation tolerates concurrent retries well enough for v1.
+- Adding row claiming or lease-style coordination now would complicate the maintenance flow before there is evidence the simpler approach is operationally insufficient.
+- The current branch already makes delete failures visible and retryable, which is the main v1 requirement.
+
+## Centralize asset delete blockers
+
+Current implementation determines whether a source asset can be deleted by checking a hard-coded list of dependent tables in the asset service.
+
+That is acceptable for the current v1 shape, but it means every new table that references `source_assets` may require coordinated updates in multiple places:
+- the delete-blocking guard in the service layer
+- the DB trigger coverage for rejecting new references while `lifecycle_status='deleting'`
+- tests that prove both the pre-delete blocker behavior and the commit-race behavior
+
+Why this may be worth changing later:
+- It spreads one business rule across multiple schema and service touchpoints.
+- It creates a maintenance trap where a new `source_asset_id` dependent can be added without also updating delete coordination.
+- It makes the delete policy harder to reason about as more asset-linked workflows are introduced.
+
+A stronger long-term alternative is to centralize asset references in a dedicated table such as `source_asset_references`, with rows that identify the referencing record kind and id. Then delete-block checks can query one canonical source instead of knowing every dependent table by name.
+
+Why it was deferred now:
+- The current codebase has only a small number of asset-dependent tables, so the explicit approach is still understandable.
+- Introducing a generalized asset-reference registry would be a real schema and workflow change, not a small refactor.
+- The branch priority is to keep delete behavior correct and recoverable first, then centralize the rule once more asset-linked surfaces justify the extra structure.

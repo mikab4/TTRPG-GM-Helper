@@ -5,7 +5,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.enums import SourceAssetTruthStatus, normalize_str_enum_value
+from app.enums import (
+    SourceAssetLifecycleStatus,
+    SourceAssetStorageStatus,
+    SourceAssetTruthStatus,
+    normalize_str_enum_value,
+)
 from app.schemas.types import OptionalNonBlankString
 
 
@@ -66,6 +71,8 @@ class AssetResponse(BaseModel):
     media_type: str
     original_filename: str
     file_size_bytes: int
+    lifecycle_status: SourceAssetLifecycleStatus
+    storage_status: SourceAssetStorageStatus
     parse_status: str
     last_parsed_at: datetime | None
     metadata: dict[str, object] = Field(

@@ -72,6 +72,11 @@ def upgrade() -> None:
     op.add_column("source_assets", sa.Column("file_size_bytes", sa.BigInteger(), nullable=True))
     op.add_column("source_assets", sa.Column("checksum", sa.Text(), nullable=True))
     op.add_column("source_assets", sa.Column("storage_key", sa.Text(), nullable=True))
+    op.add_column("source_assets", sa.Column("lifecycle_status", sa.Text(), nullable=True))
+    op.add_column("source_assets", sa.Column("storage_status", sa.Text(), nullable=True))
+    op.add_column("source_assets", sa.Column("delete_started_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("source_assets", sa.Column("delete_last_error_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("source_assets", sa.Column("delete_last_error_message", sa.Text(), nullable=True))
     op.add_column("source_assets", sa.Column("parse_status", sa.Text(), nullable=True))
     op.add_column("source_assets", sa.Column("last_parsed_at", sa.DateTime(timezone=True), nullable=True))
 
@@ -98,6 +103,8 @@ def upgrade() -> None:
                 encode(digest(convert_to(coalesce(raw_text, ''), 'UTF8'), 'sha256'), 'hex')
             ),
             storage_key = concat('legacy-assets/', id::text, '.txt'),
+            lifecycle_status = 'active',
+            storage_status = 'available',
             parse_status = 'succeeded',
             last_parsed_at = updated_at
         """
@@ -108,7 +115,61 @@ def upgrade() -> None:
     op.alter_column("source_assets", "file_size_bytes", nullable=False)
     op.alter_column("source_assets", "checksum", nullable=False)
     op.alter_column("source_assets", "storage_key", nullable=False)
+    op.alter_column("source_assets", "lifecycle_status", nullable=False)
+    op.alter_column("source_assets", "storage_status", nullable=False)
     op.alter_column("source_assets", "parse_status", nullable=False)
+
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION enforce_active_source_asset_reference()
+        RETURNS trigger AS $$
+        BEGIN
+            IF NEW.source_asset_id IS NULL THEN
+                RETURN NEW;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM source_assets
+                WHERE id = NEW.source_asset_id
+                  AND campaign_id = NEW.campaign_id
+                  AND lifecycle_status = 'active'
+            ) THEN
+                RAISE EXCEPTION
+                    USING
+                        ERRCODE = '23514',
+                        MESSAGE = 'Source asset cannot accept new provenance references while deletion is in progress.';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER tr_entities_require_active_source_asset
+        BEFORE INSERT OR UPDATE OF source_asset_id ON entities
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_active_source_asset_reference();
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER tr_entity_relationships_require_active_source_asset
+        BEFORE INSERT OR UPDATE OF source_asset_id ON entity_relationships
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_active_source_asset_reference();
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER tr_extraction_jobs_require_active_source_asset
+        BEFORE INSERT OR UPDATE OF source_asset_id ON extraction_jobs
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_active_source_asset_reference();
+        """
+    )
 
     op.create_table(
         "asset_parse_results",
@@ -213,8 +274,18 @@ def downgrade() -> None:
     op.drop_index("ix_asset_parse_results_asset_id", table_name="asset_parse_results")
     op.drop_table("asset_parse_results")
 
+    op.execute("DROP TRIGGER IF EXISTS tr_extraction_jobs_require_active_source_asset ON extraction_jobs")
+    op.execute("DROP TRIGGER IF EXISTS tr_entity_relationships_require_active_source_asset ON entity_relationships")
+    op.execute("DROP TRIGGER IF EXISTS tr_entities_require_active_source_asset ON entities")
+    op.execute("DROP FUNCTION IF EXISTS enforce_active_source_asset_reference()")
+
     op.drop_column("source_assets", "last_parsed_at")
     op.drop_column("source_assets", "parse_status")
+    op.drop_column("source_assets", "delete_last_error_message")
+    op.drop_column("source_assets", "delete_last_error_at")
+    op.drop_column("source_assets", "delete_started_at")
+    op.drop_column("source_assets", "storage_status")
+    op.drop_column("source_assets", "lifecycle_status")
     op.drop_column("source_assets", "storage_key")
     op.drop_column("source_assets", "checksum")
     op.drop_column("source_assets", "file_size_bytes")

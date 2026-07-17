@@ -208,6 +208,157 @@ If the plan ignores those, users get orphaned files, silent broken assets, or re
 
 So compensation and visible error states are part of the design, not optional cleanup.
 
+## Why We Added Asset-Level Storage Status
+
+We considered simply deleting storage first and then deleting the DB row.
+
+That is not enough even for v1.
+
+If storage delete succeeds and the DB delete later fails, then the system still has a live `source_assets` row that points at a file that no longer exists.
+
+That is not materially better than the opposite failure:
+
+- orphaned file with no row
+- or live row with no file
+
+Both are split-brain bugs. The difference is only which side lost.
+
+So we added a small explicit asset-level field, `storage_status`, with narrow v1 values:
+
+- `available`
+- `missing`
+
+This keeps the recovery contract visible without introducing a larger deletion-state workflow.
+
+## Why Missing Assets Stay Visible In Normal Reads
+
+Hiding `storage_status=missing` assets from ordinary list/detail APIs would make recovery harder and would also make provenance appear to disappear.
+
+That is the wrong failure mode.
+
+The row should still be visible because it still carries useful information:
+
+- title
+- campaign link
+- session link
+- provenance references
+- timestamps
+
+What changes is not visibility. What changes is usability.
+
+So the rule is:
+
+- ordinary asset list/detail reads may return `missing` assets
+- parse-dependent and file-dependent operations must reject them with a deterministic `409`
+
+## Why The Delete Repair Uses A Fresh Transaction
+
+After a failed ORM commit, reusing the same in-memory delete state is fragile.
+
+The safe repair shape is:
+
+1. rollback the failed delete transaction
+2. open a fresh transaction or session
+3. reload the asset row by id
+4. if it still exists, mark `storage_status=missing`
+5. commit the repair update
+
+That is intentionally boring.
+
+It avoids pretending that a failed commit left the SQLAlchemy session in a trustworthy state.
+
+It also leaves room for the edge case where the row is already gone by the time we repair. In that case, the delete effectively won and there is nothing left to mark.
+
+## Why We Added Lifecycle Status Instead Of Relying On Compensation Alone
+
+Compensation after a storage-first delete can make failures recoverable, but it does not eliminate the core race.
+
+The core race is:
+
+1. check existing blocking references
+2. delete the file
+3. try to delete the DB row
+4. discover that the DB truth changed after step 1
+
+That is the wrong order of operations.
+
+So we added a separate asset-level coordination field, `lifecycle_status`, with narrow v1 values:
+
+- `active`
+- `deleting`
+
+This field answers a workflow question:
+
+- is the asset available for normal provenance writes
+- or is deletion coordination already in progress
+
+That lets the database become the coordination point before storage is touched.
+
+## Why `lifecycle_status` And `storage_status` Both Exist
+
+These two fields are not duplicates.
+
+`lifecycle_status` is workflow intent.
+
+`storage_status` is storage reality.
+
+That distinction matters because they can diverge:
+
+- an asset can be `deleting` while the file is still present
+- an asset can be `active` while the file is already `missing`
+
+If we collapsed both ideas into one enum, we would mix workflow and file health into muddy states that are harder to reason about in code and API contracts.
+
+Keeping them separate makes the backend simpler:
+
+- `lifecycle_status` coordinates deletion and write eligibility
+- `storage_status` tells parse/download/preview paths whether the backing file is usable
+
+## Why Delete Coordination Happens In The DB First
+
+The new delete flow is intentionally boring:
+
+1. lock the asset row
+2. verify no existing blocking references from entities, entity relationships, or existing extraction jobs
+3. set `lifecycle_status='deleting'`
+4. commit
+5. only then touch storage
+
+That order is the important part.
+
+Once the asset is committed as `deleting`, well-behaved provenance writers have a stable DB fact to check before creating new references.
+
+That is much safer than deleting the file while the asset still looks fully active in the database.
+
+The current implementation also uses database triggers as a backstop for any write that sets `source_asset_id` on:
+
+- `entities`
+- `entity_relationships`
+- `extraction_jobs`
+
+That matters because service-layer checks alone do not close the race between "validated as active" and "committed while another request already moved the asset to `deleting`."
+
+Existing `extraction_jobs` are handled differently from new ones:
+
+- existing jobs block asset delete before storage is touched
+- new jobs are rejected once the asset is already `deleting`
+
+That split is intentional. It avoids a predictable post-file-delete FK failure when the asset already has dependent jobs, while still preventing new dependents from appearing after delete coordination starts.
+
+## Why We Added An Explicit Retry Command
+
+Delete failures are operational debt. They should not depend only on a future app restart to get cleaned up.
+
+So the design includes an explicit maintenance command that retries assets left in `lifecycle_status='deleting'`.
+
+That keeps the recovery path:
+
+- visible
+- manual when needed
+- easy to automate later
+
+Startup retry can still be a supplement, but it should not be the only recovery mechanism.
+
 ## Why The Test Plan Got Larger
 
 The earlier draft test plan was decent for happy paths, but too thin for the actual risk in this task.

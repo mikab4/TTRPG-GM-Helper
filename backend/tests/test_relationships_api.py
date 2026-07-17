@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app import services
 from app.models.relationship_type_definition import RelationshipTypeDefinition
 
@@ -215,6 +218,99 @@ def test_create_relationship_rejects_invalid_type_pair(
         response.json()["detail"]
         == "Relationship type is not valid for the source and target entity types."
     )
+
+
+def test_create_relationship_rejects_source_asset_when_asset_delete_is_in_progress(
+    api_request,
+    campaign_factory,
+    entity_factory,
+    source_asset_factory,
+) -> None:
+    test_campaign = campaign_factory()
+    source_entity = entity_factory(
+        campaign_id=test_campaign.id,
+        type="person",
+        name="Tarannon",
+    )
+    target_entity = entity_factory(
+        campaign_id=test_campaign.id,
+        type="person",
+        name="Civu",
+    )
+    deleting_asset = source_asset_factory(
+        campaign=test_campaign,
+        lifecycle_status="deleting",
+    )
+
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{test_campaign.id}/relationships",
+        json={
+            "source_entity_id": str(source_entity.id),
+            "target_entity_id": str(target_entity.id),
+            "relationship_type": "spouse_of",
+            "lifecycle_status": "current",
+            "visibility_status": "public",
+            "certainty_status": "confirmed",
+            "source_asset_id": str(deleting_asset.id),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Source asset cannot accept new provenance references while deletion is in progress."
+    }
+
+
+def test_create_relationship_returns_conflict_when_trigger_backstop_rejects_asset_reference(
+    api_request,
+    campaign_factory,
+    entity_factory,
+    source_asset_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_campaign = campaign_factory()
+    source_entity = entity_factory(
+        campaign_id=test_campaign.id,
+        type="person",
+        name="Tarannon",
+    )
+    target_entity = entity_factory(
+        campaign_id=test_campaign.id,
+        type="person",
+        name="Civu",
+    )
+    source_asset = source_asset_factory(campaign=test_campaign)
+
+    def failing_commit(self) -> None:
+        raise IntegrityError(
+            "INSERT INTO entity_relationships",
+            params=None,
+            orig=Exception(
+                "Source asset cannot accept new provenance references while deletion is in progress."
+            ),
+        )
+
+    monkeypatch.setattr("app.services.relationship_service.Session.commit", failing_commit)
+
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{test_campaign.id}/relationships",
+        json={
+            "source_entity_id": str(source_entity.id),
+            "target_entity_id": str(target_entity.id),
+            "relationship_type": "spouse_of",
+            "lifecycle_status": "current",
+            "visibility_status": "public",
+            "certainty_status": "confirmed",
+            "source_asset_id": str(source_asset.id),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Source asset cannot accept new provenance references while deletion is in progress."
+    }
 
 
 def test_create_relationship_rejects_inverse_duplicate_for_symmetric_type(

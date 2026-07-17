@@ -4,13 +4,13 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from app.enums import ParseStatus
+from app.enums import ParseStatus, SourceAssetLifecycleStatus, SourceAssetStorageStatus
+from app.models import Entity, ExtractionJob, Relationship, SourceAsset
 from app.models import Session as CampaignSession
-from app.models import SourceAsset
+from app.models.base import utcnow
 from app.schemas import AssetCreateFormData, AssetUpdate
 from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import ensure_campaign_exists
@@ -69,6 +69,11 @@ def create_asset(
         file_size_bytes=stored_upload_metadata.file_size_bytes,
         checksum=stored_upload_metadata.checksum,
         storage_key=storage_key,
+        lifecycle_status=SourceAssetLifecycleStatus.ACTIVE.value,
+        storage_status=SourceAssetStorageStatus.AVAILABLE.value,
+        delete_started_at=None,
+        delete_last_error_at=None,
+        delete_last_error_message=None,
         parse_status=ParseStatus.PENDING.value,
         last_parsed_at=None,
     )
@@ -153,20 +158,127 @@ def delete_asset(
     asset_id: UUID,
     asset_storage: AssetStorage,
 ) -> None:
+    deleting_asset = _begin_asset_delete(
+        db_session,
+        campaign_id=campaign_id,
+        asset_id=asset_id,
+    )
+    try:
+        asset_storage.delete(storage_key=deleting_asset.storage_key)
+    except Exception as exc:
+        _record_delete_failure(
+            db_session,
+            campaign_id=campaign_id,
+            asset_id=asset_id,
+            storage_status=SourceAssetStorageStatus.AVAILABLE,
+            error_message="Source asset delete could not remove the backing file.",
+        )
+        raise ConflictError("Source asset delete could not remove the backing file.") from exc
+
+    try:
+        _finalize_asset_delete(
+            db_session,
+            campaign_id=campaign_id,
+            asset_id=asset_id,
+        )
+    except Exception as exc:
+        _raise_delete_recovery_conflict(
+            db_session,
+            campaign_id=campaign_id,
+            asset_id=asset_id,
+            cause=exc,
+        )
+
+
+def retry_deleting_assets(
+    db_session: Session,
+    *,
+    asset_storage: AssetStorage,
+) -> int:
+    deleting_asset_ids = [
+        deleting_asset_id
+        for deleting_asset_id in db_session.scalars(
+            select(SourceAsset.id)
+            .where(SourceAsset.lifecycle_status == SourceAssetLifecycleStatus.DELETING.value)
+            .order_by(SourceAsset.delete_started_at.asc().nullsfirst(), SourceAsset.id)
+        )
+    ]
+    deleted_asset_count = 0
+
+    for deleting_asset_id in deleting_asset_ids:
+        deleting_asset = get_asset(
+            db_session,
+            campaign_id=_get_asset_campaign_id(db_session, asset_id=deleting_asset_id),
+            asset_id=deleting_asset_id,
+        )
+        try:
+            asset_storage.delete(storage_key=deleting_asset.storage_key)
+        except Exception:
+            _record_delete_failure(
+                db_session,
+                campaign_id=deleting_asset.campaign_id,
+                asset_id=deleting_asset.id,
+                storage_status=SourceAssetStorageStatus.AVAILABLE,
+                error_message="Source asset delete could not remove the backing file.",
+            )
+            continue
+
+        try:
+            _finalize_asset_delete(
+                db_session,
+                campaign_id=deleting_asset.campaign_id,
+                asset_id=deleting_asset.id,
+            )
+        except Exception:
+            _record_delete_failure(
+                db_session,
+                campaign_id=deleting_asset.campaign_id,
+                asset_id=deleting_asset.id,
+                storage_status=SourceAssetStorageStatus.MISSING,
+                error_message="Asset file is unavailable.",
+            )
+            continue
+
+        deleted_asset_count += 1
+
+    return deleted_asset_count
+
+
+def require_asset_file_available(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+) -> SourceAsset:
     stored_asset = get_asset(
         db_session,
         campaign_id=campaign_id,
         asset_id=asset_id,
     )
-    db_session.delete(stored_asset)
-    try:
-        db_session.commit()
-    except IntegrityError as exc:
-        db_session.rollback()
-        raise ConflictError(
-            "Source asset cannot be deleted while provenance-bearing records still reference it."
-        ) from exc
-    asset_storage.delete(storage_key=stored_asset.storage_key)
+    if stored_asset.storage_status == SourceAssetStorageStatus.MISSING.value:
+        raise ConflictError("Asset file is unavailable.")
+    return stored_asset
+
+
+def ensure_asset_accepts_provenance_reference(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    source_asset_id: UUID | None,
+) -> None:
+    if source_asset_id is None:
+        return
+
+    stored_asset = db_session.scalar(
+        select(SourceAsset).where(
+            SourceAsset.id == source_asset_id,
+            SourceAsset.campaign_id == campaign_id,
+        )
+    )
+    if stored_asset is None:
+        raise NotFoundError("Source asset not found.")
+    if stored_asset.lifecycle_status != SourceAssetLifecycleStatus.ACTIVE.value:
+        raise ConflictError("Source asset cannot accept new provenance references while deletion is in progress.")
 
 
 def _validate_session_link(
@@ -191,3 +303,176 @@ def _validate_session_link(
 def _build_storage_key(*, campaign_id: UUID, original_filename: str) -> str:
     sanitized_filename = Path(original_filename).name
     return f"source-assets/{campaign_id}/{uuid4()}-{sanitized_filename}"
+
+
+def _begin_asset_delete(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+) -> SourceAsset:
+    stored_asset = db_session.scalar(
+        select(SourceAsset)
+        .where(
+            SourceAsset.id == asset_id,
+            SourceAsset.campaign_id == campaign_id,
+        )
+        .with_for_update()
+    )
+    if stored_asset is None:
+        raise NotFoundError("Source asset not found.")
+    if stored_asset.lifecycle_status != SourceAssetLifecycleStatus.ACTIVE.value:
+        raise ConflictError("Source asset delete is already in progress.")
+
+    _ensure_asset_delete_has_no_blocking_references(
+        db_session,
+        campaign_id=campaign_id,
+        asset_id=asset_id,
+    )
+
+    stored_asset.lifecycle_status = SourceAssetLifecycleStatus.DELETING.value
+    stored_asset.delete_started_at = utcnow()
+    stored_asset.delete_last_error_at = None
+    stored_asset.delete_last_error_message = None
+    db_session.commit()
+    db_session.refresh(stored_asset)
+    return stored_asset
+
+
+def _ensure_asset_delete_has_no_blocking_references(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+) -> None:
+    entity_reference_exists = db_session.scalar(
+        select(exists().where(
+            Entity.campaign_id == campaign_id,
+            Entity.source_asset_id == asset_id,
+        ))
+    )
+    relationship_reference_exists = db_session.scalar(
+        select(exists().where(
+            Relationship.campaign_id == campaign_id,
+            Relationship.source_asset_id == asset_id,
+        ))
+    )
+    extraction_job_reference_exists = db_session.scalar(
+        select(exists().where(
+            ExtractionJob.campaign_id == campaign_id,
+            ExtractionJob.source_asset_id == asset_id,
+        ))
+    )
+    if entity_reference_exists or relationship_reference_exists or extraction_job_reference_exists:
+        raise ConflictError(
+            "Source asset cannot be deleted while dependent records still reference it."
+        )
+
+
+def _finalize_asset_delete(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+) -> None:
+    finalize_session = Session(bind=db_session.get_bind(), expire_on_commit=False)
+    try:
+        stored_asset = finalize_session.scalar(
+            select(SourceAsset).where(
+                SourceAsset.id == asset_id,
+                SourceAsset.campaign_id == campaign_id,
+            )
+        )
+        if stored_asset is None:
+            finalize_session.rollback()
+            return
+
+        finalize_session.delete(stored_asset)
+        finalize_session.commit()
+    finally:
+        finalize_session.close()
+
+
+def _mark_asset_delete_state(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+    storage_status: SourceAssetStorageStatus,
+    error_message: str,
+) -> bool:
+    repair_session = Session(bind=db_session.get_bind(), expire_on_commit=False)
+    try:
+        stored_asset = repair_session.scalar(
+            select(SourceAsset).where(
+                SourceAsset.id == asset_id,
+                SourceAsset.campaign_id == campaign_id,
+            )
+        )
+        if stored_asset is None:
+            repair_session.rollback()
+            return False
+
+        stored_asset.lifecycle_status = SourceAssetLifecycleStatus.DELETING.value
+        stored_asset.storage_status = storage_status.value
+        stored_asset.delete_last_error_at = utcnow()
+        stored_asset.delete_last_error_message = error_message
+        if stored_asset.delete_started_at is None:
+            stored_asset.delete_started_at = utcnow()
+        repair_session.commit()
+        return True
+    finally:
+        repair_session.close()
+
+
+def _record_delete_failure(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+    storage_status: SourceAssetStorageStatus,
+    error_message: str,
+) -> None:
+    stored_asset = get_asset(
+        db_session,
+        campaign_id=campaign_id,
+        asset_id=asset_id,
+    )
+    stored_asset.lifecycle_status = SourceAssetLifecycleStatus.DELETING.value
+    stored_asset.storage_status = storage_status.value
+    stored_asset.delete_last_error_at = utcnow()
+    stored_asset.delete_last_error_message = error_message
+    if stored_asset.delete_started_at is None:
+        stored_asset.delete_started_at = utcnow()
+    db_session.commit()
+
+
+def _raise_delete_recovery_conflict(
+    db_session: Session,
+    *,
+    campaign_id: UUID,
+    asset_id: UUID,
+    cause: Exception,
+) -> None:
+    marked_delete_failure = _mark_asset_delete_state(
+        db_session,
+        campaign_id=campaign_id,
+        asset_id=asset_id,
+        storage_status=SourceAssetStorageStatus.MISSING,
+        error_message="Asset file is unavailable.",
+    )
+    if not marked_delete_failure:
+        raise ConflictError(
+            "Source asset delete removed the backing file but could not mark the asset for recovery."
+        ) from cause
+    db_session.expire_all()
+    raise ConflictError("Asset file is unavailable.") from cause
+
+
+def _get_asset_campaign_id(db_session: Session, *, asset_id: UUID) -> UUID:
+    campaign_id = db_session.scalar(
+        select(SourceAsset.campaign_id).where(SourceAsset.id == asset_id)
+    )
+    if campaign_id is None:
+        raise NotFoundError("Source asset not found.")
+    return campaign_id

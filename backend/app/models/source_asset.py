@@ -55,6 +55,11 @@ class SourceAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     checksum: Mapped[str] = mapped_column(Text, nullable=False)
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_status: Mapped[str] = mapped_column(Text, nullable=False)
+    delete_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delete_last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delete_last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     parse_status: Mapped[str] = mapped_column(Text, nullable=False)
     last_parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_: Mapped[dict[str, object]] = mapped_column(

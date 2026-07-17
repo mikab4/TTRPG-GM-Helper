@@ -3,11 +3,13 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.enums import EntityType, RelationshipFamily, normalize_str_enum_value
-from app.models import Entity, Relationship, SourceAsset
+from app.models import Entity, Relationship
 from app.schemas import RelationshipCreate, RelationshipUpdate
+from app.services.asset_service import ensure_asset_accepts_provenance_reference
 from app.services.campaign_lookup import ensure_campaign_exists
 from app.services.errors import ConflictError, NotFoundError
 from app.services.relationship_catalog import list_relationship_type_descriptors_by_family
@@ -55,7 +57,7 @@ def create_relationship(
         provenance_data=relationship_create.provenance_data,
     )
     db_session.add(created_relationship)
-    db_session.commit()
+    _commit_relationship_write(db_session)
     db_session.refresh(created_relationship)
     return created_relationship
 
@@ -133,7 +135,7 @@ def update_relationship(
     for field_name, field_value in update_fields.items():
         setattr(stored_relationship, field_name, field_value)
 
-    db_session.commit()
+    _commit_relationship_write(db_session)
     db_session.refresh(stored_relationship)
     return stored_relationship
 
@@ -234,16 +236,27 @@ def _validate_source_asset(
     campaign_id: UUID,
     source_asset_id: UUID | None,
 ) -> None:
-    if source_asset_id is None:
-        return
-    stored_asset = db_session.scalar(
-        select(SourceAsset.id).where(
-            SourceAsset.id == source_asset_id,
-            SourceAsset.campaign_id == campaign_id,
-        )
+    ensure_asset_accepts_provenance_reference(
+        db_session,
+        campaign_id=campaign_id,
+        source_asset_id=source_asset_id,
     )
-    if stored_asset is None:
-        raise NotFoundError("Source asset not found.")
+
+
+def _commit_relationship_write(db_session: Session) -> None:
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        if _is_source_asset_delete_conflict(exc):
+            raise ConflictError(
+                "Source asset cannot accept new provenance references while deletion is in progress."
+            ) from exc
+        raise
+
+
+def _is_source_asset_delete_conflict(exc: IntegrityError) -> bool:
+    return "Source asset cannot accept new provenance references while deletion is in progress." in str(exc)
 
 
 def _validate_and_resolve_relationship_type(

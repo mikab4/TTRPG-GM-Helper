@@ -61,6 +61,16 @@ class ParseStatus(StrEnum):
     FAILED = "failed"
 
 
+class SourceAssetStorageStatus(StrEnum):
+    AVAILABLE = "available"
+    MISSING = "missing"
+
+
+class SourceAssetLifecycleStatus(StrEnum):
+    ACTIVE = "active"
+    DELETING = "deleting"
+
+
 class AssetParserKind(StrEnum):
     TEXT = "text"
     SPREADSHEET = "spreadsheet"

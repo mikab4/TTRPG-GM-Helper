@@ -57,6 +57,11 @@ Rename and reshape the current persistence model to this target:
     - `file_size_bytes`
     - `checksum`
     - `storage_key`
+    - `lifecycle_status`
+    - `storage_status`
+    - `delete_started_at`
+    - `delete_last_error_at`
+    - `delete_last_error_message`
     - `parse_status`
     - `last_parsed_at`
   - keep:
@@ -91,6 +96,8 @@ New controlled fields must use the repo's existing `StrEnum` plus schema-normali
 Add enum-backed values for:
 
 - asset truth status
+- asset lifecycle status
+- asset storage status
 - asset parse status
 - asset parser kind
 - parse result status
@@ -204,6 +211,16 @@ Rules:
 - `PATCH /campaigns/{campaign_id}/assets/{asset_id}`
 - `DELETE /campaigns/{campaign_id}/assets/{asset_id}`
 
+Asset response semantics:
+
+- asset list and detail responses must include `lifecycle_status`
+- asset list and detail responses must include `storage_status`
+- `lifecycle_status=active` means the asset may accept new provenance references
+- `lifecycle_status=deleting` means delete coordination is in progress and new writes carrying `source_asset_id` must be rejected
+- `storage_status=available` means the original backing file is expected to exist
+- `storage_status=missing` means the row is still visible for metadata and provenance, but the original file is unavailable
+- normal list/detail reads keep `missing` assets visible instead of silently hiding them
+
 ### Frontend orchestration rule
 
 The frontend may still present one combined form for:
@@ -255,6 +272,25 @@ Required behavior:
 
 - if original file storage succeeds but DB persistence fails:
   - clean up the stored file, or mark it recoverable and invisible to normal reads
+- if original file delete succeeds but DB delete fails:
+  - leave the row in `lifecycle_status=deleting`
+  - mark `storage_status=missing`
+  - persist `delete_last_error_at` and `delete_last_error_message`
+- asset delete must coordinate in the database before mutating storage:
+  - lock the asset row
+  - check existing blocking references from:
+    - entities
+    - entity relationships
+    - existing extraction jobs
+  - set `lifecycle_status=deleting`
+  - commit
+  - only then touch storage
+- new references that carry `source_asset_id` must be rejected whenever `lifecycle_status != active`
+- the DB backstop must enforce that rule for:
+  - entities
+  - entity relationships
+  - extraction jobs
+- provide an explicit maintenance command to retry `deleting` assets and hard-delete rows once storage cleanup succeeds
 - if DB row creation succeeds but derived parse artifact storage fails:
   - persist a visible failed parse status and error detail
   - do not pretend the asset parsed successfully
@@ -264,6 +300,12 @@ Required behavior:
   - allow a later successful retry path to clear stale failure state correctly
 - if a file changes or parser version changes:
   - do not reuse stale parse output
+
+Parse/file-dependent operation contract:
+
+- if `storage_status=missing`, parse-dependent reads must fail deterministically with `409 Conflict`
+- future file preview/download flows must use the same `409 asset file is unavailable` contract
+- do not retry storage access silently for `missing` assets in ordinary request handling
 
 ## Implementation Sequence
 
@@ -287,6 +329,8 @@ Required behavior:
 - add the storage backend abstraction
 - implement local filesystem storage
 - implement asset workflow service
+- add DB-first delete coordination for assets
+- add retry cleanup command for assets left in `deleting`
 - implement parser helpers for text documents and spreadsheets
 - add parse-result selection, persistence, and pruning behavior
 
@@ -343,6 +387,12 @@ Update all source-of-truth docs that still describe the old shape:
 
 - original file written but DB write fails
 - DB row exists but derived artifact write fails
+- delete marks `lifecycle_status=deleting` before touching storage
+- asset delete rejects existing blocking references from entities, relationships, and extraction jobs before touching storage
+- writes that set `source_asset_id` reject assets where `lifecycle_status != active`
+- original file delete succeeds but DB row delete fails, leaving `lifecycle_status=deleting` and `storage_status=missing`
+- retry cleanup command hard-deletes rows after successful storage retry
+- parse/file-dependent operations return `409` when `storage_status=missing`
 - cleanup or recoverable error handling leaves the system in a non-silent state
 
 ### Frontend integration coverage

@@ -146,6 +146,37 @@ def test_extraction_job_rejects_source_asset_from_another_campaign(
             db_session.rollback()
 
 
+def test_extraction_job_rejects_deleting_source_asset(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with DBSession(engine) as db_session:
+            owner = Owner(email="gm@example.com")
+            campaign = Campaign(owner=owner, name="Campaign A")
+            deleting_asset = build_source_asset(campaign=campaign)
+            deleting_asset.lifecycle_status = "deleting"
+
+            db_session.add_all([owner, campaign, deleting_asset])
+            db_session.commit()
+
+            invalid_job = ExtractionJob(
+                campaign=campaign,
+                source_asset_id=deleting_asset.id,
+                status="pending",
+                extractor_kind="rules",
+            )
+            db_session.add(invalid_job)
+
+            with pytest.raises(IntegrityError):
+                db_session.commit()
+
+            db_session.rollback()
+
+
 def test_extraction_candidate_rejects_job_from_another_campaign(
     monkeypatch: pytest.MonkeyPatch,
     postgres_test_settings: Settings,

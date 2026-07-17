@@ -96,6 +96,11 @@ class SourceAssetFactory(SQLAlchemyModelFactory):
     file_size_bytes = 12
     checksum = factory.Sequence(lambda n: f"sha256:test-{n}")
     storage_key = factory.Sequence(lambda n: f"test-assets/{n}.txt")
+    lifecycle_status = "active"
+    storage_status = "available"
+    delete_started_at = None
+    delete_last_error_at = None
+    delete_last_error_message = None
     parse_status = "pending"
     last_parsed_at = None
     metadata_ = factory.LazyFunction(dict)
