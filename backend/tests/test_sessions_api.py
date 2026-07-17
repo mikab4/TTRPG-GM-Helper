@@ -48,6 +48,30 @@ def test_create_session_returns_not_found_for_unknown_campaign(api_request) -> N
     assert response.json() == {"detail": "Campaign not found."}
 
 
+def test_create_session_returns_conflict_for_duplicate_session_number(
+    api_request,
+    campaign_factory,
+    session_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    session_factory(campaign=stored_campaign, session_number=7, session_label="Existing")
+
+    # Act
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{stored_campaign.id}/sessions",
+        json={
+            "session_number": 7,
+            "session_label": "Duplicate",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Session number already exists for this campaign."}
+
+
 def test_list_sessions_returns_campaign_sessions_in_number_order(
     api_request,
     owner_factory,
@@ -159,6 +183,30 @@ def test_update_session_allows_replacing_both_identity_fields(
     assert session_data["session_label"] == "After Update"
 
 
+def test_update_session_returns_conflict_for_duplicate_session_number(
+    api_request,
+    campaign_factory,
+    session_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    first_session = session_factory(campaign=stored_campaign, session_number=4, session_label="First")
+    second_session = session_factory(campaign=stored_campaign, session_number=8, session_label="Second")
+
+    # Act
+    response = api_request(
+        "PATCH",
+        f"/api/campaigns/{stored_campaign.id}/sessions/{second_session.id}",
+        json={
+            "session_number": first_session.session_number,
+        },
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Session number already exists for this campaign."}
+
+
 def test_update_session_rejects_clearing_the_last_identity_field(
     api_request,
     campaign_factory,
@@ -209,6 +257,28 @@ def test_delete_session_removes_session(
         f"/api/campaigns/{stored_campaign.id}/sessions/{stored_session.id}",
     )
     assert missing_response.status_code == 404
+
+
+def test_delete_session_returns_conflict_when_source_assets_still_reference_it(
+    api_request,
+    campaign_factory,
+    session_factory,
+    source_asset_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    stored_session = session_factory(campaign=stored_campaign, session_number=4)
+    source_asset_factory(campaign=stored_campaign, session_id=stored_session.id)
+
+    # Act
+    response = api_request(
+        "DELETE",
+        f"/api/campaigns/{stored_campaign.id}/sessions/{stored_session.id}",
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Session cannot be deleted while source assets still reference it."}
 
 
 def test_get_session_returns_not_found_for_campaign_mismatch(

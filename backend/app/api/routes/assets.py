@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_asset_storage, get_db_session
 from app.config import Settings, get_settings
 from app.schemas import AssetCreateFormData, AssetResponse, AssetUpdate
-from app.services import AssetUploadTooLargeError, NotFoundError, UnsupportedMediaTypeError, asset_service
+from app.services import AssetUploadTooLargeError, ConflictError, NotFoundError, UnsupportedMediaTypeError, asset_service
 from app.services.asset_storage import AssetStorage
 
 router = APIRouter()
@@ -140,6 +140,8 @@ def delete_asset(
             asset_id=asset_id,
             asset_storage=asset_storage,
         )
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

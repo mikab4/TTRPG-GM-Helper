@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from fastapi import UploadFile
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.enums import ParseStatus
@@ -13,7 +14,7 @@ from app.models import SourceAsset
 from app.schemas import AssetCreateFormData, AssetUpdate
 from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import ensure_campaign_exists
-from app.services.errors import NotFoundError, UnsupportedMediaTypeError
+from app.services.errors import ConflictError, NotFoundError, UnsupportedMediaTypeError
 
 SUPPORTED_MEDIA_TYPES = {
     "application/pdf",
@@ -158,7 +159,13 @@ def delete_asset(
         asset_id=asset_id,
     )
     db_session.delete(stored_asset)
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError(
+            "Source asset cannot be deleted while provenance-bearing records still reference it."
+        ) from exc
     asset_storage.delete(storage_key=stored_asset.storage_key)
 
 

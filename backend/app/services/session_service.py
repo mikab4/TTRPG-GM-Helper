@@ -3,12 +3,13 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Session as CampaignSession
 from app.schemas import SessionCreate, SessionUpdate
 from app.services.campaign_lookup import ensure_campaign_exists
-from app.services.errors import NotFoundError
+from app.services.errors import ConflictError, NotFoundError
 
 
 def create_session(
@@ -27,7 +28,11 @@ def create_session(
         summary=session_create.summary,
     )
     db_session.add(created_session)
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError("Session number already exists for this campaign.") from exc
     db_session.refresh(created_session)
     return created_session
 
@@ -81,7 +86,11 @@ def update_session(
     if stored_session.session_number is None and stored_session.session_label is None:
         raise ValueError("Session number or session label must remain set.")
 
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError("Session number already exists for this campaign.") from exc
     db_session.refresh(stored_session)
     return stored_session
 
@@ -98,4 +107,8 @@ def delete_session(
         session_id=session_id,
     )
     db_session.delete(stored_session)
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError("Session cannot be deleted while source assets still reference it.") from exc

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
 from app.schemas import SessionCreate, SessionResponse, SessionUpdate
-from app.services import NotFoundError, session_service
+from app.services import ConflictError, NotFoundError, session_service
 
 router = APIRouter()
 
@@ -31,6 +31,8 @@ def create_session(
             campaign_id=campaign_id,
             session_create=session_create,
         )
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -80,6 +82,8 @@ def update_session(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -100,6 +104,8 @@ def delete_session(campaign_id: UUID, session_id: UUID, db_session: DbSession) -
             campaign_id=campaign_id,
             session_id=session_id,
         )
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

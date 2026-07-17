@@ -310,3 +310,64 @@ def test_delete_asset_removes_asset(
         f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset.id}",
     )
     assert missing_response.status_code == 404
+
+
+def test_delete_asset_returns_conflict_when_entity_provenance_still_references_it(
+    api_request,
+    campaign_factory,
+    source_asset_factory,
+    entity_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    stored_source_asset = source_asset_factory(campaign=stored_campaign)
+    entity_factory(
+        campaign_id=stored_campaign.id,
+        type="person",
+        name="Magistrate Ilya",
+        source_asset_id=stored_source_asset.id,
+    )
+
+    # Act
+    response = api_request(
+        "DELETE",
+        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset.id}",
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Source asset cannot be deleted while provenance-bearing records still reference it."
+    }
+
+
+def test_delete_asset_returns_conflict_when_relationship_provenance_still_references_it(
+    api_request,
+    campaign_factory,
+    source_asset_factory,
+    entity_factory,
+    relationship_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    stored_source_asset = source_asset_factory(campaign=stored_campaign)
+    source_entity = entity_factory(campaign_id=stored_campaign.id, type="person", name="Martha")
+    target_entity = entity_factory(campaign_id=stored_campaign.id, type="person", name="Rick")
+    relationship_factory(
+        campaign_id=stored_campaign.id,
+        source_entity=source_entity,
+        target_entity=target_entity,
+        source_asset_id=stored_source_asset.id,
+    )
+
+    # Act
+    response = api_request(
+        "DELETE",
+        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset.id}",
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Source asset cannot be deleted while provenance-bearing records still reference it."
+    }
