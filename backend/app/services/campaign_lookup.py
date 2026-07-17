@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Campaign
@@ -16,4 +17,6 @@ def get_campaign_or_raise(db_session: Session, campaign_id: UUID) -> Campaign:
 
 
 def ensure_campaign_exists(db_session: Session, campaign_id: UUID) -> None:
-    get_campaign_or_raise(db_session, campaign_id)
+    stored_campaign_id = db_session.scalar(select(Campaign.id).where(Campaign.id == campaign_id))
+    if stored_campaign_id is None:
+        raise NotFoundError("Campaign not found.")

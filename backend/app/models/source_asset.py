@@ -81,22 +81,22 @@ class SourceAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     extraction_jobs: Mapped[list["ExtractionJob"]] = relationship(
         back_populates="source_asset",
-        lazy="selectin",
+        lazy="select",
         overlaps="campaign,extraction_jobs",
     )
     entities: Mapped[list["Entity"]] = relationship(
         back_populates="source_asset",
-        lazy="selectin",
+        lazy="select",
         overlaps="campaign,entities",
     )
     relationships: Mapped[list["Relationship"]] = relationship(
         back_populates="source_asset",
-        lazy="selectin",
+        lazy="select",
         overlaps="campaign,relationships",
     )
     parse_results: Mapped[list["AssetParseResult"]] = relationship(
         back_populates="asset",
-        lazy="selectin",
+        lazy="select",
         cascade="all, delete-orphan",
         overlaps="campaign,parse_results",
     )

@@ -39,6 +39,6 @@ class Session(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     campaign: Mapped["Campaign"] = relationship(back_populates="sessions", lazy="select")
     source_assets: Mapped[list["SourceAsset"]] = relationship(
         back_populates="session",
-        lazy="selectin",
+        lazy="select",
         overlaps="campaign,source_assets",
     )

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.datastructures import Headers
 
@@ -90,6 +92,32 @@ def build_upload_file(
         filename=filename,
         headers=Headers({"content-type": content_type}),
     )
+
+
+class SelectStatementCounter:
+    def __init__(self, engine: Engine) -> None:
+        self._engine = engine
+        self.select_statement_count = 0
+
+    def __enter__(self) -> "SelectStatementCounter":
+        event.listen(self._engine, "before_cursor_execute", self._before_cursor_execute)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        event.remove(self._engine, "before_cursor_execute", self._before_cursor_execute)
+
+    def _before_cursor_execute(
+        self,
+        conn,
+        cursor,
+        statement: str,
+        parameters,
+        context,
+        executemany,
+    ) -> None:
+        del conn, cursor, parameters, context, executemany
+        if statement.lstrip().upper().startswith("SELECT"):
+            self.select_statement_count += 1
 
 
 def test_create_asset_reads_upload_stream_in_chunks_and_persists_metadata(
@@ -230,6 +258,53 @@ def test_create_asset_rejects_uploads_larger_than_max_bytes(
         remaining_files = [stored_path for stored_path in asset_storage_root.rglob("*") if stored_path.is_file()]
         assert remaining_files == []
         assert asset_service.list_assets(db_session, campaign_id=stored_campaign.id) == []
+
+
+def test_list_assets_does_not_eager_load_unused_child_collections(
+    db_session_factory,
+    sqlite_engine: Engine,
+    campaign_factory,
+    source_asset_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    source_asset_factory(campaign=stored_campaign, title="Observatory Notes")
+
+    with db_session_factory() as db_session:
+        # Act
+        with SelectStatementCounter(sqlite_engine) as statement_counter:
+            listed_assets = asset_service.list_assets(
+                db_session,
+                campaign_id=stored_campaign.id,
+            )
+
+        # Assert
+        assert [listed_asset.title for listed_asset in listed_assets] == ["Observatory Notes"]
+        assert statement_counter.select_statement_count == 2
+
+
+def test_get_asset_does_not_eager_load_unused_child_collections(
+    db_session_factory,
+    sqlite_engine: Engine,
+    campaign_factory,
+    source_asset_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    stored_asset = source_asset_factory(campaign=stored_campaign, title="Harbor Recap")
+
+    with db_session_factory() as db_session:
+        # Act
+        with SelectStatementCounter(sqlite_engine) as statement_counter:
+            loaded_asset = asset_service.get_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=stored_asset.id,
+            )
+
+        # Assert
+        assert loaded_asset.title == "Harbor Recap"
+        assert statement_counter.select_statement_count == 1
 
 
 def test_delete_asset_removes_stored_file_and_database_row(
