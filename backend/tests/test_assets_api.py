@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from app.config import get_settings
 
 
@@ -129,6 +131,49 @@ def test_create_asset_upload_returns_payload_too_large_when_upload_exceeds_limit
     # Assert
     assert response.status_code == 413
     assert response.json() == {"detail": "Uploaded asset exceeds the maximum allowed size."}
+
+
+@pytest.mark.parametrize(
+    ("asset_form_data", "expected_error_type", "expected_error_location"),
+    [
+        (
+            {"truth_status": "legendary"},
+            "value_error",
+            ["body", "truth_status"],
+        ),
+        (
+            {"title": "   "},
+            "string_too_short",
+            ["body", "title"],
+        ),
+    ],
+)
+def test_create_asset_upload_returns_422_for_invalid_form_fields(
+    api_request,
+    campaign_factory,
+    asset_form_data,
+    expected_error_type,
+    expected_error_location,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+
+    # Act
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        data=asset_form_data,
+        files={
+            "file": ("session-7.txt", b"The observatory is burning.", "text/plain"),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 422
+    error_details = response.json()["detail"]
+    assert len(error_details) == 1
+    assert error_details[0]["type"] == expected_error_type
+    assert error_details[0]["loc"] == expected_error_location
 
 
 def test_list_assets_returns_campaign_assets_without_triggering_parse(

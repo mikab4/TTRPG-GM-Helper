@@ -4,6 +4,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_asset_storage, get_db_session
@@ -24,11 +26,22 @@ def parse_asset_create_form_data(
     truth_status: str = Form(default="uncertain"),
     session_id: UUID | None = Form(default=None),
 ) -> AssetCreateFormData:
-    return AssetCreateFormData(
-        title=title,
-        truth_status=truth_status,
-        session_id=session_id,
-    )
+    try:
+        return AssetCreateFormData(
+            title=title,
+            truth_status=truth_status,
+            session_id=session_id,
+        )
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [
+                {
+                    **validation_error,
+                    "loc": ("body", *validation_error["loc"]),
+                }
+                for validation_error in exc.errors(include_url=False)
+            ]
+        ) from exc
 
 
 @router.post(
