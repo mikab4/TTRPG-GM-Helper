@@ -104,7 +104,7 @@ def upgrade() -> None:
             ),
             storage_key = concat('legacy-assets/', id::text, '.txt'),
             lifecycle_status = 'active',
-            storage_status = 'available',
+            storage_status = 'missing',
             parse_status = 'succeeded',
             last_parsed_at = updated_at
         """

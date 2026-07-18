@@ -10,7 +10,7 @@ from fastapi import UploadFile
 
 from app.config import Settings
 from app.enums import AssetStorageBackend
-from app.services.errors import AssetUploadTooLargeError
+from app.services.errors import AssetStorageNotFoundError, AssetUploadTooLargeError
 
 UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 
@@ -78,7 +78,10 @@ class LocalAssetStorage:
 
     def delete(self, *, storage_key: str) -> None:
         stored_asset_path = self._resolve_storage_path(storage_key)
-        stored_asset_path.unlink(missing_ok=True)
+        try:
+            stored_asset_path.unlink()
+        except FileNotFoundError as exc:
+            raise AssetStorageNotFoundError(f"Stored asset not found for key: {storage_key}") from exc
 
     def _resolve_storage_path(self, storage_key: str) -> Path:
         key_path = PurePosixPath(storage_key)

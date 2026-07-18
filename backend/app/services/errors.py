@@ -12,3 +12,7 @@ class UnsupportedMediaTypeError(Exception):
 
 class AssetUploadTooLargeError(Exception):
     pass
+
+
+class AssetStorageNotFoundError(Exception):
+    pass

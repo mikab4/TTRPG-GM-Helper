@@ -395,6 +395,7 @@ def test_upgrade_from_20260410_backfills_legacy_source_document_into_source_asse
             assert migrated_asset.session_id == legacy_record_ids.session_id
             assert migrated_asset.parse_status == "succeeded"
             assert migrated_asset.checksum.startswith("sha256:")
+            assert migrated_asset.storage_status == "missing"
             assert len(migrated_parse_results) == 1
 
             migrated_parse_result = migrated_parse_results[0]

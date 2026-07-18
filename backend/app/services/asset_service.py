@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -14,7 +15,12 @@ from app.models.base import utcnow
 from app.schemas import AssetCreateFormData, AssetUpdate
 from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import ensure_campaign_exists
-from app.services.errors import ConflictError, NotFoundError, UnsupportedMediaTypeError
+from app.services.errors import (
+    AssetStorageNotFoundError,
+    ConflictError,
+    NotFoundError,
+    UnsupportedMediaTypeError,
+)
 
 SUPPORTED_MEDIA_TYPES = {
     "application/pdf",
@@ -28,7 +34,11 @@ SUPPORTED_MEDIA_TYPES = {
     "text/markdown",
     "text/plain",
 }
+MEDIA_TYPE_ALIASES = {
+    "text/x-markdown": "text/markdown",
+}
 UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
+ASSET_DELETE_RETRY_GRACE_PERIOD = timedelta(minutes=1)
 
 
 def create_asset(
@@ -47,7 +57,7 @@ def create_asset(
         session_id=asset_create.session_id,
     )
 
-    media_type = upload_file.content_type or "application/octet-stream"
+    media_type = _normalize_media_type(upload_file.content_type)
     if media_type not in SUPPORTED_MEDIA_TYPES:
         raise UnsupportedMediaTypeError("Unsupported asset media type.")
 
@@ -82,7 +92,10 @@ def create_asset(
         db_session.commit()
     except Exception:
         db_session.rollback()
-        asset_storage.delete(storage_key=storage_key)
+        try:
+            asset_storage.delete(storage_key=storage_key)
+        except AssetStorageNotFoundError:
+            pass
         raise
     db_session.refresh(created_asset)
     return created_asset
@@ -165,6 +178,15 @@ def delete_asset(
     )
     try:
         asset_storage.delete(storage_key=deleting_asset.storage_key)
+    except AssetStorageNotFoundError as exc:
+        _record_delete_failure(
+            db_session,
+            campaign_id=campaign_id,
+            asset_id=asset_id,
+            storage_status=SourceAssetStorageStatus.MISSING,
+            error_message="Asset file is unavailable.",
+        )
+        raise ConflictError("Asset file is unavailable.") from exc
     except Exception as exc:
         _record_delete_failure(
             db_session,
@@ -195,11 +217,18 @@ def retry_deleting_assets(
     *,
     asset_storage: AssetStorage,
 ) -> int:
+    retry_started_before = utcnow() - ASSET_DELETE_RETRY_GRACE_PERIOD
     deleting_asset_ids = [
         deleting_asset_id
         for deleting_asset_id in db_session.scalars(
             select(SourceAsset.id)
-            .where(SourceAsset.lifecycle_status == SourceAssetLifecycleStatus.DELETING.value)
+            .where(
+                SourceAsset.lifecycle_status == SourceAssetLifecycleStatus.DELETING.value,
+                (
+                    SourceAsset.delete_started_at.is_(None)
+                    | (SourceAsset.delete_started_at <= retry_started_before)
+                ),
+            )
             .order_by(SourceAsset.delete_started_at.asc().nullsfirst(), SourceAsset.id)
         )
     ]
@@ -211,17 +240,21 @@ def retry_deleting_assets(
             campaign_id=_get_asset_campaign_id(db_session, asset_id=deleting_asset_id),
             asset_id=deleting_asset_id,
         )
-        try:
-            asset_storage.delete(storage_key=deleting_asset.storage_key)
-        except Exception:
-            _record_delete_failure(
-                db_session,
-                campaign_id=deleting_asset.campaign_id,
-                asset_id=deleting_asset.id,
-                storage_status=SourceAssetStorageStatus.AVAILABLE,
-                error_message="Source asset delete could not remove the backing file.",
-            )
-            continue
+        if deleting_asset.storage_status != SourceAssetStorageStatus.MISSING.value:
+            try:
+                asset_storage.delete(storage_key=deleting_asset.storage_key)
+            except AssetStorageNotFoundError:
+                deleting_asset.storage_status = SourceAssetStorageStatus.MISSING.value
+                db_session.commit()
+            except Exception:
+                _record_delete_failure(
+                    db_session,
+                    campaign_id=deleting_asset.campaign_id,
+                    asset_id=deleting_asset.id,
+                    storage_status=SourceAssetStorageStatus.AVAILABLE,
+                    error_message="Source asset delete could not remove the backing file.",
+                )
+                continue
 
         try:
             _finalize_asset_delete(
@@ -279,6 +312,17 @@ def ensure_asset_accepts_provenance_reference(
         raise NotFoundError("Source asset not found.")
     if stored_asset.lifecycle_status != SourceAssetLifecycleStatus.ACTIVE.value:
         raise ConflictError("Source asset cannot accept new provenance references while deletion is in progress.")
+
+
+def _normalize_media_type(raw_media_type: str | None) -> str:
+    if raw_media_type is None:
+        return "application/octet-stream"
+
+    normalized_media_type = raw_media_type.split(";", maxsplit=1)[0].strip().lower()
+    if not normalized_media_type:
+        return "application/octet-stream"
+
+    return MEDIA_TYPE_ALIASES.get(normalized_media_type, normalized_media_type)
 
 
 def _validate_session_link(

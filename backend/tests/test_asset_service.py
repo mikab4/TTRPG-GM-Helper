@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from app.models import ExtractionJob
 from app.schemas import AssetCreateFormData
 from app.services import AssetUploadTooLargeError, ConflictError, NotFoundError, asset_service
 from app.services.asset_storage import LocalAssetStorage, StoredUploadMetadata
+from app.services.errors import AssetStorageNotFoundError
 
 
 class NoWholeFileReadsStream:
@@ -73,12 +75,22 @@ class DeleteFailingAssetStorage(RecordingAssetStorage):
         raise OSError("storage delete failed")
 
 
+class DeleteMissingAssetStorage(RecordingAssetStorage):
+    def delete(self, *, storage_key: str) -> None:
+        self.deleted_keys.append(storage_key)
+        raise AssetStorageNotFoundError("storage object missing")
+
+
 def build_recording_asset_storage(*, storage_root: Path) -> RecordingAssetStorage:
     return RecordingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
 
 
 def build_delete_failing_asset_storage(*, storage_root: Path) -> DeleteFailingAssetStorage:
     return DeleteFailingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
+
+
+def build_delete_missing_asset_storage(*, storage_root: Path) -> DeleteMissingAssetStorage:
+    return DeleteMissingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
 
 
 def build_upload_file(
@@ -400,6 +412,93 @@ def test_delete_asset_leaves_row_unchanged_when_storage_delete_fails(
         assert stored_asset_path.is_file()
 
 
+def test_delete_asset_marks_asset_missing_when_backing_file_is_already_missing(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"already-missing"),
+        filename="already-missing.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        stored_asset_path.unlink()
+
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Asset file is unavailable."):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=asset_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.storage_status == "missing"
+        assert reloaded_asset.delete_last_error_message == "Asset file is unavailable."
+
+
+def test_delete_asset_marks_asset_missing_when_storage_backend_reports_missing_object(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    create_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    delete_storage = build_delete_missing_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"storage-missing"),
+        filename="storage-missing.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=create_storage,
+        )
+
+        # Act / Assert
+        with pytest.raises(ConflictError, match="Asset file is unavailable."):
+            asset_service.delete_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+                asset_storage=delete_storage,
+            )
+
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.storage_status == "missing"
+        assert reloaded_asset.delete_last_error_message == "Asset file is unavailable."
+
+
 def test_delete_asset_rejects_existing_extraction_job_before_storage_delete(
     db_session_factory,
     campaign_factory,
@@ -650,7 +749,11 @@ def test_retry_deleting_assets_removes_asset_after_storage_delete_succeeds(
             asset_id=created_asset.id,
         )
         stored_asset.lifecycle_status = "deleting"
-        stored_asset.delete_started_at = stored_asset.created_at
+        stored_asset.delete_started_at = (
+            asset_service.utcnow() - asset_service.ASSET_DELETE_RETRY_GRACE_PERIOD - timedelta(seconds=1)
+        )
+        stored_asset.delete_last_error_at = None
+        stored_asset.delete_last_error_message = None
         db_session.commit()
 
         # Act
@@ -662,6 +765,113 @@ def test_retry_deleting_assets_removes_asset_after_storage_delete_succeeds(
         # Assert
         assert deleted_asset_count == 1
         assert not stored_asset_path.exists()
+        with pytest.raises(NotFoundError):
+            asset_service.get_asset(
+                db_session,
+                campaign_id=stored_campaign.id,
+                asset_id=created_asset.id,
+            )
+
+
+def test_retry_deleting_assets_ignores_recent_in_progress_delete(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"in-progress-delete"),
+        filename="in-progress-delete.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        stored_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        stored_asset.lifecycle_status = "deleting"
+        stored_asset.delete_started_at = asset_service.utcnow()
+        stored_asset.delete_last_error_at = None
+        stored_asset.delete_last_error_message = None
+        db_session.commit()
+
+        # Act
+        deleted_asset_count = asset_service.retry_deleting_assets(
+            db_session,
+            asset_storage=asset_storage,
+        )
+
+        # Assert
+        assert deleted_asset_count == 0
+        assert stored_asset_path.exists()
+        reloaded_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        assert reloaded_asset.lifecycle_status == "deleting"
+        assert reloaded_asset.delete_last_error_at is None
+
+
+def test_retry_deleting_assets_hard_deletes_missing_storage_row_without_retrying_storage_delete(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    asset_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory()
+    upload_file = build_upload_file(
+        file_obj=BytesIO(b"missing-storage-retry"),
+        filename="missing-storage-retry.txt",
+    )
+
+    with db_session_factory() as db_session:
+        created_asset = asset_service.create_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_create=AssetCreateFormData(),
+            upload_file=upload_file,
+            asset_storage=asset_storage,
+        )
+        stored_asset_path = asset_storage_root / created_asset.storage_key
+        stored_asset_path.unlink()
+        stored_asset = asset_service.get_asset(
+            db_session,
+            campaign_id=stored_campaign.id,
+            asset_id=created_asset.id,
+        )
+        stored_asset.lifecycle_status = "deleting"
+        stored_asset.storage_status = "missing"
+        stored_asset.delete_started_at = (
+            asset_service.utcnow() - asset_service.ASSET_DELETE_RETRY_GRACE_PERIOD - timedelta(seconds=1)
+        )
+        stored_asset.delete_last_error_at = asset_service.utcnow()
+        stored_asset.delete_last_error_message = "Asset file is unavailable."
+        db_session.commit()
+
+        # Act
+        deleted_asset_count = asset_service.retry_deleting_assets(
+            db_session,
+            asset_storage=asset_storage,
+        )
+
+        # Assert
+        assert deleted_asset_count == 1
+        assert asset_storage.deleted_keys == []
         with pytest.raises(NotFoundError):
             asset_service.get_asset(
                 db_session,

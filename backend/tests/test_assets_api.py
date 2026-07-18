@@ -119,6 +119,27 @@ def test_create_asset_upload_rejects_unsupported_media_type(
     assert response.json() == {"detail": "Unsupported asset media type."}
 
 
+def test_create_asset_upload_accepts_supported_media_type_with_parameters(
+    api_request,
+    campaign_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+
+    # Act
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        files={
+            "file": ("session-7.txt", b"The observatory is burning.", "text/plain; charset=utf-8"),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 201
+    assert response.json()["media_type"] == "text/plain"
+
+
 def test_create_asset_upload_returns_payload_too_large_when_upload_exceeds_limit(
     api_request,
     campaign_factory,
@@ -304,16 +325,22 @@ def test_update_asset_returns_updated_fields(
 def test_delete_asset_removes_asset(
     api_request,
     campaign_factory,
-    source_asset_factory,
 ) -> None:
     # Arrange
     stored_campaign = campaign_factory()
-    stored_source_asset = source_asset_factory(campaign=stored_campaign)
+    create_response = api_request(
+        "POST",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        files={
+            "file": ("session-7.txt", b"The observatory is burning.", "text/plain"),
+        },
+    )
+    stored_source_asset_id = create_response.json()["id"]
 
     # Act
     delete_response = api_request(
         "DELETE",
-        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset.id}",
+        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset_id}",
     )
 
     # Assert
@@ -321,7 +348,7 @@ def test_delete_asset_removes_asset(
 
     missing_response = api_request(
         "GET",
-        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset.id}",
+        f"/api/campaigns/{stored_campaign.id}/assets/{stored_source_asset_id}",
     )
     assert missing_response.status_code == 404
 
