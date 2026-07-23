@@ -1,0 +1,8 @@
+.data/
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+alembic/versions/__pycache__/
+tests/
