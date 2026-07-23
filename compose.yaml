@@ -20,14 +20,15 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      ASSET_STORAGE_ROOT: /app/.data/assets
+      ASSET_STORAGE_ROOT: /data/assets
       AUTO_APPLY_MIGRATIONS: "true"
+      PYTHONDONTWRITEBYTECODE: "1"
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - backend-venv:/app/.venv
-      - backend-assets:/app/.data/assets
+      - backend-assets:/data/assets
     depends_on:
       postgres:
         condition: service_healthy
