@@ -45,7 +45,6 @@ services:
 
 volumes:
   rpg-gm-helper-postgres-data:
-    name: rpg-gm-helper-postgres-data
   backend-venv:
   backend-assets:
   frontend-node-modules:

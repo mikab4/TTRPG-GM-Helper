@@ -1,6 +1,6 @@
 # RPG GM Helper
 
-RPG GM Helper is a local-first workspace for tabletop RPG Game Masters. It manages campaign records, sessions, relationships, and source assets; supports reviewed extraction candidates; and searches structured campaign data and parsed source text.
+RPG GM Helper is a local-first workspace for tabletop RPG Game Masters. It manages campaign records, entities, relationships, sessions, and source assets.
 
 ## Requirements
 
@@ -87,11 +87,33 @@ docker version
 docker run --rm hello-world
 ```
 
-## Verification
+## Tests
+
+Backend tests require Docker. They create and remove a disposable PostgreSQL container automatically.
 
 ```bash
-cd backend && uv run ruff check && uv run pytest
-cd frontend && npm run lint && npm run format:check && npm run build && npm test
+cd backend
+uv run pytest
+```
+
+```bash
+cd frontend
+npm test -- --run
+```
+
+## Code quality
+
+```bash
+cd backend
+uv run ruff format --check
+uv run ruff check
+```
+
+```bash
+cd frontend
+npm run lint
+npm run format:check
+npm run build
 ```
 
 ## Project layout
