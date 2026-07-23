@@ -33,6 +33,22 @@ Open the application at `http://localhost:5173`. The API health check is availab
 
 Press Ctrl+C to stop the foreground processes. To run in the background, use `docker compose up -d`; stop the stack with `docker compose down`.
 
+## Additional tools
+
+Additional tools for dev work are added to .project_env.sh. 
+To add it to your bashrc run:
+
+```bash
+echo 'source /absolute/path/to/rpg_gm_helper/.project_env.sh' >> ~/.bashrc
+source ~/.bashrc
+```
+Tools: 
+- To remove a worktree run:
+
+```bash
+git_worktree_remove .worktrees/my-feature
+```
+
 ## Debugging
 
 ### Backend
