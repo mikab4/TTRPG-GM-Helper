@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from alembic import command
 from app.api.router import api_router
 from app.config import Settings, get_settings
+from app.db import get_db_session_factory, get_engine
 
 
 def build_alembic_config(settings: Settings) -> Config:
@@ -26,12 +27,17 @@ def apply_pending_migrations(settings: Settings) -> None:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    db_engine = get_engine(settings)
+    db_session_factory = get_db_session_factory(db_engine)
 
     @asynccontextmanager
     async def app_lifespan(_app: FastAPI):
-        if settings.auto_apply_migrations:
-            apply_pending_migrations(settings)
-        yield
+        try:
+            if settings.auto_apply_migrations:
+                apply_pending_migrations(settings)
+            yield
+        finally:
+            db_engine.dispose()
 
     app = FastAPI(title=settings.app_name, lifespan=app_lifespan)
     app.add_middleware(
@@ -42,6 +48,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router, prefix=settings.api_prefix)
+    app.state.db_engine = db_engine
+    app.state.db_session_factory = db_session_factory
     app.state.settings = settings
     return app
 

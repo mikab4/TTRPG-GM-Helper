@@ -3,16 +3,15 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.db import get_db_session_factory
 from app.services.asset_storage import AssetStorage, build_asset_storage
 
 
-def get_db_session() -> Iterator[Session]:
-    db_session_factory = get_db_session_factory()
+def get_db_session(request: Request) -> Iterator[Session]:
+    db_session_factory = request.app.state.db_session_factory
     with db_session_factory() as db_session:
         yield db_session
 

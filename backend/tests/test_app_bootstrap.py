@@ -5,6 +5,8 @@ import httpx
 import pytest
 
 from app.config import Settings
+from app.models import Base
+from tests.conftest import patched_jsonb_defaults
 
 TEST_DATABASE_URL = "postgresql+psycopg://test:test@localhost:5432/test_db"
 
@@ -45,12 +47,14 @@ def app_client_factory() -> Callable[[Settings], AsyncIterator[httpx.AsyncClient
     async def build_client(settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
         from app.main import create_app
 
-        transport = httpx.ASGITransport(app=create_app(settings))
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as api_client:
-            yield api_client
+        app = create_app(settings)
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            ) as api_client:
+                yield api_client
 
     return build_client
 
@@ -139,3 +143,60 @@ async def test_app_startup_skips_pending_migrations_when_disabled(
         pass
 
     assert migrated_settings == []
+
+
+@pytest.mark.anyio
+async def test_repeated_database_requests_use_the_app_session_factory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    sync_api_test_runtime_shim,
+) -> None:
+    # Arrange
+    from app import main
+
+    app_settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'workspace.db'}",
+    )
+    created_engines = []
+    created_session_factories = []
+    created_sessions = []
+    original_get_engine = main.get_engine
+    original_get_db_session_factory = main.get_db_session_factory
+
+    def track_engine_creation(settings: Settings):
+        created_engine = original_get_engine(settings)
+        created_engines.append(created_engine)
+        return created_engine
+
+    def track_session_factory_creation(db_engine):
+        created_session_factory = original_get_db_session_factory(db_engine)
+        created_session_factories.append(created_session_factory)
+
+        def create_request_session():
+            created_session = created_session_factory()
+            created_sessions.append(created_session)
+            return created_session
+
+        return create_request_session
+
+    monkeypatch.setattr(main, "get_engine", track_engine_creation)
+    monkeypatch.setattr(main, "get_db_session_factory", track_session_factory_creation)
+    app = main.create_app(app_settings)
+    with patched_jsonb_defaults():
+        Base.metadata.create_all(app.state.db_engine)
+
+    # Act
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as api_client:
+            responses = [await api_client.get("/api/campaigns") for _ in range(20)]
+
+    # Assert
+    assert [response.status_code for response in responses] == [200] * 20
+    assert created_engines == [app.state.db_engine]
+    assert len(created_session_factories) == 1
+    assert len(created_sessions) == 20

@@ -278,6 +278,7 @@ def test_app(sqlite_engine: Engine, monkeypatch: pytest.MonkeyPatch, tmp_path: P
         yield app
     finally:
         app.dependency_overrides.clear()
+        app.state.db_engine.dispose()
 
 
 @pytest.fixture

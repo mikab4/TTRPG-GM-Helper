@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import Settings, get_settings
@@ -12,9 +13,14 @@ def get_engine(settings: Settings | None = None):
     return create_engine(settings.database_url, future=True)
 
 
-def get_db_session_factory(settings: Settings | None = None):
+def get_db_session_factory(engine_or_settings: Engine | Settings | None = None):
+    if isinstance(engine_or_settings, Engine):
+        db_engine = engine_or_settings
+    else:
+        db_engine = get_engine(engine_or_settings)
+
     return sessionmaker(
-        bind=get_engine(settings),
+        bind=db_engine,
         autoflush=False,
         autocommit=False,
         future=True,
