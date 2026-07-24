@@ -7,6 +7,7 @@ import { CampaignForm } from "../components/CampaignForm";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
+import { useCampaignDirectory } from "../app/CampaignDirectoryContext";
 
 type CampaignFormPageProps = {
   mode: "create" | "edit";
@@ -24,6 +25,7 @@ type CampaignFormState =
 
 export function CampaignFormPage({ mode }: CampaignFormPageProps) {
   const navigate = useNavigate();
+  const { refreshCampaigns } = useCampaignDirectory();
   const { campaignId } = useParams();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -91,6 +93,7 @@ export function CampaignFormPage({ mode }: CampaignFormPageProps) {
           name: values.name,
           ownerId: pageState.ownerId,
         });
+        await refreshCampaigns();
         await navigate(`/campaigns/${createdCampaign.id}`);
         return;
       }
@@ -103,6 +106,7 @@ export function CampaignFormPage({ mode }: CampaignFormPageProps) {
         description: values.description.trim() || null,
         name: values.name,
       });
+      await refreshCampaigns();
       await navigate(`/campaigns/${updatedCampaign.id}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown campaign save failure.");

@@ -7,7 +7,7 @@ export type Entity = {
   name: string;
   summary: string | null;
   metadata: Record<string, unknown>;
-  sourceDocumentId: string | null;
+  sourceAssetId: string | null;
   provenanceExcerpt: string | null;
   provenanceData: Record<string, unknown>;
   createdAt: string;

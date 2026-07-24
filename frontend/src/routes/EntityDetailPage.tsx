@@ -1,8 +1,8 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import { getCampaign } from "../api/campaigns";
-import { getEntity, listCampaignEntities } from "../api/entities";
+import { deleteEntity, getEntity, listCampaignEntities } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
@@ -25,8 +25,10 @@ type EntityDetailState =
     };
 
 export function EntityDetailPage() {
+  const navigate = useNavigate();
   const { campaignId, entityId } = useParams();
   const [pageState, setPageState] = useState<EntityDetailState>({ status: "loading" });
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -76,6 +78,20 @@ export function EntityDetailPage() {
     };
   }, [campaignId, entityId]);
 
+  async function handleDelete() {
+    if (pageState.status !== "ready" || deleting) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteEntity(pageState.campaign.id, pageState.entity.id);
+      await navigate(`/campaigns/${pageState.campaign.id}/entities`);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (pageState.status === "loading") {
     return <RequestStateBlock message="Loading entity details and campaign context." title="Loading entity" />;
   }
@@ -95,18 +111,15 @@ export function EntityDetailPage() {
       <PageHeader
         actions={
           <div className="action-row">
-            <Link className="secondary-button" to={`/campaigns/${pageState.campaign.id}/entities`}>
-              Back To Campaign
-            </Link>
-            <Link
-              className="secondary-button"
-              to={`/campaigns/${pageState.campaign.id}/relationships?entityId=${pageState.entity.id}`}
-            >
+            <Link className="secondary-button" to={`/campaigns/${pageState.campaign.id}/relationships`}>
               Relationships
             </Link>
             <Link className="primary-button" to={`/campaigns/${pageState.campaign.id}/entities/${pageState.entity.id}/edit`}>
               Edit Entity
             </Link>
+            <button className="danger-button" disabled={deleting} type="button" onClick={() => void handleDelete()}>
+              {deleting ? "Deleting..." : "Delete Entity"}
+            </button>
           </div>
         }
         description={`Campaign: ${pageState.campaign.name}`}

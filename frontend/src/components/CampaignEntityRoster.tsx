@@ -6,6 +6,7 @@ import type { Entity } from "../types/entities";
 type CampaignEntityRosterProps = {
   campaignNamesById?: Map<string, string>;
   entities: Entity[];
+  onDelete?: (entity: Entity) => void;
   onQuickLook?: (entity: Entity) => void;
   relationshipPreviewByEntityId?: Map<string, string[]>;
   showCampaignName?: boolean;
@@ -14,6 +15,7 @@ type CampaignEntityRosterProps = {
 export function CampaignEntityRoster({
   campaignNamesById = new Map<string, string>(),
   entities,
+  onDelete,
   onQuickLook,
   relationshipPreviewByEntityId = new Map<string, string[]>(),
   showCampaignName = false,
@@ -71,6 +73,19 @@ export function CampaignEntityRoster({
             >
               Edit
             </Link>
+            {onDelete ? (
+              <button
+                aria-label={`Delete ${entity.name}`}
+                className="text-button"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(entity);
+                }}
+              >
+                Delete
+              </button>
+            ) : null}
           </div>
         </article>
       ))}

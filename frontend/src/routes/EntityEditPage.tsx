@@ -67,17 +67,13 @@ export function EntityEditPage() {
     setSubmitError(null);
 
     try {
-      const updatedEntity = await updateEntity(pageState.campaign.id, entityId, {
+      await updateEntity(pageState.campaign.id, entityId, {
         metadata: pageState.entity.metadata,
         name: values.name,
         summary: values.summary.trim() || null,
         type: values.type,
       });
-      setPageState({
-        campaign: pageState.campaign,
-        entity: updatedEntity,
-        status: "ready",
-      });
+      void navigate(`/campaigns/${pageState.campaign.id}/entities/${entityId}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown entity save failure.");
     } finally {

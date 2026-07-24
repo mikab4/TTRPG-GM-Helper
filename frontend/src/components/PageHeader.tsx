@@ -12,7 +12,7 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
     <header className="page-header panel">
       <div className="page-header-copy">
         {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h2 className="font-ui">{title}</h2>
+        <h2 className="font-cinzel">{title}</h2>
         {description ? <p className="lede">{description}</p> : null}
       </div>
       {actions ? <div className="page-header-actions">{actions}</div> : null}

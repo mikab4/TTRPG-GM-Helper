@@ -10,6 +10,65 @@
 
 ---
 
+## Non-negotiable visual and interaction contract
+
+The current application’s older dark-shell-plus-wide-horizontal-navigation treatment is superseded for this branch. Do not retain its global navigation rows, its duplicate section labels, or its broad rounded workspace surfaces just because those components already exist. Match the mockup’s hierarchy and proportions first; reuse existing code only where it can be restyled to meet this contract.
+
+### Overall composition
+
+- Use a quiet stone-gray page background with a single dark, sticky application header. The header is application context, not a second navigation bar.
+- Center the workspace at approximately `1120px` maximum width. On desktop, use a fixed `250px` sidebar and one fluid main column, separated by about `24px`.
+- The dark header uses the same column alignment: a small `Campaign Workspace` brand label above the sidebar column and the campaign switcher aligned over the main column.
+- The header contains no World, Search, Extraction, Sessions, or Assets links. The campaign switcher and Campaign Registry entry are the only global navigation controls in this branch.
+- The sidebar is one parchment card with workspace-section navigation only. Its active item has a white inset surface, a light purple outline/shadow, and deep-purple text. Do not add another tab row above the content.
+
+### Campaign context
+
+- The current campaign name is the dominant header control, not a breadcrumb substitute. It uses Cinzel, bold weight, and warm gold (`#fde68a`) on the dark switcher surface.
+- Pair the name with a small green status dot and a compact `Campaign` affordance. Do not render the current campaign name purple on the dark header; purple there has inadequate visual hierarchy.
+- The switcher menu lists campaigns and includes an explicit `Campaign Registry` route. In the production app, selection navigates to the same workspace section for the chosen campaign.
+- Within content copy, the selected campaign may use deep purple (`#7e22ce`) on parchment; this is distinct from the warm-gold header treatment.
+
+### Typography and color roles
+
+- Use Inter for all controls, list rows, table-like data, body copy, metadata, and sidebar labels.
+- Use Cinzel only for display hierarchy: the campaign switcher name and page titles such as Assets, Entities, Relationships, and Sessions. Do not use Cinzel for filters, row text, or form controls.
+- Keep parchment cards near `#fdfcfb`, body ink near `#1c1917`, muted copy near `#78716c`, deep purple `#7e22ce`, and purple hover `#6b21a8`.
+- Use purple for primary actions and focus states; use warm gold only for the campaign name and amber only for document/file-type accents. Do not make purple the default text color across the interface.
+
+### Cards, controls, and spacing
+
+- Parchment cards use roughly `16px` radius, a subtle `#e7e5e4` border, and a restrained shadow. Avoid the existing large 20–24px card radius and heavy decorative gradients.
+- Page section headers use a thin bottom divider, a 26px Cinzel title, and compact muted helper text.
+- Primary section actions (`Add entity`, `Add relationship`, `Add session`) are compact, not pill-like: 26px high, 12px Inter label, 12px horizontal padding, 8px radius, and a deep-purple gradient. They sit at the right edge of the section header.
+- The asset drop-zone browse button is intentionally more substantial than those section actions because it is the primary action inside that isolated upload surface.
+- Search fields and selects have white fills, 10px radii, 12px text, subtle gray borders, and purple focus rings. Keep entity search and relationship search/type controls compact and aligned in one toolbar on desktop.
+- File rows have modest 14–16px padding, 38×42px colored file-type blocks, small metadata, and quiet outline `View` actions. A missing asset is visible with a red status chip but has no Relink or replacement action.
+
+### View-specific behavior
+
+- **Entities:** use a searchable grid/roster. Clicking a card opens the existing quick-look summary beside the roster on desktop; the roster stays visible. The quick-look card shows the entity’s name, type, summary, relationship scent, a close control, and an `Open full record` path. On small screens it stacks below the roster.
+- **Relationships:** show searchable relationship cards. Search matches entity names; the relationship-type dropdown combines with it using AND semantics. Relationship cards keep source/target names, relationship type, and short contextual copy scannable.
+- **Sessions:** keep the same header/action hierarchy and use the existing or new session list/detail route rather than introducing a separate global sessions screen.
+- **Assets:** one drop surface supports drag/drop and browse. Keep search plus a media-family dropdown (Documents, Spreadsheets, Images), not semantic categories inferred from file names.
+
+### Responsive and implementation constraints
+
+- At narrow widths, stack the header/workspace columns, make sidebar section navigation horizontally scrollable, and stack the quick-look panel beneath the roster. Do not hide critical navigation or turn the sidebar into a second header bar.
+- Use the existing stylesheet and Lucide React icons in production; the mockup’s Unicode glyphs are layout placeholders, not a production icon system.
+- Do not import Tailwind or copy prototype JavaScript into React. The implementation must preserve route-driven navigation, typed API clients, and existing request-state patterns.
+
+### Visual acceptance checklist
+
+- There is exactly one app-level header and exactly one campaign-section navigation surface.
+- The active campaign is warm gold in the dark switcher, not deep purple.
+- A GM can identify the active campaign, active section, and primary action without scanning two navigation bars.
+- Add buttons are visibly smaller than the asset browse button.
+- Entity quick look remains beside the roster after selection and does not replace the list.
+- No unavailable backend behavior is implied: no parser status, Analyze/Sync action, global World model, app-wide Search, or Relink action.
+
+---
+
 ## Approved scope decisions
 
 - Remove the global `World`, `Sessions`, `Assets`, `Search`, and `Extraction` navigation destinations from the persistent shell. They either duplicate a workspace section or represent deferred capability.
@@ -56,6 +115,35 @@
 2. Keep the active section route-derived, not component-local state, so browser navigation and deep links work.
 3. Preserve the existing campaign edit/delete controls without making them compete with section navigation.
 4. Add the Sessions and Assets sidebar entries once their routes exist.
+
+### Task 2.1: Fix PostgreSQL connection-pool exhaustion
+
+**Problem confirmed during workspace testing:** `get_db_session()` currently calls
+`get_db_session_factory()` for every API request. That factory creates a new SQLAlchemy
+engine each time. Closing the request session returns its connection to that newly-created
+engine's pool, but the engine and pool remain alive. After enough requests PostgreSQL rejects
+new connections with `FATAL: sorry, too many clients already`; the API then fails every request
+and the frontend shows `Failed to fetch` throughout the workspace.
+
+**Files:**
+
+- Modify: `backend/app/db.py`
+- Modify: `backend/app/api/dependencies.py`
+- Modify: `backend/app/main.py`
+- Test: `backend/tests/test_db.py` and focused API/bootstrap coverage
+
+1. Create the SQLAlchemy engine and session factory once per backend process, rather than once
+   per request. `get_db_session()` must obtain a request-scoped session from that shared factory
+   and close it after the response.
+2. Keep test configuration explicit: test settings/engines must remain isolated from the
+   application process's production engine and must be disposed during test teardown.
+3. Dispose the shared engine during FastAPI shutdown so a deliberate backend restart releases
+   pooled connections promptly.
+4. Add coverage that multiple dependency/session acquisitions reuse the application factory and
+   do not create a fresh engine/pool per request. Retain a focused API smoke test that makes
+   repeated database-backed requests without connection exhaustion.
+5. `docker compose restart backend` is an acceptable temporary local recovery for an already
+   exhausted process, but is not the permanent fix and must not be documented as one.
 
 ### Task 3: Add campaign-scoped sessions and assets routes plus typed clients
 

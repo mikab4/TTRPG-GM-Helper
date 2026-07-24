@@ -11,8 +11,6 @@ import { EntitiesPage } from "../routes/EntitiesPage";
 import { EntityDetailPage } from "../routes/EntityDetailPage";
 import { EntityEditPage } from "../routes/EntityEditPage";
 import { EntityFormPage } from "../routes/EntityFormPage";
-import { OverviewPage } from "../routes/OverviewPage";
-import { PlaceholderPage } from "../routes/PlaceholderPage";
 import { RelationshipFormPage } from "../routes/RelationshipFormPage";
 import { RelationshipTypeManagementPage } from "../routes/RelationshipTypeManagementPage";
 
@@ -23,7 +21,7 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <OverviewPage />,
+        element: <CampaignsPage />,
       },
       {
         path: "campaigns",
@@ -43,41 +41,51 @@ export const routes: RouteObject[] = [
           },
           {
             path: "entities",
-            element: <CampaignEntitiesTab />,
+            children: [
+              {
+                index: true,
+                element: <CampaignEntitiesTab />,
+              },
+              {
+                path: "new",
+                element: <EntityFormPage source="campaign" />,
+              },
+              {
+                path: ":entityId",
+                element: <EntityDetailPage />,
+              },
+              {
+                path: ":entityId/edit",
+                element: <EntityEditPage />,
+              },
+            ],
           },
           {
             path: "relationships",
-            element: <CampaignRelationshipsTab />,
+            children: [
+              {
+                index: true,
+                element: <CampaignRelationshipsTab />,
+              },
+              {
+                path: "new",
+                element: <RelationshipFormPage mode="create" />,
+              },
+              {
+                path: ":relationshipId/edit",
+                element: <RelationshipFormPage mode="edit" />,
+              },
+            ],
+          },
+          {
+            path: "edit",
+            element: <CampaignFormPage mode="edit" />,
+          },
+          {
+            path: "relationship-types",
+            element: <RelationshipTypeManagementPage />,
           },
         ],
-      },
-      {
-        path: "campaigns/:campaignId/edit",
-        element: <CampaignFormPage mode="edit" />,
-      },
-      {
-        path: "campaigns/:campaignId/entities/new",
-        element: <EntityFormPage source="campaign" />,
-      },
-      {
-        path: "campaigns/:campaignId/entities/:entityId",
-        element: <EntityDetailPage />,
-      },
-      {
-        path: "campaigns/:campaignId/entities/:entityId/edit",
-        element: <EntityEditPage />,
-      },
-      {
-        path: "campaigns/:campaignId/relationships/new",
-        element: <RelationshipFormPage mode="create" />,
-      },
-      {
-        path: "campaigns/:campaignId/relationship-types",
-        element: <RelationshipTypeManagementPage />,
-      },
-      {
-        path: "campaigns/:campaignId/relationships/:relationshipId/edit",
-        element: <RelationshipFormPage mode="edit" />,
       },
       {
         path: "entities",
@@ -86,33 +94,6 @@ export const routes: RouteObject[] = [
       {
         path: "entities/new",
         element: <EntityFormPage source="global" />,
-      },
-      {
-        path: "session-notes",
-        element: (
-          <PlaceholderPage
-            description="Session note ingestion and document flows will plug into this route after the backend slice is ready."
-            title="Session Notes"
-          />
-        ),
-      },
-      {
-        path: "extraction-review",
-        element: (
-          <PlaceholderPage
-            description="Extraction candidates and review workflows will attach here once the extraction APIs are available."
-            title="Extraction Review"
-          />
-        ),
-      },
-      {
-        path: "search",
-        element: (
-          <PlaceholderPage
-            description="Search scaffolding is routed now, but the real query surface waits on backend search endpoints."
-            title="Search"
-          />
-        ),
       },
     ],
   },

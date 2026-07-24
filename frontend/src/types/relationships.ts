@@ -21,7 +21,7 @@ export type Relationship = {
   certaintyStatus: RelationshipCertaintyStatusValue;
   notes: string | null;
   confidence: number | null;
-  sourceDocumentId: string | null;
+  sourceAssetId: string | null;
   provenanceExcerpt: string | null;
   provenanceData: Record<string, unknown>;
   createdAt: string;

@@ -25,8 +25,8 @@ function parseEntity(payload: unknown): Entity {
     !("metadata" in payload) ||
     typeof payload.metadata !== "object" ||
     payload.metadata === null ||
-    !("source_document_id" in payload) ||
-    !(typeof payload.source_document_id === "string" || payload.source_document_id === null) ||
+    !("source_asset_id" in payload) ||
+    !(typeof payload.source_asset_id === "string" || payload.source_asset_id === null) ||
     !("provenance_excerpt" in payload) ||
     !(typeof payload.provenance_excerpt === "string" || payload.provenance_excerpt === null) ||
     !("provenance_data" in payload) ||
@@ -47,7 +47,7 @@ function parseEntity(payload: unknown): Entity {
     name: payload.name,
     summary: payload.summary,
     metadata: payload.metadata as Record<string, unknown>,
-    sourceDocumentId: payload.source_document_id,
+    sourceAssetId: payload.source_asset_id,
     provenanceExcerpt: payload.provenance_excerpt,
     provenanceData: payload.provenance_data as Record<string, unknown>,
     createdAt: payload.created_at,

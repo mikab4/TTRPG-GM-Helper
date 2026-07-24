@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
 import { listCampaigns } from "../api/campaigns";
-import { listEntities } from "../api/entities";
+import { deleteEntity, listEntities } from "../api/entities";
 import { CampaignEntityRoster } from "../components/CampaignEntityRoster";
 import { EntityFilters } from "../components/EntityFilters";
 import { EntityQuickLookPanel } from "../components/EntityQuickLookPanel";
@@ -32,6 +32,16 @@ export function EntitiesPage() {
   const [entitySearch, setEntitySearch] = useState("");
   const [entityType, setEntityType] = useState<EntityTypeValue | "">("");
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+
+  async function handleDelete(entity: Entity) {
+    await deleteEntity(entity.campaignId, entity.id);
+    setSelectedEntity(null);
+    setEntityListState((currentState) =>
+      currentState.status === "ready"
+        ? { ...currentState, entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id) }
+        : currentState,
+    );
+  }
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -174,17 +184,18 @@ export function EntitiesPage() {
               campaignNamesById={campaignNamesById}
               entities={filteredEntities}
               onQuickLook={setSelectedEntity}
+              onDelete={(entity) => void handleDelete(entity)}
               showCampaignName
             />
           ) : null}
         </SectionPanel>
         {selectedEntity ? (
           <EntityQuickLookPanel
-            campaign={campaignsById.get(selectedEntity.campaignId)}
             entity={selectedEntity}
             onClose={() => {
               setSelectedEntity(null);
             }}
+            onDelete={(entity) => void handleDelete(entity)}
           />
         ) : null}
       </div>

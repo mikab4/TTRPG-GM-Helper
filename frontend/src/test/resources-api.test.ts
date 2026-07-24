@@ -69,7 +69,7 @@ describe("frontend resource APIs", () => {
           name: "Ilya",
           summary: "Magistrate",
           metadata: {},
-          source_document_id: null,
+          source_asset_id: null,
           provenance_excerpt: null,
           provenance_data: {},
           created_at: "2026-04-08T12:00:00Z",
@@ -82,12 +82,14 @@ describe("frontend resource APIs", () => {
 
     const { createEntity } = await import("../api/entities");
 
-    await createEntity("c53594e5-c721-46dc-8f88-70273d8de676", {
-      type: "person",
-      name: "Ilya",
-      summary: "Magistrate",
-      metadata: {},
-    });
+    await expect(
+      createEntity("c53594e5-c721-46dc-8f88-70273d8de676", {
+        type: "person",
+        name: "Ilya",
+        summary: "Magistrate",
+        metadata: {},
+      }),
+    ).resolves.toMatchObject({ sourceAssetId: null });
 
     const firstCall = fetchSpy.mock.calls[0] as [string, RequestInit] | undefined;
 
@@ -105,6 +107,53 @@ describe("frontend resource APIs", () => {
       },
       method: "POST",
     });
+  });
+
+  it("creates relationships from source-asset response payloads", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "relationship-1",
+            campaign_id: "campaign-1",
+            source_entity_id: "entity-1",
+            target_entity_id: "entity-2",
+            relationship_type: "knows",
+            relationship_family: "social",
+            relationship_family_label: "Social",
+            forward_label: "knows",
+            reverse_label: "known by",
+            is_symmetric: false,
+            lifecycle_status: "current",
+            visibility_status: "public",
+            certainty_status: "confirmed",
+            notes: null,
+            confidence: null,
+            source_asset_id: null,
+            provenance_excerpt: null,
+            provenance_data: {},
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-08T12:00:00Z",
+          }),
+      }),
+    );
+
+    const { createRelationship } = await import("../api/relationships");
+
+    await expect(
+      createRelationship("campaign-1", {
+        sourceEntityId: "entity-1",
+        targetEntityId: "entity-2",
+        relationshipType: "knows",
+        lifecycleStatus: "current",
+        visibilityStatus: "public",
+        certaintyStatus: "confirmed",
+        notes: null,
+      }),
+    ).resolves.toMatchObject({ sourceAssetId: null });
   });
 
   it("surfaces backend error details as readable messages", async () => {

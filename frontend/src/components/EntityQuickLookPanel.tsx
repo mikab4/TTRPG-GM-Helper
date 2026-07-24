@@ -5,17 +5,16 @@ import { listCampaignEntities } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { formatEntityTypeLabel } from "../entities/entityTypes";
 import { buildEntityNameMap, buildImportantRelationshipPreview } from "../relationships/presentation";
-import type { Campaign } from "../types/campaigns";
 import type { Entity } from "../types/entities";
 import type { Relationship } from "../types/relationships";
 
 type EntityQuickLookPanelProps = {
   entity: Entity;
-  campaign?: Campaign;
   onClose: () => void;
+  onDelete?: (entity: Entity) => void;
 };
 
-export function EntityQuickLookPanel({ entity, campaign, onClose }: EntityQuickLookPanelProps) {
+export function EntityQuickLookPanel({ entity, onClose, onDelete }: EntityQuickLookPanelProps) {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
 
@@ -61,17 +60,15 @@ export function EntityQuickLookPanel({ entity, campaign, onClose }: EntityQuickL
       </div>
       <div className="quick-look-body">
         <section className="quick-look-section">
-          <h4>Core Details</h4>
-          <p>{formatEntityTypeLabel(entity.type)}</p>
-        </section>
-        <section className="quick-look-section">
           <h4>Summary</h4>
           <p>{entity.summary ?? "No summary recorded yet."}</p>
         </section>
-        <section className="quick-look-section">
-          <h4>Appears In</h4>
-          <p>{campaign?.name ?? entity.campaignId}</p>
-        </section>
+        {entity.sourceAssetId ? (
+          <section className="quick-look-section">
+            <h4>Source Asset</h4>
+            <p>{entity.sourceAssetId}</p>
+          </section>
+        ) : null}
         <section className="quick-look-section">
           <h4>Relationships</h4>
           {relationshipPreview.length > 0 ? (
@@ -89,12 +86,23 @@ export function EntityQuickLookPanel({ entity, campaign, onClose }: EntityQuickL
         <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/entities/${entity.id}`}>
           Full Profile
         </Link>
-        <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/relationships?entityId=${entity.id}`}>
+        <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/relationships`}>
           Relationship Management
         </Link>
         <Link className="primary-button" to={`/campaigns/${entity.campaignId}/entities/${entity.id}/edit`}>
           Edit Entity
         </Link>
+        {onDelete ? (
+          <button
+            className="danger-button"
+            type="button"
+            onClick={() => {
+              onDelete(entity);
+            }}
+          >
+            Delete Entity
+          </button>
+        ) : null}
       </div>
     </aside>
   );

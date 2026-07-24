@@ -50,8 +50,8 @@ function parseRelationship(payload: unknown): Relationship {
     !(typeof payload.notes === "string" || payload.notes === null) ||
     !("confidence" in payload) ||
     !(typeof payload.confidence === "number" || payload.confidence === null) ||
-    !("source_document_id" in payload) ||
-    !(typeof payload.source_document_id === "string" || payload.source_document_id === null) ||
+    !("source_asset_id" in payload) ||
+    !(typeof payload.source_asset_id === "string" || payload.source_asset_id === null) ||
     !("provenance_excerpt" in payload) ||
     !(typeof payload.provenance_excerpt === "string" || payload.provenance_excerpt === null) ||
     !("provenance_data" in payload) ||
@@ -81,7 +81,7 @@ function parseRelationship(payload: unknown): Relationship {
     certaintyStatus: payload.certainty_status,
     notes: payload.notes,
     confidence: payload.confidence,
-    sourceDocumentId: payload.source_document_id,
+    sourceAssetId: payload.source_asset_id,
     provenanceExcerpt: payload.provenance_excerpt,
     provenanceData: payload.provenance_data as Record<string, unknown>,
     createdAt: payload.created_at,

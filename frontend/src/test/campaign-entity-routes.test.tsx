@@ -65,16 +65,17 @@ describe("campaign and entity frontend routes", () => {
 
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByRole("heading", { name: "Campaigns" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Campaigns" })).toHaveClass("font-cinzel");
     expect(screen.getByRole("link", { name: "New Campaign" })).toBeInTheDocument();
     expect(await screen.findByText("Shadows of Glass")).toBeInTheDocument();
-    expect(screen.getByText("Urban intrigue campaign")).toBeInTheDocument();
-    expect(screen.getByText(/Last Updated/i)).toBeInTheDocument();
+    expect(screen.queryByText("Urban intrigue campaign")).toBeNull();
+    expect(screen.queryByText(/Last Updated/i)).toBeNull();
     expect(screen.queryByRole("heading", { name: "Campaign List" })).toBeNull();
     expect(screen.getByRole("link", { name: "Open workspace for Shadows of Glass" })).toHaveAttribute(
       "href",
       "/campaigns/campaign-1",
     );
+    expect(screen.getByRole("button", { name: "Delete Shadows of Glass" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Edit" })).toBeNull();
   });
 
@@ -139,7 +140,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Rowan",
                 summary: "Harbor ruler",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -252,28 +253,19 @@ describe("campaign and entity frontend routes", () => {
 
     const { container } = render(<RouterProvider router={router} />);
 
-    expect(await screen.findByRole("heading", { name: "Shadows of Glass" })).toHaveClass("font-ui");
-    expect(screen.getByRole("link", { name: "Back to Registry" })).toHaveAttribute("href", "/campaigns");
-    expect(
-      within(screen.getByRole("navigation", { name: "Campaign Sections" })).getByRole("link", {
-        name: "Overview",
-      }),
-    ).toHaveAttribute("aria-current", "page");
-    expect(
-      within(screen.getByRole("navigation", { name: "Campaign Sections" })).getByRole("link", {
-        name: "Entities",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("navigation", { name: "Campaign Sections" })).getByRole("link", {
-        name: "Relationships",
-      }),
-    ).toBeInTheDocument();
+    expect(document.querySelector(".shell-header-content")).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Back to Registry" })).toBeNull();
+    const workspaceSidebar = await screen.findByRole("navigation", { name: "Campaign Workspace" });
+    expect(workspaceSidebar).toHaveClass("campaign-workspace-sidebar");
+    expect(within(workspaceSidebar).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+    expect(within(workspaceSidebar).getByRole("link", { name: "Entities" })).toBeInTheDocument();
+    expect(within(workspaceSidebar).getByRole("link", { name: "Relationships" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Campaign Summary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent Activity" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Quick Notes" })).toBeInTheDocument();
     expect(screen.getByText("Urban intrigue campaign")).toBeInTheDocument();
-    expect(container.querySelector(".workspace-surface")).not.toBeNull();
+    expect(container.querySelector(".campaign-workspace")).not.toBeNull();
+    expect(container.querySelector(".workspace-surface")).toBeNull();
     expect(screen.queryByText("Create a campaign workspace before adding campaign-specific entities.")).toBeNull();
     expect(
       screen.queryByText("Keep campaign descriptions short and practical in v1 so the table remains easy to scan."),
@@ -285,7 +277,7 @@ describe("campaign and entity frontend routes", () => {
     ).toBeNull();
   });
 
-  it("renders the campaign relationships tab with readable relationship phrases", async () => {
+  it("renders every campaign relationship without an entity filter", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     const fetchSpy = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const requestUrl = getRequestUrl(input);
@@ -318,7 +310,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Rowan",
                 summary: "Harbor ruler",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -331,7 +323,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Blackharbor",
                 summary: "Port city",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -344,7 +336,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Ash Provinces",
                 summary: "Regional territory",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -357,7 +349,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Harbor Watch",
                 summary: "City guard",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -389,7 +381,7 @@ describe("campaign and entity frontend routes", () => {
                 certainty_status: "confirmed",
                 notes: null,
                 confidence: null,
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -411,7 +403,7 @@ describe("campaign and entity frontend routes", () => {
                 certainty_status: "confirmed",
                 notes: null,
                 confidence: null,
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -433,7 +425,7 @@ describe("campaign and entity frontend routes", () => {
                 certainty_status: "confirmed",
                 notes: null,
                 confidence: null,
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -473,17 +465,17 @@ describe("campaign and entity frontend routes", () => {
 
     const { routes } = await import("../app/routes");
     const router = createMemoryRouter(routes, {
-      initialEntries: ["/campaigns/campaign-1/relationships?entityId=entity-2"],
+      initialEntries: ["/campaigns/campaign-1/relationships"],
     });
 
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByRole("heading", { name: "Relationships" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Relationships" })).toHaveClass("font-cinzel");
     expect(await screen.findByText("Rowan governs Blackharbor")).toBeInTheDocument();
     expect(screen.getByText("Ash Provinces is located in Blackharbor")).toBeInTheDocument();
-    expect(screen.queryByText("Rowan leads Harbor Watch")).toBeNull();
-    expect(screen.getByLabelText("Filter by entity")).toHaveValue("entity-2");
-    expect(screen.getAllByText("Current · Public · Confirmed")).toHaveLength(2);
+    expect(screen.getByText("Rowan leads Harbor Watch")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter by entity")).toBeNull();
+    expect(screen.getAllByText("Current · Public · Confirmed")).toHaveLength(3);
     expect(screen.queryByText("political · Current · Public · Confirmed")).toBeNull();
     expect(screen.getByRole("link", { name: "New Relationship" })).toHaveAttribute(
       "href",
@@ -493,6 +485,7 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/relationship-types",
     );
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(3);
     expect(screen.queryByRole("heading", { name: "Relationship Type Workbench" })).toBeNull();
     expect(screen.queryByText("person, organization -> location, organization")).toBeNull();
   });
@@ -530,7 +523,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Rowan",
                 summary: "Harbor ruler",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -543,7 +536,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Blackharbor",
                 summary: "Trade city",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -556,7 +549,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Harbor Watch",
                 summary: "City watch",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -569,7 +562,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Night of Cinders",
                 summary: "Disaster",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -662,7 +655,7 @@ describe("campaign and entity frontend routes", () => {
               certainty_status: "confirmed",
               notes: null,
               confidence: null,
-              source_document_id: null,
+              source_asset_id: null,
               provenance_excerpt: null,
               provenance_data: {},
               created_at: "2026-04-08T12:00:00Z",
@@ -764,7 +757,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Rowan",
                   summary: "Harbor ruler",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -777,7 +770,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Blackharbor",
                   summary: "Now modeled incorrectly for compatibility testing",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -790,7 +783,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Harbor Watch",
                   summary: "City watch",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -857,7 +850,7 @@ describe("campaign and entity frontend routes", () => {
                 certainty_status: "confirmed",
                 notes: "Persisted before the target type changed.",
                 confidence: null,
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -929,7 +922,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Rowan",
                   summary: "Harbor ruler",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -942,7 +935,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Blackharbor",
                   summary: "Port city",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -1060,7 +1053,7 @@ describe("campaign and entity frontend routes", () => {
     });
   });
 
-  it("exposes edit and delete actions from the campaign workspace", async () => {
+  it("exposes edit and delete actions from the campaign overview", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     const fetchSpy = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const requestUrl = getRequestUrl(input);
@@ -1112,20 +1105,7 @@ describe("campaign and entity frontend routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(await screen.findByRole("link", { name: "Edit Campaign" })).toHaveAttribute("href", "/campaigns/campaign-1/edit");
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete Campaign" }));
-
-    expect(await screen.findByRole("heading", { name: "Campaign deleted" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to Campaigns" })).toHaveAttribute("href", "/campaigns");
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "http://example.test/api/campaigns/campaign-1",
-        expect.objectContaining({
-          method: "DELETE",
-        }),
-      );
-    });
+    expect(screen.getByRole("button", { name: "Delete Campaign" })).toBeInTheDocument();
   });
 
   it("renders campaign-scoped entities inside the campaign workspace", async () => {
@@ -1163,7 +1143,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Magistrate Ilya",
                   summary: "City official",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -1185,8 +1165,10 @@ describe("campaign and entity frontend routes", () => {
 
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByRole("heading", { name: "Shadows of Glass" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Entities" })).toBeInTheDocument();
     expect(await screen.findByText("Magistrate Ilya")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Edit Campaign" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete Campaign" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Entity Roster" })).toBeNull();
     expect(screen.getByRole("link", { name: "New Entity" })).toBeInTheDocument();
     expect(screen.getByText("NPC")).toBeInTheDocument();
@@ -1234,7 +1216,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Magistrate Ilya",
                   summary: "Brother of Rowan, magistrate of the lower ward.",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: "asset-1",
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -1262,6 +1244,10 @@ describe("campaign and entity frontend routes", () => {
     expect(quickLookPanel.className).toContain("quick-look-panel-paper");
 
     expect(within(quickLookPanel).getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(within(quickLookPanel).getByRole("heading", { name: "Source Asset" })).toBeInTheDocument();
+    expect(within(quickLookPanel).getByText("asset-1")).toBeInTheDocument();
+    expect(within(quickLookPanel).queryByRole("heading", { name: "Core Details" })).toBeNull();
+    expect(within(quickLookPanel).queryByRole("heading", { name: "Appears In" })).toBeNull();
     expect(
       within(quickLookPanel).queryByText(
         "npc record in active use. Open the full record for campaign notes, editing, and deeper provenance.",
@@ -1276,6 +1262,7 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/entities/entity-1/edit",
     );
+    expect(within(quickLookPanel).getByRole("button", { name: "Delete Entity" })).toBeInTheDocument();
   });
 
   it("refetches the global entities page when the campaign filter changes", async () => {
@@ -1312,7 +1299,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Magistrate Ilya",
                 summary: "City official",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1335,7 +1322,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Broken Observatory",
                 summary: "Hidden ruin",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1431,7 +1418,7 @@ describe("campaign and entity frontend routes", () => {
                   name: "Magistrate Ilya",
                   summary: "Brother of Rowan, magistrate of the lower ward.",
                   metadata: {},
-                  source_document_id: null,
+                  source_asset_id: null,
                   provenance_excerpt: null,
                   provenance_data: {},
                   created_at: "2026-04-08T12:00:00Z",
@@ -1466,7 +1453,7 @@ describe("campaign and entity frontend routes", () => {
     );
     expect(within(quickLookPanel).getByRole("link", { name: "Relationship Management" })).toHaveAttribute(
       "href",
-      "/campaigns/campaign-1/relationships?entityId=entity-1",
+      "/campaigns/campaign-1/relationships",
     );
     expect(within(quickLookPanel).getByRole("link", { name: "Edit Entity" })).toHaveAttribute(
       "href",
@@ -1733,7 +1720,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Magistrate Ilya",
                 summary: "Brother of Rowan, magistrate of the lower ward.",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1761,10 +1748,12 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/entities/entity-1/edit",
     );
+    expect(screen.getByRole("button", { name: "Delete Entity" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Back To Campaign" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save Entity" })).toBeNull();
   });
 
-  it("renders the entity editor on the edit route", async () => {
+  it("keeps the campaign sidebar on the entity edit route", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     vi.stubGlobal(
       "fetch",
@@ -1787,6 +1776,33 @@ describe("campaign and entity frontend routes", () => {
           );
         }
 
+        if (requestUrl.endsWith("/campaigns/campaign-1/entities")) {
+          return Promise.resolve(
+            jsonResponse({
+              ok: true,
+              body: [
+                {
+                  id: "entity-1",
+                  campaign_id: "campaign-1",
+                  type: "person",
+                  name: "Magistrate Ilya",
+                  summary: "Brother of Rowan, magistrate of the lower ward.",
+                  metadata: {},
+                  source_asset_id: null,
+                  provenance_excerpt: null,
+                  provenance_data: {},
+                  created_at: "2026-04-08T12:00:00Z",
+                  updated_at: "2026-04-08T12:00:00Z",
+                },
+              ],
+            }),
+          );
+        }
+
+        if (requestUrl.endsWith("/campaigns/campaign-1/relationships")) {
+          return Promise.resolve(jsonResponse({ ok: true, body: [] }));
+        }
+
         if (requestUrl.endsWith("/campaigns/campaign-1/entities/entity-1")) {
           return Promise.resolve(
             jsonResponse({
@@ -1798,7 +1814,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Magistrate Ilya",
                 summary: "Brother of Rowan, magistrate of the lower ward.",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1821,6 +1837,7 @@ describe("campaign and entity frontend routes", () => {
 
     expect(await screen.findByRole("heading", { name: "Edit Entity" })).toBeInTheDocument();
     expect(container.querySelector(".workspace-surface")).not.toBeNull();
+    expect(screen.getByRole("navigation", { name: "Campaign Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Entity" })).toBeInTheDocument();
     expect(screen.getByLabelText("Type")).toHaveDisplayValue("NPC (legacy)");
     expect(screen.getByRole("option", { name: "Organization" })).toBeInTheDocument();
@@ -1878,7 +1895,30 @@ describe("campaign and entity frontend routes", () => {
 
   it("keeps the campaign-scoped new entity page free of plan-document wording", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const requestUrl = getRequestUrl(input);
+
+        if (requestUrl.endsWith("/campaigns/campaign-1")) {
+          return Promise.resolve(
+            jsonResponse({
+              ok: true,
+              body: {
+                id: "campaign-1",
+                owner_id: "owner-1",
+                name: "Shadows of Glass",
+                description: "Urban intrigue campaign",
+                created_at: "2026-04-08T12:00:00Z",
+                updated_at: "2026-04-08T12:00:00Z",
+              },
+            }),
+          );
+        }
+
+        return Promise.resolve(jsonResponse({ ok: true, body: [] }));
+      }),
+    );
 
     const { routes } = await import("../app/routes");
     const router = createMemoryRouter(routes, {
@@ -1928,7 +1968,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Zam Grimbot",
                 summary: "Timelord ruler of Wappana.",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1941,7 +1981,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Broken Observatory",
                 summary: "Hidden ruin",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",
@@ -1975,9 +2015,7 @@ describe("campaign and entity frontend routes", () => {
     expect(await screen.findByText("Zam Grimbot")).toBeInTheDocument();
     expect(screen.queryByText("Broken Observatory")).toBeNull();
 
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledTimes(3);
-    });
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
   });
 
   it("shows a user-facing error when entity delete fails from the edit page", async () => {
@@ -2014,7 +2052,7 @@ describe("campaign and entity frontend routes", () => {
                 name: "Magistrate Ilya",
                 summary: "Brother of Rowan, magistrate of the lower ward.",
                 metadata: {},
-                source_document_id: null,
+                source_asset_id: null,
                 provenance_excerpt: null,
                 provenance_data: {},
                 created_at: "2026-04-08T12:00:00Z",

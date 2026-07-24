@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CampaignDirectoryProvider } from "../../app/CampaignDirectoryContext";
 import type { CampaignWorkspaceContext } from "../CampaignWorkspacePage";
 
 const mockUseOutletContext = vi.fn<() => CampaignWorkspaceContext>();
+const refreshCampaigns = vi.fn(() => Promise.resolve());
 
 function buildCampaignWorkspaceContext(
   campaignId: string,
@@ -32,11 +35,13 @@ vi.mock("react-router-dom", async () => {
 
 describe("CampaignOverviewTab", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     window.localStorage.clear();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     window.localStorage.clear();
   });
 
@@ -46,7 +51,13 @@ describe("CampaignOverviewTab", () => {
     );
 
     const { CampaignOverviewTab } = await import("../CampaignOverviewTab");
-    render(<CampaignOverviewTab />);
+    render(
+      <CampaignDirectoryProvider value={{ refreshCampaigns }}>
+        <MemoryRouter>
+          <CampaignOverviewTab />
+        </MemoryRouter>
+      </CampaignDirectoryProvider>,
+    );
 
     fireEvent.change(screen.getByRole("textbox", { name: "Quick Notes" }), {
       target: { value: "Remember the king's brother knows the east gate signal." },
@@ -66,7 +77,13 @@ describe("CampaignOverviewTab", () => {
     mockUseOutletContext.mockImplementation(() => currentContext);
 
     const { CampaignOverviewTab } = await import("../CampaignOverviewTab");
-    const { rerender } = render(<CampaignOverviewTab />);
+    const { rerender } = render(
+      <CampaignDirectoryProvider value={{ refreshCampaigns }}>
+        <MemoryRouter>
+          <CampaignOverviewTab />
+        </MemoryRouter>
+      </CampaignDirectoryProvider>,
+    );
 
     fireEvent.change(screen.getByRole("textbox", { name: "Quick Notes" }), {
       target: { value: "Campaign one should keep its own note." },
@@ -80,7 +97,13 @@ describe("CampaignOverviewTab", () => {
 
     currentContext = buildCampaignWorkspaceContext("campaign-2", "Ashes of Karth", "Second campaign");
 
-    rerender(<CampaignOverviewTab />);
+    rerender(
+      <CampaignDirectoryProvider value={{ refreshCampaigns }}>
+        <MemoryRouter>
+          <CampaignOverviewTab />
+        </MemoryRouter>
+      </CampaignDirectoryProvider>,
+    );
 
     expect(await screen.findByRole("textbox", { name: "Quick Notes" })).toHaveValue("Campaign two already has notes.");
     expect(window.localStorage.getItem("gm-workspace:campaign-quick-notes:campaign-2")).toBe(

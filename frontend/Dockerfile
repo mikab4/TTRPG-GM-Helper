@@ -9,4 +9,4 @@ COPY . ./
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "echo 'Open GM Workspace: http://localhost:5173' && exec npm run dev -- --host 0.0.0.0"]

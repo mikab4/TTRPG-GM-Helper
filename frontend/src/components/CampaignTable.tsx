@@ -4,29 +4,34 @@ import type { Campaign } from "../types/campaigns";
 
 type CampaignTableProps = {
   campaigns: Campaign[];
+  onDelete: (campaign: Campaign) => void;
 };
 
-export function CampaignTable({ campaigns }: CampaignTableProps) {
+export function CampaignTable({ campaigns, onDelete }: CampaignTableProps) {
   return (
     <div className="campaign-card-list">
       {campaigns.map((campaign) => (
-        <Link
-          key={campaign.id}
-          aria-label={`Open workspace for ${campaign.name}`}
-          className="campaign-card"
-          to={`/campaigns/${campaign.id}`}
-        >
-          <div className="campaign-card-copy">
+        <article key={campaign.id} className="campaign-card">
+          <Link
+            aria-label={`Open workspace for ${campaign.name}`}
+            className="campaign-card-copy"
+            to={`/campaigns/${campaign.id}`}
+          >
             <h3 className="campaign-card-title">{campaign.name}</h3>
-            <p className="campaign-card-updated">Last Updated {new Date(campaign.updatedAt).toLocaleDateString()}</p>
-            <p className="campaign-card-description">{campaign.description ?? "No description yet."}</p>
+          </Link>
+          <div className="campaign-card-actions">
+            <button
+              aria-label={`Delete ${campaign.name}`}
+              className="text-button"
+              type="button"
+              onClick={() => {
+                onDelete(campaign);
+              }}
+            >
+              Delete
+            </button>
           </div>
-          <div aria-hidden="true" className="campaign-card-actions">
-            <span className="campaign-card-open">
-              <span aria-hidden="true">›</span>
-            </span>
-          </div>
-        </Link>
+        </article>
       ))}
     </div>
   );

@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 
-import { listCampaigns } from "../api/campaigns";
+import { deleteCampaign, listCampaigns } from "../api/campaigns";
 import { CampaignTable } from "../components/CampaignTable";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
+import { useCampaignDirectory } from "../app/CampaignDirectoryContext";
 import type { Campaign } from "../types/campaigns";
 
 type CampaignsRequestState =
@@ -13,7 +14,21 @@ type CampaignsRequestState =
   | { campaigns: Campaign[]; status: "success" };
 
 export function CampaignsPage() {
+  const { refreshCampaigns } = useCampaignDirectory();
   const [requestState, setRequestState] = useState<CampaignsRequestState>({ status: "loading" });
+
+  async function handleDelete(campaign: Campaign) {
+    await deleteCampaign(campaign.id);
+    await refreshCampaigns();
+    setRequestState((currentState) =>
+      currentState.status === "success"
+        ? {
+            campaigns: currentState.campaigns.filter((listedCampaign) => listedCampaign.id !== campaign.id),
+            status: "success",
+          }
+        : currentState,
+    );
+  }
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -64,7 +79,7 @@ export function CampaignsPage() {
         />
       ) : null}
       {requestState.status === "success" && requestState.campaigns.length > 0 ? (
-        <CampaignTable campaigns={requestState.campaigns} />
+        <CampaignTable campaigns={requestState.campaigns} onDelete={(campaign) => void handleDelete(campaign)} />
       ) : null}
     </div>
   );

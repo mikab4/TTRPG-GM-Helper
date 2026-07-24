@@ -2,6 +2,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import { listCampaignEntities } from "../api/entities";
+import { deleteEntity } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { CampaignEntityRoster } from "../components/CampaignEntityRoster";
 import { EntityQuickLookPanel } from "../components/EntityQuickLookPanel";
@@ -21,6 +22,16 @@ export function CampaignEntitiesTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const [pageState, setPageState] = useState<CampaignEntitiesState>({ status: "loading" });
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+
+  async function handleDelete(entity: Entity) {
+    await deleteEntity(campaign.id, entity.id);
+    setSelectedEntity(null);
+    setPageState((currentState) =>
+      currentState.status === "ready"
+        ? { ...currentState, entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id) }
+        : currentState,
+    );
+  }
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -67,42 +78,53 @@ export function CampaignEntitiesTab() {
       : new Map<string, string[]>();
 
   return (
-    <div className="campaign-entities-layout">
-      <SectionPanel>
+    <div className="page-stack">
+      <header className="workspace-section-header">
+        <div>
+          <h2 className="font-cinzel">Entities</h2>
+          <p>
+            People, places, factions, and things in <span className="workspace-campaign-name">{campaign.name}</span>.
+          </p>
+        </div>
         <div className="section-actions">
           <Link className="primary-button" to={`/campaigns/${campaign.id}/entities/new`}>
             New Entity
           </Link>
         </div>
-        {pageState.status === "loading" ? (
-          <RequestStateBlock message="Loading this campaign's saved entities." title="Loading entities" />
-        ) : null}
-        {pageState.status === "error" ? (
-          <RequestStateBlock message={pageState.message} title="Entities unavailable" tone="error" />
-        ) : null}
-        {pageState.status === "ready" && pageState.entities.length === 0 ? (
-          <RequestStateBlock
-            message="Add the first entity for this campaign from here to keep ownership context explicit."
-            title="No campaign entities yet"
+      </header>
+      <div className="campaign-entities-layout">
+        <SectionPanel>
+          {pageState.status === "loading" ? (
+            <RequestStateBlock message="Loading this campaign's saved entities." title="Loading entities" />
+          ) : null}
+          {pageState.status === "error" ? (
+            <RequestStateBlock message={pageState.message} title="Entities unavailable" tone="error" />
+          ) : null}
+          {pageState.status === "ready" && pageState.entities.length === 0 ? (
+            <RequestStateBlock
+              message="Add the first entity for this campaign from here to keep ownership context explicit."
+              title="No campaign entities yet"
+            />
+          ) : null}
+          {pageState.status === "ready" && pageState.entities.length > 0 ? (
+            <CampaignEntityRoster
+              entities={pageState.entities}
+              relationshipPreviewByEntityId={relationshipPreviewByEntityId}
+              onQuickLook={setSelectedEntity}
+              onDelete={(entity) => void handleDelete(entity)}
+            />
+          ) : null}
+        </SectionPanel>
+        {selectedEntity ? (
+          <EntityQuickLookPanel
+            entity={selectedEntity}
+            onClose={() => {
+              setSelectedEntity(null);
+            }}
+            onDelete={(entity) => void handleDelete(entity)}
           />
         ) : null}
-        {pageState.status === "ready" && pageState.entities.length > 0 ? (
-          <CampaignEntityRoster
-            entities={pageState.entities}
-            relationshipPreviewByEntityId={relationshipPreviewByEntityId}
-            onQuickLook={setSelectedEntity}
-          />
-        ) : null}
-      </SectionPanel>
-      {selectedEntity ? (
-        <EntityQuickLookPanel
-          campaign={campaign}
-          entity={selectedEntity}
-          onClose={() => {
-            setSelectedEntity(null);
-          }}
-        />
-      ) : null}
+      </div>
     </div>
   );
 }

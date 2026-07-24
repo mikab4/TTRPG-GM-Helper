@@ -1,8 +1,8 @@
-import { Link, useOutletContext, useSearchParams } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
 import { listCampaignEntities } from "../api/entities";
-import { listRelationships } from "../api/relationships";
+import { deleteRelationship, listRelationships } from "../api/relationships";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import { buildEntityNameMap, buildRelationshipPhrase, formatRelationshipStatus } from "../relationships/presentation";
@@ -17,11 +17,23 @@ type RelationshipTabState =
 
 export function CampaignRelationshipsTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [relationshipState, setRelationshipState] = useState<RelationshipTabState>({
     status: "loading",
   });
-  const selectedEntityId = searchParams.get("entityId");
+
+  async function handleDelete(relationship: Relationship) {
+    await deleteRelationship(campaign.id, relationship.id);
+    setRelationshipState((currentState) =>
+      currentState.status === "ready"
+        ? {
+            ...currentState,
+            relationships: currentState.relationships.filter(
+              (listedRelationship) => listedRelationship.id !== relationship.id,
+            ),
+          }
+        : currentState,
+    );
+  }
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -58,28 +70,17 @@ export function CampaignRelationshipsTab() {
     [relationshipState],
   );
 
-  const visibleRelationships =
-    relationshipState.status === "ready" && selectedEntityId
-      ? relationshipState.relationships.filter(
-          (relationship) =>
-            relationship.sourceEntityId === selectedEntityId || relationship.targetEntityId === selectedEntityId,
-        )
-      : relationshipState.status === "ready"
-        ? relationshipState.relationships
-        : [];
-
-  function handleEntityFilterChange(entityId: string) {
-    if (!entityId) {
-      setSearchParams({});
-      return;
-    }
-
-    setSearchParams({ entityId });
-  }
+  const visibleRelationships = relationshipState.status === "ready" ? relationshipState.relationships : [];
 
   return (
     <div className="page-stack">
-      <SectionPanel title="Relationships">
+      <header className="workspace-section-header">
+        <div>
+          <h2 className="font-cinzel">Relationships</h2>
+          <p>
+            Connections that give <span className="workspace-campaign-name">{campaign.name}</span> its shape.
+          </p>
+        </div>
         <div className="section-actions">
           <Link className="primary-button" to={`/campaigns/${campaign.id}/relationships/new`}>
             New Relationship
@@ -88,30 +89,13 @@ export function CampaignRelationshipsTab() {
             New Relationship Type
           </Link>
         </div>
+      </header>
+      <SectionPanel>
         {relationshipState.status === "loading" ? (
           <RequestStateBlock message="Loading campaign relationship records." title="Loading relationships" />
         ) : null}
         {relationshipState.status === "error" ? (
           <RequestStateBlock message={relationshipState.message} title="Relationships unavailable" tone="error" />
-        ) : null}
-        {relationshipState.status === "ready" ? (
-          <label className="field relationship-filter-field">
-            <span className="field-label">Filter By Entity</span>
-            <select
-              aria-label="Filter by entity"
-              value={selectedEntityId ?? ""}
-              onChange={(event) => {
-                handleEntityFilterChange(event.target.value);
-              }}
-            >
-              <option value="">All entities</option>
-              {relationshipState.entities.map((entity) => (
-                <option key={entity.id} value={entity.id}>
-                  {entity.name}
-                </option>
-              ))}
-            </select>
-          </label>
         ) : null}
         {relationshipState.status === "ready" && visibleRelationships.length === 0 ? (
           <RequestStateBlock
@@ -136,6 +120,9 @@ export function CampaignRelationshipsTab() {
                   <Link className="text-link" to={`/campaigns/${campaign.id}/relationships/${relationship.id}/edit`}>
                     Edit
                   </Link>
+                  <button className="text-button" type="button" onClick={() => void handleDelete(relationship)}>
+                    Delete
+                  </button>
                 </div>
               </article>
             ))}
