@@ -194,8 +194,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Create: `backend/app/api/assets.py`
 - Create: `backend/tests/test_sessions_api.py`
 - Create: `backend/tests/test_assets_api.py`
-- Create: `frontend/src/pages/SessionsPage.tsx`
-- Create: `frontend/src/pages/AssetsPage.tsx`
+- Create: campaign-workspace Session and Asset route components under `frontend/src/routes/`
 
 **Steps:**
 1. Implement CRUD for sessions.
@@ -206,13 +205,14 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 6. Add tests covering session CRUD, asset upload, asset-session linking, groundwork migration safety for future parse caching, and migration-safe provenance preservation.
 7. Keep the backend upload contract single-purpose. If the UI offers one form for creating a session and uploading an asset, the frontend should orchestrate two API calls rather than adding a combined backend endpoint in this task.
 8. Verify the session and asset groundwork flow is usable end-to-end before starting the next parsing-focused branch.
-9. Build session and asset list and detail flows in the frontend.
-10. Connect session and asset screens to the typed API client without moving validation rules into React.
+9. Build session and asset list/detail flows as sections of the selected campaign workspace; do not add separate top-level Sessions or Assets picker pages.
+10. Connect those campaign-scoped screens to the typed API client without moving validation rules into React. Use the workspace-first navigation and mockup acceptance criteria in `docs/plans/2026-07-24-workspace-first-frontend-scope.md`.
 
 **Design decisions to revisit in this task:**
 - Which session and asset facts belong in quick inspection surfaces versus full editing pages?
 - How should campaign context remain visible while working inside sessions/assets so users do not lose orientation?
 - Which parsed asset details should be exposed in asset detail views without surfacing parser internals too early?
+- How should the campaign switcher preserve the current workspace section while protecting unsaved form changes?
 
 ### Task 9: Parsing implementation and parse-cache behavior
 

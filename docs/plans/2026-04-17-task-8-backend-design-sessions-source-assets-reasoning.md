@@ -145,6 +145,14 @@ So the UI gets one flow, but the frontend orchestrates:
 
 This keeps the backend explicit and boring while still delivering the intended UX.
 
+## Why The Frontend Is Campaign-Workspace-First
+
+Sessions and source assets are campaign-owned in the current API and schema. Giving them duplicate global navigation destinations would imply a global list or cross-campaign ownership model that task 8 deliberately does not provide.
+
+The approved frontend therefore uses a Campaign Registry as the entry point and a selected-campaign workspace for Overview, Entities, Relationships, Sessions, and Assets. A persistent campaign switcher supports lateral movement between campaigns and includes a direct path back to the registry. This is a navigation improvement only: it does not introduce a World domain, shared records, global search, or different backend ownership rules.
+
+The static visual/interaction reference is `docs/mockups/workspace-v1.html`. It keeps the app’s dark header and parchment workspace language while giving each campaign section one unambiguous home.
+
 ## Why We Kept Parse History
 
 Overwriting one mutable cache row is cheaper today, but it throws away useful information:

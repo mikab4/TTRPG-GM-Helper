@@ -341,8 +341,10 @@ Parse/file-dependent operation contract:
 
 - update frontend contracts to use `sessions` and `assets`
 - implement the one-form orchestration flow as two API calls when session creation is needed
-- expose parse status clearly
-- keep ordinary asset reads cheap; parse-dependent UI should be the only caller that triggers parsing
+- expose asset truth, lifecycle, and storage status; do not expose parse status or last-parsed information before parse orchestration exists
+- keep ordinary asset reads cheap and never trigger parsing from session/asset list or detail screens in this task
+- render Sessions and Assets only as sections of a selected campaign workspace; the campaign switcher changes the current campaign context without creating a global assets/sessions backend contract
+- use `docs/plans/2026-07-24-workspace-first-frontend-scope.md` and `docs/mockups/workspace-v1.html` as the frontend navigation and visual reference
 
 ### 5. Documentation sync
 

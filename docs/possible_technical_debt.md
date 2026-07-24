@@ -1,5 +1,16 @@
 # Possible Technical Debt
 
+## World-owned reusable assets
+
+Task 8 keeps each source asset campaign-owned because its current schema, storage, ownership validation, provenance rules, and list APIs are all campaign-scoped.
+
+A future reusable-asset model should introduce `worlds` as an ownership layer above campaigns. A canonical World asset would own the original stored file, parsed output, checksum, and provenance. A campaign-to-world-asset association would represent reuse and reserve fields for campaign-local annotation, visibility, or interpretation.
+
+Why this is deferred now:
+- It requires coordinated changes to ownership validation, list APIs, provenance, deletion rules, extraction, search, migrations, and the frontend workspace.
+- A `campaign_ids` array or duplicated files would be a weaker substitute because it splits canonical storage and provenance.
+- The current task needs a reliable campaign-owned ingestion workflow before it gains a second ownership layer.
+
 ## Entity subtype detail tables
 
 Current recommendation for the v1 schema is to keep one generic `entities` table with flexible `metadata`, because that matches the current CRUD, provenance, and future extraction workflow well.
