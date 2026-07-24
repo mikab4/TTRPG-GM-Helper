@@ -206,7 +206,7 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 7. Keep the backend upload contract single-purpose. If the UI offers one form for creating a session and uploading an asset, the frontend should orchestrate two API calls rather than adding a combined backend endpoint in this task.
 8. Verify the session and asset groundwork flow is usable end-to-end before starting the next parsing-focused branch.
 9. Build session and asset list/detail flows as sections of the selected campaign workspace; do not add separate top-level Sessions or Assets picker pages.
-10. Connect those campaign-scoped screens to the typed API client without moving validation rules into React. Use the workspace-first navigation and mockup acceptance criteria in `docs/plans/2026-07-24-workspace-first-frontend-scope.md`.
+10. Connect those campaign-scoped screens to the typed API client without moving validation rules into React. Use `docs/plans/2026-07-24-campaign-sessions-assets-frontend-scope.md` for the session/asset extension, and preserve the workspace shell defined in `docs/plans/2026-07-24-workspace-layout-frontend-scope.md`.
 
 **Design decisions to revisit in this task:**
 - Which session and asset facts belong in quick inspection surfaces versus full editing pages?

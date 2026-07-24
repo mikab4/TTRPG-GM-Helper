@@ -344,7 +344,7 @@ Parse/file-dependent operation contract:
 - expose asset truth, lifecycle, and storage status; do not expose parse status or last-parsed information before parse orchestration exists
 - keep ordinary asset reads cheap and never trigger parsing from session/asset list or detail screens in this task
 - render Sessions and Assets only as sections of a selected campaign workspace; the campaign switcher changes the current campaign context without creating a global assets/sessions backend contract
-- use `docs/plans/2026-07-24-workspace-first-frontend-scope.md` and `docs/mockups/workspace-v1.html` as the frontend navigation and visual reference
+- use `docs/plans/2026-07-24-workspace-layout-frontend-scope.md` for the established shell, `docs/plans/2026-07-24-campaign-sessions-assets-frontend-scope.md` for the session/asset extension, and `docs/mockups/workspace-v1.html` as the visual reference
 
 ### 5. Documentation sync
 
