@@ -218,6 +218,29 @@ def test_delete_entity_removes_entity(
     assert missing_response.status_code == 404
 
 
+def test_delete_entity_cascades_its_relationships(
+    api_request,
+    campaign_factory,
+    entity_factory,
+    relationship_factory,
+) -> None:
+    stored_campaign = campaign_factory()
+    source_entity = entity_factory(campaign_id=stored_campaign.id, name="Captain Ilya", type="person")
+    target_entity = entity_factory(campaign_id=stored_campaign.id, name="Blackharbor", type="location")
+    relationship_factory(
+        campaign_id=stored_campaign.id,
+        source_entity_id=source_entity.id,
+        target_entity_id=target_entity.id,
+    )
+
+    delete_response = api_request(
+        "DELETE",
+        f"/api/campaigns/{stored_campaign.id}/entities/{source_entity.id}",
+    )
+
+    assert delete_response.status_code == 204
+
+
 def test_get_entity_returns_not_found_for_campaign_mismatch(
     api_request,
     owner_factory,
