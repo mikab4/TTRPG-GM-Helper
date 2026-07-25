@@ -16,6 +16,19 @@ This is the current-branch handoff. It implements original Tasks 1, 2, 2.1, and 
 - Reserve Sessions and Assets for [the follow-up handoff](2026-07-24-campaign-sessions-assets-frontend-scope.md). That plan extends this established shell rather than recreating it.
 - Task 2.1 is included because its backend fix is necessary for reliable workspace use. The current branch already contains the app-scoped engine fix; retain its tests and do not reintroduce request-scoped engine creation.
 
+## Implementation record
+
+Completed in this branch:
+
+- Campaign Registry entry, persistent campaign switcher, and route-derived workspace sidebar for Overview, Entities, and Relationships.
+- Mockup-aligned workspace visual language and responsive composition.
+- Local entity-name filtering, retained entity quick look, relationship entity/type AND filtering, and URL-backed relationship filter restoration.
+- A selected-entity roster-card treatment for the open quick-look record.
+- Workspace delete feedback and duplicate-submit protection for entities.
+- Entity deletion cascades related relationship rows through matching ORM and database cascade configuration.
+
+Sessions and Assets remain deferred to the follow-up handoff; no frontend routes or controls for them were added here.
+
 ---
 
 ## Non-negotiable visual and interaction contract

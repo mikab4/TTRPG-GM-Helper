@@ -66,6 +66,7 @@ Schema defaults:
 - Use one generic `Entity` table in v1.
 - `Entity` has `type`, `name`, `summary`, `metadata JSONB`, provenance fields, and timestamps.
 - `Relationship` maps to the `entity_relationships` table and stores source entity, target entity, relationship type, optional notes, provenance, and confidence.
+- Deleting an entity also deletes its incoming and outgoing relationships. The ORM relationship configuration and database foreign keys must agree on that cascade behavior.
 - `Session` represents an actual play session and is distinct from uploaded source artifacts.
 - `SourceAsset` stores uploaded evidence or artifacts and may optionally link back to a session.
 - `AssetParseResult` stores backend-owned parse-cache groundwork so later branches can add reusable parsed text and structure without another schema reshape.

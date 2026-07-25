@@ -128,7 +128,10 @@ Use sample notes under `docs/sample-notes/` for repeatable tests and demos.
 ## Documentation Expectations
 
 When changing architecture, scope, or major workflows:
-- update `README.md` if the user-facing setup or project description changes
+- Keep `README.md` limited to the general product description, installation, running the app, debugging, development prerequisites, and test/verification commands.
+- Do not add implementation status, task details, architectural decisions, reasoning, or plan summaries to `README.md`.
+- Record implementation details, design decisions, scope changes, reasoning, and handoffs only under `docs/`, updating the relevant file under `docs/plans/`.
+- Update `README.md` only when the general product description, setup, run, debugging, or verification instructions change.
 - update the relevant file under `docs/plans/` if the intended design changes
 
 ## Working Style
