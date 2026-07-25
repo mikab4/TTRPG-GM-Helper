@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.models import Relationship
+
 
 def test_create_entity_returns_created_record(
     api_request,
@@ -76,7 +78,10 @@ def test_list_all_entities_returns_cross_campaign_results(
     response = api_request("GET", "/api/entities")
 
     assert response.status_code == 200
-    assert {listed_entity["name"] for listed_entity in response.json()} == {"Magistrate Ilya", "Varkesh",}
+    assert {listed_entity["name"] for listed_entity in response.json()} == {
+        "Magistrate Ilya",
+        "Varkesh",
+    }
 
 
 def test_list_all_entities_tolerates_legacy_entity_types_in_persisted_rows(
@@ -117,7 +122,9 @@ def test_list_all_entities_supports_campaign_and_type_filters(
     )
 
     assert response.status_code == 200
-    assert {listed_entity["name"] for listed_entity in response.json()} == {"Magistrate Ilya",}
+    assert {listed_entity["name"] for listed_entity in response.json()} == {
+        "Magistrate Ilya",
+    }
 
 
 def test_list_campaign_entities_supports_type_filter(
@@ -136,7 +143,9 @@ def test_list_campaign_entities_supports_type_filter(
     )
 
     assert response.status_code == 200
-    assert {listed_entity["name"] for listed_entity in response.json()} == {"Magistrate Ilya",}
+    assert {listed_entity["name"] for listed_entity in response.json()} == {
+        "Magistrate Ilya",
+    }
 
 
 def test_get_entity_returns_stored_record(
@@ -221,24 +230,49 @@ def test_delete_entity_removes_entity(
 def test_delete_entity_cascades_its_relationships(
     api_request,
     campaign_factory,
+    db_session_factory,
     entity_factory,
     relationship_factory,
 ) -> None:
+    # Arrange
     stored_campaign = campaign_factory()
-    source_entity = entity_factory(campaign_id=stored_campaign.id, name="Captain Ilya", type="person")
-    target_entity = entity_factory(campaign_id=stored_campaign.id, name="Blackharbor", type="location")
-    relationship_factory(
+    central_entity = entity_factory(
         campaign_id=stored_campaign.id,
-        source_entity_id=source_entity.id,
-        target_entity_id=target_entity.id,
+        name="Captain Ilya",
+        type="person",
+    )
+    outgoing_target_entity = entity_factory(
+        campaign_id=stored_campaign.id,
+        name="Blackharbor",
+        type="location",
+    )
+    incoming_source_entity = entity_factory(
+        campaign_id=stored_campaign.id,
+        name="Harbormaster Vessa",
+        type="person",
+    )
+    outgoing_relationship = relationship_factory(
+        campaign_id=stored_campaign.id,
+        source_entity_id=central_entity.id,
+        target_entity_id=outgoing_target_entity.id,
+    )
+    incoming_relationship = relationship_factory(
+        campaign_id=stored_campaign.id,
+        source_entity_id=incoming_source_entity.id,
+        target_entity_id=central_entity.id,
     )
 
+    # Act
     delete_response = api_request(
         "DELETE",
-        f"/api/campaigns/{stored_campaign.id}/entities/{source_entity.id}",
+        f"/api/campaigns/{stored_campaign.id}/entities/{central_entity.id}",
     )
 
+    # Assert
     assert delete_response.status_code == 204
+    with db_session_factory() as db_session:
+        assert db_session.get(Relationship, outgoing_relationship.id) is None
+        assert db_session.get(Relationship, incoming_relationship.id) is None
 
 
 def test_get_entity_returns_not_found_for_campaign_mismatch(

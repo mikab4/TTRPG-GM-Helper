@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
@@ -392,6 +393,61 @@ def test_relationship_rejects_confidence_above_one(postgres_session: DBSession) 
     with pytest.raises(IntegrityError):
         postgres_session.commit()
     postgres_session.rollback()
+
+
+def test_database_cascade_deletes_incoming_and_outgoing_relationships(
+    postgres_session: DBSession,
+) -> None:
+    # Arrange
+    owner = Owner(email="gm@example.com")
+    campaign = Campaign(owner=owner, name="Shadows of Glass")
+    central_entity = Entity(campaign=campaign, type="person", name="Captain Ilya")
+    outgoing_target_entity = Entity(campaign=campaign, type="location", name="Blackharbor")
+    incoming_source_entity = Entity(campaign=campaign, type="person", name="Harbormaster Vessa")
+    outgoing_relationship = Relationship(
+        campaign=campaign,
+        source_entity=central_entity,
+        target_entity=outgoing_target_entity,
+        relationship_type="commands",
+    )
+    incoming_relationship = Relationship(
+        campaign=campaign,
+        source_entity=incoming_source_entity,
+        target_entity=central_entity,
+        relationship_type="knows",
+    )
+    postgres_session.add_all(
+        [
+            owner,
+            campaign,
+            central_entity,
+            outgoing_target_entity,
+            incoming_source_entity,
+            outgoing_relationship,
+            incoming_relationship,
+        ]
+    )
+    postgres_session.commit()
+
+    outgoing_relationship_id = outgoing_relationship.id
+    incoming_relationship_id = incoming_relationship.id
+
+    # Act
+    with postgres_session.get_bind().begin() as database_connection:
+        deleted_entity_count = database_connection.execute(
+            Entity.__table__.delete().where(Entity.id == central_entity.id)
+        ).rowcount
+        remaining_outgoing_relationship_id = database_connection.scalar(
+            select(Relationship.__table__.c.id).where(Relationship.__table__.c.id == outgoing_relationship_id)
+        )
+        remaining_incoming_relationship_id = database_connection.scalar(
+            select(Relationship.__table__.c.id).where(Relationship.__table__.c.id == incoming_relationship_id)
+        )
+
+    # Assert
+    assert deleted_entity_count == 1
+    assert remaining_outgoing_relationship_id is None
+    assert remaining_incoming_relationship_id is None
 
 
 def test_campaign_name_must_be_unique_per_owner(postgres_session: DBSession) -> None:
