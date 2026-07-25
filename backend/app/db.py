@@ -13,12 +13,7 @@ def get_engine(settings: Settings | None = None):
     return create_engine(settings.database_url, future=True)
 
 
-def get_db_session_factory(engine_or_settings: Engine | Settings | None = None):
-    if isinstance(engine_or_settings, Engine):
-        db_engine = engine_or_settings
-    else:
-        db_engine = get_engine(engine_or_settings)
-
+def get_db_session_factory(db_engine: Engine):
     return sessionmaker(
         bind=db_engine,
         autoflush=False,
