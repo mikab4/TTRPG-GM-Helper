@@ -5,19 +5,23 @@ import type { Entity } from "../types/entities";
 
 type CampaignEntityRosterProps = {
   campaignNamesById?: Map<string, string>;
+  deletingEntityId?: string | null;
   entities: Entity[];
   onDelete?: (entity: Entity) => void;
   onQuickLook?: (entity: Entity) => void;
   relationshipPreviewByEntityId?: Map<string, string[]>;
+  selectedEntityId?: string;
   showCampaignName?: boolean;
 };
 
 export function CampaignEntityRoster({
   campaignNamesById = new Map<string, string>(),
+  deletingEntityId = null,
   entities,
   onDelete,
   onQuickLook,
   relationshipPreviewByEntityId = new Map<string, string[]>(),
+  selectedEntityId,
   showCampaignName = false,
 }: CampaignEntityRosterProps) {
   return (
@@ -25,7 +29,7 @@ export function CampaignEntityRoster({
       {entities.map((entity) => (
         <article
           key={entity.id}
-          className="entity-roster-card"
+          className={`entity-roster-card${entity.id === selectedEntityId ? " entity-roster-card-selected" : ""}`}
           onClick={() => {
             onQuickLook?.(entity);
           }}
@@ -77,13 +81,14 @@ export function CampaignEntityRoster({
               <button
                 aria-label={`Delete ${entity.name}`}
                 className="text-button"
+                disabled={deletingEntityId === entity.id}
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
                   onDelete(entity);
                 }}
               >
-                Delete
+                {deletingEntityId === entity.id ? "Deleting..." : "Delete"}
               </button>
             ) : null}
           </div>

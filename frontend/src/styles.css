@@ -847,6 +847,88 @@ h4 {
   padding-top: 0.2rem;
 }
 
+.workspace-retrieval-toolbar {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.workspace-search-field {
+  display: block;
+  width: min(100%, 22rem);
+}
+
+.workspace-relationship-toolbar {
+  align-items: flex-start;
+}
+
+.workspace-entity-picker {
+  position: relative;
+  width: min(100%, 22rem);
+}
+
+.workspace-entity-picker .workspace-search-field {
+  width: 100%;
+}
+
+.workspace-entity-picker-options {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 100%;
+  max-height: 13rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.35rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(28, 25, 23, 0.12);
+  list-style: none;
+}
+
+.workspace-entity-picker-option {
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  padding: 0.45rem 0.55rem;
+  background: transparent;
+  color: var(--paper-text);
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.workspace-entity-picker-option:hover,
+.workspace-entity-picker-option[aria-selected="true"] {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.workspace-relationship-type-label {
+  display: block;
+  width: min(100%, 13rem);
+}
+
+.workspace-search-field input,
+.workspace-relationship-type-filter {
+  width: 100%;
+  min-height: 2.2rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  padding: 0.45rem 0.65rem;
+  background: #ffffff;
+  color: var(--paper-text);
+  font-size: 0.75rem;
+}
+
+.workspace-search-field input:focus,
+.workspace-relationship-type-filter:focus {
+  border-color: #a855f7;
+  outline: 2px solid rgba(168, 85, 247, 0.18);
+}
+
 .workspace-surface > .request-state {
   box-shadow: none;
 }
@@ -877,6 +959,11 @@ h4 {
 .campaign-card:hover,
 .entity-roster-card:hover {
   border-color: rgba(123, 84, 184, 0.28);
+}
+
+.entity-roster-card-selected {
+  border: 2px solid #d8b4fe;
+  box-shadow: 0 4px 12px rgba(126, 34, 206, 0.1);
 }
 
 .campaign-card {

@@ -10,11 +10,12 @@ import type { Relationship } from "../types/relationships";
 
 type EntityQuickLookPanelProps = {
   entity: Entity;
+  isDeleting?: boolean;
   onClose: () => void;
   onDelete?: (entity: Entity) => void;
 };
 
-export function EntityQuickLookPanel({ entity, onClose, onDelete }: EntityQuickLookPanelProps) {
+export function EntityQuickLookPanel({ entity, isDeleting = false, onClose, onDelete }: EntityQuickLookPanelProps) {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
 
@@ -95,12 +96,13 @@ export function EntityQuickLookPanel({ entity, onClose, onDelete }: EntityQuickL
         {onDelete ? (
           <button
             className="danger-button"
+            disabled={isDeleting}
             type="button"
             onClick={() => {
               onDelete(entity);
             }}
           >
-            Delete Entity
+            {isDeleting ? "Deleting..." : "Delete Entity"}
           </button>
         ) : null}
       </div>

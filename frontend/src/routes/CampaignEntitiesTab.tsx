@@ -22,15 +22,30 @@ export function CampaignEntitiesTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const [pageState, setPageState] = useState<CampaignEntitiesState>({ status: "loading" });
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+  const [entityNameQuery, setEntityNameQuery] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingEntityId, setDeletingEntityId] = useState<string | null>(null);
 
   async function handleDelete(entity: Entity) {
-    await deleteEntity(campaign.id, entity.id);
-    setSelectedEntity(null);
-    setPageState((currentState) =>
-      currentState.status === "ready"
-        ? { ...currentState, entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id) }
-        : currentState,
-    );
+    if (deletingEntityId) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeletingEntityId(entity.id);
+    try {
+      await deleteEntity(campaign.id, entity.id);
+      setSelectedEntity(null);
+      setPageState((currentState) =>
+        currentState.status === "ready"
+          ? { ...currentState, entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id) }
+          : currentState,
+      );
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unknown entity delete failure.");
+    } finally {
+      setDeletingEntityId(null);
+    }
   }
 
   useEffect(() => {
@@ -77,6 +92,11 @@ export function CampaignEntitiesTab() {
         )
       : new Map<string, string[]>();
 
+  const visibleEntities =
+    pageState.status === "ready"
+      ? pageState.entities.filter((entity) => entity.name.toLocaleLowerCase().includes(entityNameQuery.toLocaleLowerCase()))
+      : [];
+
   return (
     <div className="page-stack">
       <header className="workspace-section-header">
@@ -94,6 +114,11 @@ export function CampaignEntitiesTab() {
       </header>
       <div className="campaign-entities-layout">
         <SectionPanel>
+          {deleteError ? (
+            <p className="field-error" role="alert">
+              {deleteError}
+            </p>
+          ) : null}
           {pageState.status === "loading" ? (
             <RequestStateBlock message="Loading this campaign's saved entities." title="Loading entities" />
           ) : null}
@@ -107,17 +132,36 @@ export function CampaignEntitiesTab() {
             />
           ) : null}
           {pageState.status === "ready" && pageState.entities.length > 0 ? (
-            <CampaignEntityRoster
-              entities={pageState.entities}
-              relationshipPreviewByEntityId={relationshipPreviewByEntityId}
-              onQuickLook={setSelectedEntity}
-              onDelete={(entity) => void handleDelete(entity)}
-            />
+            <>
+              <div className="workspace-retrieval-toolbar">
+                <label className="workspace-search-field">
+                  <span className="sr-only">Search entity names</span>
+                  <input
+                    aria-label="Search entity names"
+                    placeholder="Search entity names…"
+                    type="search"
+                    value={entityNameQuery}
+                    onChange={(event) => {
+                      setEntityNameQuery(event.target.value);
+                    }}
+                  />
+                </label>
+              </div>
+              <CampaignEntityRoster
+                entities={visibleEntities}
+                deletingEntityId={deletingEntityId}
+                selectedEntityId={selectedEntity?.id}
+                relationshipPreviewByEntityId={relationshipPreviewByEntityId}
+                onQuickLook={setSelectedEntity}
+                onDelete={(entity) => void handleDelete(entity)}
+              />
+            </>
           ) : null}
         </SectionPanel>
         {selectedEntity ? (
           <EntityQuickLookPanel
             entity={selectedEntity}
+            isDeleting={deletingEntityId === selectedEntity.id}
             onClose={() => {
               setSelectedEntity(null);
             }}

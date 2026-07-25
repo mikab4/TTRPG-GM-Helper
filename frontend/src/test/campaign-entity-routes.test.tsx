@@ -277,7 +277,7 @@ describe("campaign and entity frontend routes", () => {
     ).toBeNull();
   });
 
-  it("renders every campaign relationship without an entity filter", async () => {
+  it("filters campaign relationships by URL-backed entity and type selections", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     const fetchSpy = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const requestUrl = getRequestUrl(input);
@@ -465,17 +465,18 @@ describe("campaign and entity frontend routes", () => {
 
     const { routes } = await import("../app/routes");
     const router = createMemoryRouter(routes, {
-      initialEntries: ["/campaigns/campaign-1/relationships"],
+      initialEntries: ["/campaigns/campaign-1/relationships?entity_id=entity-1&relationship_type=governs"],
     });
 
     render(<RouterProvider router={router} />);
 
     expect(await screen.findByRole("heading", { name: "Relationships" })).toHaveClass("font-cinzel");
     expect(await screen.findByText("Rowan governs Blackharbor")).toBeInTheDocument();
-    expect(screen.getByText("Ash Provinces is located in Blackharbor")).toBeInTheDocument();
-    expect(screen.getByText("Rowan leads Harbor Watch")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Filter by entity")).toBeNull();
-    expect(screen.getAllByText("Current · Public · Confirmed")).toHaveLength(3);
+    expect(screen.queryByText("Ash Provinces is located in Blackharbor")).toBeNull();
+    expect(screen.queryByText("Rowan leads Harbor Watch")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Filter by entity" })).toHaveValue("Rowan");
+    expect(screen.getByRole("combobox", { name: "Filter by relationship type" })).toHaveValue("governs");
+    expect(screen.getAllByText("Current · Public · Confirmed")).toHaveLength(1);
     expect(screen.queryByText("political · Current · Public · Confirmed")).toBeNull();
     expect(screen.getByRole("link", { name: "New Relationship" })).toHaveAttribute(
       "href",
@@ -485,7 +486,7 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/relationship-types",
     );
-    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
     expect(screen.queryByRole("heading", { name: "Relationship Type Workbench" })).toBeNull();
     expect(screen.queryByText("person, organization -> location, organization")).toBeNull();
   });
@@ -726,7 +727,7 @@ describe("campaign and entity frontend routes", () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
         const requestUrl = getRequestUrl(input);
 
         if (requestUrl.endsWith("/campaigns/campaign-1")) {
@@ -790,6 +791,16 @@ describe("campaign and entity frontend routes", () => {
                   updated_at: "2026-04-08T12:00:00Z",
                 },
               ],
+            }),
+          );
+        }
+
+        if (requestUrl.endsWith("/campaigns/campaign-1/entities/entity-1") && init?.method === "DELETE") {
+          return Promise.resolve(
+            jsonResponse({
+              ok: false,
+              status: 500,
+              body: { detail: "Entity deletion failed." },
             }),
           );
         }
@@ -1112,7 +1123,7 @@ describe("campaign and entity frontend routes", () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
         const requestUrl = getRequestUrl(input);
 
         if (requestUrl.endsWith("/campaigns/campaign-1")) {
@@ -1150,6 +1161,16 @@ describe("campaign and entity frontend routes", () => {
                   updated_at: "2026-04-08T12:00:00Z",
                 },
               ],
+            }),
+          );
+        }
+
+        if (requestUrl.endsWith("/campaigns/campaign-1/entities/entity-1") && init?.method === "DELETE") {
+          return Promise.resolve(
+            jsonResponse({
+              ok: false,
+              status: 500,
+              body: { detail: "Entity deletion failed." },
             }),
           );
         }
@@ -1240,6 +1261,10 @@ describe("campaign and entity frontend routes", () => {
 
     fireEvent.click(await screen.findByText("Magistrate Ilya"));
 
+    expect(screen.getByRole("heading", { level: 4, name: "Magistrate Ilya" }).closest("article")).toHaveClass(
+      "entity-roster-card-selected",
+    );
+
     const quickLookPanel = await screen.findByRole("complementary", { name: "Entity quick look" });
     expect(quickLookPanel.className).toContain("quick-look-panel-paper");
 
@@ -1263,6 +1288,98 @@ describe("campaign and entity frontend routes", () => {
       "/campaigns/campaign-1/entities/entity-1/edit",
     );
     expect(within(quickLookPanel).getByRole("button", { name: "Delete Entity" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.getByRole("heading", { level: 4, name: "Magistrate Ilya" }).closest("article")).not.toHaveClass(
+      "entity-roster-card-selected",
+    );
+  });
+
+  it("filters campaign entities by name without closing the quick look", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const requestUrl = getRequestUrl(input);
+
+        if (requestUrl.endsWith("/campaigns/campaign-1")) {
+          return Promise.resolve(
+            jsonResponse({
+              ok: true,
+              body: {
+                id: "campaign-1",
+                owner_id: "owner-1",
+                name: "Shadows of Glass",
+                description: "Urban intrigue campaign",
+                created_at: "2026-04-08T12:00:00Z",
+                updated_at: "2026-04-08T12:00:00Z",
+              },
+            }),
+          );
+        }
+
+        if (requestUrl.endsWith("/campaigns/campaign-1/entities")) {
+          return Promise.resolve(
+            jsonResponse({
+              ok: true,
+              body: [
+                {
+                  id: "entity-1",
+                  campaign_id: "campaign-1",
+                  type: "person",
+                  name: "Captain Rowan",
+                  summary: "Harbor ruler",
+                  metadata: {},
+                  source_asset_id: null,
+                  provenance_excerpt: null,
+                  provenance_data: {},
+                  created_at: "2026-04-08T12:00:00Z",
+                  updated_at: "2026-04-08T12:00:00Z",
+                },
+                {
+                  id: "entity-2",
+                  campaign_id: "campaign-1",
+                  type: "location",
+                  name: "Blackharbor",
+                  summary: "Port city",
+                  metadata: {},
+                  source_asset_id: null,
+                  provenance_excerpt: null,
+                  provenance_data: {},
+                  created_at: "2026-04-08T12:00:00Z",
+                  updated_at: "2026-04-08T12:00:00Z",
+                },
+              ],
+            }),
+          );
+        }
+
+        return Promise.resolve(jsonResponse({ ok: true, body: [] }));
+      }),
+    );
+
+    const { routes } = await import("../app/routes");
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/campaigns/campaign-1/entities"],
+    });
+
+    render(<RouterProvider router={router} />);
+
+    const entitySearch = await screen.findByRole("searchbox", { name: "Search entity names" });
+    fireEvent.change(entitySearch, { target: { value: "CAPTAIN" } });
+
+    expect(screen.getByText("Captain Rowan")).toBeInTheDocument();
+    expect(screen.queryByText("Blackharbor")).toBeNull();
+
+    fireEvent.click(screen.getByText("Captain Rowan"));
+    expect(await screen.findByRole("complementary", { name: "Entity quick look" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.getByRole("searchbox", { name: "Search entity names" })).toHaveValue("CAPTAIN");
+    expect(screen.getByText("Captain Rowan")).toBeInTheDocument();
+    expect(screen.queryByText("Blackharbor")).toBeNull();
   });
 
   it("refetches the global entities page when the campaign filter changes", async () => {
