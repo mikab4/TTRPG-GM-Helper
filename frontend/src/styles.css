@@ -682,6 +682,42 @@ h4 {
   color: #b42323;
 }
 
+.campaign-delete-dialog {
+  width: min(32rem, calc(100% - 2rem));
+  padding: 0;
+  border: 1px solid var(--paper-line);
+  border-radius: 16px;
+  color: var(--paper-text);
+  background: var(--paper-bg);
+  box-shadow: var(--shadow-deep);
+}
+
+.campaign-delete-dialog::backdrop {
+  background: rgba(12, 12, 14, 0.58);
+}
+
+.campaign-delete-dialog form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.campaign-delete-dialog h2,
+.campaign-delete-dialog p {
+  margin: 0;
+}
+
+.campaign-delete-dialog h2 {
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.campaign-delete-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 .workspace-tabs {
   display: flex;
   flex-wrap: wrap;

@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 
-import { deleteCampaign, listCampaigns } from "../api/campaigns";
+import { listCampaigns } from "../api/campaigns";
+import { CampaignDeleteDialog } from "../components/CampaignDeleteDialog";
 import { CampaignTable } from "../components/CampaignTable";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
@@ -16,10 +17,9 @@ type CampaignsRequestState =
 export function CampaignsPage() {
   const { refreshCampaigns } = useCampaignDirectory();
   const [requestState, setRequestState] = useState<CampaignsRequestState>({ status: "loading" });
+  const [campaignPendingDeletion, setCampaignPendingDeletion] = useState<Campaign | null>(null);
 
-  async function handleDelete(campaign: Campaign) {
-    await deleteCampaign(campaign.id);
-    await refreshCampaigns();
+  function handleDeletedCampaign(campaign: Campaign) {
     setRequestState((currentState) =>
       currentState.status === "success"
         ? {
@@ -28,6 +28,8 @@ export function CampaignsPage() {
           }
         : currentState,
     );
+    setCampaignPendingDeletion(null);
+    void refreshCampaigns();
   }
 
   useEffect(() => {
@@ -79,8 +81,15 @@ export function CampaignsPage() {
         />
       ) : null}
       {requestState.status === "success" && requestState.campaigns.length > 0 ? (
-        <CampaignTable campaigns={requestState.campaigns} onDelete={(campaign) => void handleDelete(campaign)} />
+        <CampaignTable campaigns={requestState.campaigns} onDelete={setCampaignPendingDeletion} />
       ) : null}
+      <CampaignDeleteDialog
+        campaign={campaignPendingDeletion}
+        onCancel={() => {
+          setCampaignPendingDeletion(null);
+        }}
+        onDeleted={handleDeletedCampaign}
+      />
     </div>
   );
 }

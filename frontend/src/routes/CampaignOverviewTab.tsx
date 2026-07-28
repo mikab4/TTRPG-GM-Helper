@@ -1,8 +1,8 @@
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { useState } from "react";
 
-import { deleteCampaign } from "../api/campaigns";
 import { useCampaignDirectory } from "../app/CampaignDirectoryContext";
+import { CampaignDeleteDialog } from "../components/CampaignDeleteDialog";
 import { SectionPanel } from "../components/SectionPanel";
 import { useLocalStorageState } from "../hooks/useLocalStorageState";
 import type { CampaignWorkspaceContext } from "./CampaignWorkspacePage";
@@ -13,26 +13,12 @@ export function CampaignOverviewTab() {
   const { refreshCampaigns } = useCampaignDirectory();
   const [quickNotes, setQuickNotes] = useLocalStorageState(quickNotesStorageKey);
   const navigate = useNavigate();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [campaignPendingDeletion, setCampaignPendingDeletion] = useState(false);
 
-  async function handleDeleteCampaign() {
-    if (deleting) {
-      return;
-    }
-
-    setDeleting(true);
-    setDeleteError(null);
-
-    try {
-      await deleteCampaign(campaign.id);
-      await refreshCampaigns();
-      void navigate("/campaigns");
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Unknown campaign delete failure.");
-    } finally {
-      setDeleting(false);
-    }
+  function handleDeletedCampaign() {
+    setCampaignPendingDeletion(false);
+    void navigate("/campaigns");
+    void refreshCampaigns();
   }
 
   return (
@@ -48,12 +34,24 @@ export function CampaignOverviewTab() {
           <Link className="secondary-button" to={`/campaigns/${campaign.id}/edit`}>
             Edit Campaign
           </Link>
-          <button className="danger-button" disabled={deleting} type="button" onClick={() => void handleDeleteCampaign()}>
-            {deleting ? "Deleting..." : "Delete Campaign"}
+          <button
+            className="danger-button"
+            type="button"
+            onClick={() => {
+              setCampaignPendingDeletion(true);
+            }}
+          >
+            Delete Campaign
           </button>
         </div>
       </header>
-      {deleteError ? <p className="field-error">{deleteError}</p> : null}
+      <CampaignDeleteDialog
+        campaign={campaignPendingDeletion ? campaign : null}
+        onCancel={() => {
+          setCampaignPendingDeletion(false);
+        }}
+        onDeleted={handleDeletedCampaign}
+      />
       <SectionPanel title="Campaign Summary">
         <p className="campaign-summary-text">{campaign.description ?? "No description yet."}</p>
       </SectionPanel>
