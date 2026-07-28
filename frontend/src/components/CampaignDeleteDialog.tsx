@@ -74,9 +74,9 @@ export function CampaignDeleteDialog({ campaign, onCancel, onDeleted }: Campaign
       closeDialog({ resetDeletionGuard: false });
       onDeleted(campaignToDelete);
     } catch (error) {
-      deletionInFlightRef.current = false;
       setDeleteError(error instanceof Error ? error.message : "Unknown campaign delete failure.");
     } finally {
+      deletionInFlightRef.current = false;
       setIsDeleting(false);
     }
   }

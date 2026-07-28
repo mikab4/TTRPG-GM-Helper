@@ -95,6 +95,51 @@ describe("campaign delete route integration", () => {
     });
   });
 
+  it("allows a second registry deletion after the first succeeds", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    const secondCampaign = { ...campaign, id: "campaign-2", name: "Ashen Coast" };
+    const listedCampaigns = [campaign, secondCampaign];
+    const fetchSpy = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = getRequestUrl(input);
+
+      if (requestUrl.endsWith("/compatibility/entity-types")) {
+        return Promise.resolve(jsonResponse({ body: { has_issues: false, issue_count: 0, issues: [] }, ok: true }));
+      }
+
+      if (init?.method === "DELETE") {
+        const deletedCampaignId = requestUrl.split("/").at(-1);
+        const deletedCampaignIndex = listedCampaigns.findIndex((listedCampaign) => listedCampaign.id === deletedCampaignId);
+        listedCampaigns.splice(deletedCampaignIndex, 1);
+        return Promise.resolve(jsonResponse({ ok: true, status: 204 }));
+      }
+
+      if (requestUrl.endsWith("/campaigns")) {
+        return Promise.resolve(jsonResponse({ body: listedCampaigns, ok: true }));
+      }
+
+      return Promise.resolve(jsonResponse({ body: [], ok: true }));
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { routes } = await import("../app/routes");
+    const router = createMemoryRouter(routes, { initialEntries: ["/campaigns"] });
+
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Shadows of Glass" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete campaign" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Shadows of Glass")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Ashen Coast" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete campaign" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Ashen Coast")).not.toBeInTheDocument();
+    });
+
+    expect(fetchSpy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "DELETE")).toHaveLength(2);
+  });
+
   it("navigates to the registry after a confirmed overview deletion", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     installCampaignApiMock();

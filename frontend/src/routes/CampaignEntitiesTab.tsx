@@ -1,10 +1,11 @@
 import { Link, useOutletContext } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { listCampaignEntities } from "../api/entities";
 import { deleteEntity } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { CampaignEntityRoster } from "../components/CampaignEntityRoster";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { EntityQuickLookPanel } from "../components/EntityQuickLookPanel";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
@@ -25,27 +26,47 @@ export function CampaignEntitiesTab() {
   const [entityNameQuery, setEntityNameQuery] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingEntityId, setDeletingEntityId] = useState<string | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<Entity | null>(null);
+  const deletionInFlightRef = useRef(false);
 
-  async function handleDelete(entity: Entity) {
-    if (deletingEntityId) {
+  function requestDeletion(entity: Entity) {
+    setDeleteError(null);
+    setPendingDeletion(entity);
+  }
+
+  async function confirmDeletion() {
+    const entity = pendingDeletion;
+    if (!entity || deletionInFlightRef.current) {
       return;
     }
 
+    deletionInFlightRef.current = true;
     setDeleteError(null);
     setDeletingEntityId(entity.id);
     try {
       await deleteEntity(campaign.id, entity.id);
-      setSelectedEntity(null);
-      setPageState((currentState) =>
-        currentState.status === "ready"
-          ? { ...currentState, entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id) }
-          : currentState,
-      );
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Unknown entity delete failure.");
+      return;
     } finally {
+      deletionInFlightRef.current = false;
       setDeletingEntityId(null);
     }
+
+    setPendingDeletion(null);
+    setDeleteError(null);
+    setSelectedEntity(null);
+    setPageState((currentState) =>
+      currentState.status === "ready"
+        ? {
+            ...currentState,
+            entities: currentState.entities.filter((listedEntity) => listedEntity.id !== entity.id),
+            relationships: currentState.relationships.filter(
+              (relationship) => relationship.sourceEntityId !== entity.id && relationship.targetEntityId !== entity.id,
+            ),
+          }
+        : currentState,
+    );
   }
 
   useEffect(() => {
@@ -153,7 +174,7 @@ export function CampaignEntitiesTab() {
                 selectedEntityId={selectedEntity?.id}
                 relationshipPreviewByEntityId={relationshipPreviewByEntityId}
                 onQuickLook={setSelectedEntity}
-                onDelete={(entity) => void handleDelete(entity)}
+                onDelete={requestDeletion}
               />
             </>
           ) : null}
@@ -165,10 +186,23 @@ export function CampaignEntitiesTab() {
             onClose={() => {
               setSelectedEntity(null);
             }}
-            onDelete={(entity) => void handleDelete(entity)}
+            onDelete={requestDeletion}
           />
         ) : null}
       </div>
+      {pendingDeletion ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deletingEntityId === pendingDeletion.id}
+          recordName={pendingDeletion.name}
+          warningText="This entity and its related relationships will be permanently deleted. This action cannot be undone."
+          onCancel={() => {
+            setDeleteError(null);
+            setPendingDeletion(null);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }

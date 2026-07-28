@@ -5,6 +5,7 @@ import { listCampaignEntities } from "../api/entities";
 import { deleteRelationship, listRelationships } from "../api/relationships";
 import { listRelationshipTypes } from "../api/relationshipTypes";
 import { RequestStateBlock } from "../components/RequestStateBlock";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { SectionPanel } from "../components/SectionPanel";
 import { RELATIONSHIP_ENTITY_FILTER_PARAM } from "../relationships/domain";
 import { buildEntityNameMap, buildRelationshipPhrase, formatRelationshipStatus } from "../relationships/presentation";
@@ -29,13 +30,41 @@ export function CampaignRelationshipsTab() {
   const [entityNameQuery, setEntityNameQuery] = useState<string | null>(null);
   const [isEntityPickerOpen, setIsEntityPickerOpen] = useState(false);
   const [activeEntityIndex, setActiveEntityIndex] = useState(0);
+  const [pendingDeletion, setPendingDeletion] = useState<Relationship | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingRelationshipId, setDeletingRelationshipId] = useState<string | null>(null);
   const expectedEntityFilterUpdateRef = useRef<ExpectedEntityFilterUpdate>(null);
   const previousCampaignIdRef = useRef(campaign.id);
+  const deletionInFlightRef = useRef(false);
   const selectedEntityId = searchParams.get(RELATIONSHIP_ENTITY_FILTER_PARAM) ?? "";
   const selectedRelationshipType = searchParams.get("relationship_type") ?? "";
 
-  async function handleDelete(relationship: Relationship) {
-    await deleteRelationship(campaign.id, relationship.id);
+  function requestDeletion(relationship: Relationship) {
+    setDeleteError(null);
+    setPendingDeletion(relationship);
+  }
+
+  async function confirmDeletion() {
+    const relationship = pendingDeletion;
+    if (!relationship || deletionInFlightRef.current) {
+      return;
+    }
+
+    deletionInFlightRef.current = true;
+    setDeleteError(null);
+    setDeletingRelationshipId(relationship.id);
+    try {
+      await deleteRelationship(campaign.id, relationship.id);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unknown relationship delete failure.");
+      return;
+    } finally {
+      deletionInFlightRef.current = false;
+      setDeletingRelationshipId(null);
+    }
+
+    setPendingDeletion(null);
+    setDeleteError(null);
     setRelationshipState((currentState) =>
       currentState.status === "ready"
         ? {
@@ -297,6 +326,11 @@ export function CampaignRelationshipsTab() {
             title="No relationships found"
           />
         ) : null}
+        {deleteError && !pendingDeletion ? (
+          <p className="field-error" role="alert">
+            {deleteError}
+          </p>
+        ) : null}
         {relationshipState.status === "ready" && visibleRelationships.length > 0 ? (
           <div className="relationship-list">
             {visibleRelationships.map((relationship) => (
@@ -314,8 +348,15 @@ export function CampaignRelationshipsTab() {
                   <Link className="text-link" to={`/campaigns/${campaign.id}/relationships/${relationship.id}/edit`}>
                     Edit
                   </Link>
-                  <button className="text-button" type="button" onClick={() => void handleDelete(relationship)}>
-                    Delete
+                  <button
+                    className="text-button"
+                    disabled={deletingRelationshipId === relationship.id}
+                    type="button"
+                    onClick={() => {
+                      requestDeletion(relationship);
+                    }}
+                  >
+                    {deletingRelationshipId === relationship.id ? "Deleting..." : "Delete"}
                   </button>
                 </div>
               </article>
@@ -323,6 +364,19 @@ export function CampaignRelationshipsTab() {
           </div>
         ) : null}
       </SectionPanel>
+      {pendingDeletion ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deletingRelationshipId === pendingDeletion.id}
+          recordName={buildRelationshipPhrase(pendingDeletion, entitiesById)}
+          warningText="This relationship will be permanently deleted. This action cannot be undone."
+          onCancel={() => {
+            setDeleteError(null);
+            setPendingDeletion(null);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }

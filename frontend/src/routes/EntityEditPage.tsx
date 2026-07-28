@@ -6,6 +6,7 @@ import { deleteEntity, getEntity, updateEntity } from "../api/entities";
 import { EntityForm, type EntityFormValues } from "../components/EntityForm";
 import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import { PageHeader } from "../components/PageHeader";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import { formatEntityTypeLabel } from "../entities/entityTypes";
@@ -24,6 +25,9 @@ export function EntityEditPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deletionInFlightRef = useRef(false);
   const formRegistrationRef = useRef<UnsavedChangesRegistration | null>(null);
 
   useEffect(() => {
@@ -89,28 +93,34 @@ export function EntityEditPage() {
     }
   }
 
-  async function handleDelete() {
-    if (pageState.status !== "ready" || !entityId || deleting) {
+  async function confirmDeletion() {
+    if (pageState.status !== "ready" || !entityId || deletionInFlightRef.current) {
       return;
     }
 
+    deletionInFlightRef.current = true;
     setDeleting(true);
-    setSubmitError(null);
+    setDeleteError(null);
 
     try {
       await deleteEntity(pageState.campaign.id, entityId);
-      const navigateToEntityList = () => {
-        void navigate(`/campaigns/${pageState.campaign.id}/entities`);
-      };
-      if (formRegistrationRef.current !== null) {
-        formRegistrationRef.current.markCleanAndNavigate(navigateToEntityList);
-      } else {
-        navigateToEntityList();
-      }
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unknown entity delete failure.");
+      setDeleteError(error instanceof Error ? error.message : "Unknown entity delete failure.");
+      return;
     } finally {
+      deletionInFlightRef.current = false;
       setDeleting(false);
+    }
+
+    setDeletePending(false);
+    setDeleteError(null);
+    const navigateToEntityList = () => {
+      void navigate(`/campaigns/${pageState.campaign.id}/entities`);
+    };
+    if (formRegistrationRef.current !== null) {
+      formRegistrationRef.current.markCleanAndNavigate(navigateToEntityList);
+    } else {
+      navigateToEntityList();
     }
   }
 
@@ -130,8 +140,16 @@ export function EntityEditPage() {
             <Link className="secondary-button" to={`/campaigns/${pageState.campaign.id}/entities/${pageState.entity.id}`}>
               Full Profile
             </Link>
-            <button className="danger-button" disabled={deleting} type="button" onClick={() => void handleDelete()}>
-              {deleting ? "Deleting..." : "Delete Entity"}
+            <button
+              className="danger-button"
+              disabled={deleting}
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setDeletePending(true);
+              }}
+            >
+              Delete Entity
             </button>
           </div>
         }
@@ -174,6 +192,19 @@ export function EntityEditPage() {
           </dl>
         </SectionPanel>
       </div>
+      {deletePending ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deleting}
+          recordName={pageState.entity.name}
+          warningText="This entity and its related relationships will be permanently deleted. This action cannot be undone."
+          onCancel={() => {
+            setDeleteError(null);
+            setDeletePending(false);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }

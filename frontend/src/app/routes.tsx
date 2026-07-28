@@ -7,7 +7,6 @@ import { CampaignOverviewTab } from "../routes/CampaignOverviewTab";
 import { CampaignRelationshipsTab } from "../routes/CampaignRelationshipsTab";
 import { CampaignWorkspacePage } from "../routes/CampaignWorkspacePage";
 import { CampaignsPage } from "../routes/CampaignsPage";
-import { EntitiesPage } from "../routes/EntitiesPage";
 import { EntityDetailPage } from "../routes/EntityDetailPage";
 import { EntityEditPage } from "../routes/EntityEditPage";
 import { EntityFormPage } from "../routes/EntityFormPage";
@@ -86,14 +85,6 @@ export const routes: RouteObject[] = [
             element: <RelationshipTypeManagementPage />,
           },
         ],
-      },
-      {
-        path: "entities",
-        element: <EntitiesPage />,
-      },
-      {
-        path: "entities/new",
-        element: <EntityFormPage source="global" />,
       },
     ],
   },

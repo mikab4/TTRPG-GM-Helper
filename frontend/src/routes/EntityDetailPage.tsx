@@ -1,10 +1,11 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getCampaign } from "../api/campaigns";
 import { deleteEntity, getEntity, listCampaignEntities } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { PageHeader } from "../components/PageHeader";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import { formatEntityTypeLabel } from "../entities/entityTypes";
@@ -30,6 +31,9 @@ export function EntityDetailPage() {
   const { campaignId, entityId } = useParams();
   const [pageState, setPageState] = useState<EntityDetailState>({ status: "loading" });
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const deletionInFlightRef = useRef(false);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -79,18 +83,26 @@ export function EntityDetailPage() {
     };
   }, [campaignId, entityId]);
 
-  async function handleDelete() {
-    if (pageState.status !== "ready" || deleting) {
+  async function confirmDeletion() {
+    if (pageState.status !== "ready" || deletionInFlightRef.current) {
       return;
     }
 
+    deletionInFlightRef.current = true;
     setDeleting(true);
     try {
       await deleteEntity(pageState.campaign.id, pageState.entity.id);
-      await navigate(`/campaigns/${pageState.campaign.id}/entities`);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unknown entity delete failure.");
+      return;
     } finally {
+      deletionInFlightRef.current = false;
       setDeleting(false);
     }
+
+    setDeletePending(false);
+    setDeleteError(null);
+    void navigate(`/campaigns/${pageState.campaign.id}/entities`);
   }
 
   if (pageState.status === "loading") {
@@ -122,8 +134,16 @@ export function EntityDetailPage() {
             <Link className="primary-button" to={`/campaigns/${pageState.campaign.id}/entities/${pageState.entity.id}/edit`}>
               Edit Entity
             </Link>
-            <button className="danger-button" disabled={deleting} type="button" onClick={() => void handleDelete()}>
-              {deleting ? "Deleting..." : "Delete Entity"}
+            <button
+              className="danger-button"
+              disabled={deleting}
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setDeletePending(true);
+              }}
+            >
+              Delete Entity
             </button>
           </div>
         }
@@ -170,6 +190,19 @@ export function EntityDetailPage() {
           )}
         </SectionPanel>
       </div>
+      {deletePending ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deleting}
+          recordName={pageState.entity.name}
+          warningText="This entity and its related relationships will be permanently deleted. This action cannot be undone."
+          onCancel={() => {
+            setDeleteError(null);
+            setDeletePending(false);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }

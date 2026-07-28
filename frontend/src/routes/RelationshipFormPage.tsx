@@ -9,6 +9,7 @@ import { listRelationshipTypes } from "../api/relationshipTypes";
 import { RelationshipForm, type RelationshipFormValues } from "../components/RelationshipForm";
 import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import { PageHeader } from "../components/PageHeader";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import type { Campaign } from "../types/campaigns";
@@ -40,7 +41,10 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const formRegistrationRef = useRef<UnsavedChangesRegistration | null>(null);
+  const deletionInFlightRef = useRef(false);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -131,28 +135,34 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
     }
   }
 
-  async function handleDelete() {
-    if (pageState.status !== "ready" || !campaignId || !relationshipId || deleting) {
+  async function confirmDeletion() {
+    if (pageState.status !== "ready" || !campaignId || !relationshipId || deletionInFlightRef.current) {
       return;
     }
 
+    deletionInFlightRef.current = true;
     setDeleting(true);
-    setSubmitError(null);
+    setDeleteError(null);
 
     try {
       await deleteRelationship(campaignId, relationshipId);
-      const navigateToRelationships = () => {
-        void navigate(`/campaigns/${campaignId}/relationships`);
-      };
-      if (formRegistrationRef.current !== null) {
-        formRegistrationRef.current.markCleanAndNavigate(navigateToRelationships);
-      } else {
-        navigateToRelationships();
-      }
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unknown relationship delete failure.");
+      setDeleteError(error instanceof Error ? error.message : "Unknown relationship delete failure.");
+      return;
     } finally {
+      deletionInFlightRef.current = false;
       setDeleting(false);
+    }
+
+    setDeletePending(false);
+    setDeleteError(null);
+    const navigateToRelationships = () => {
+      void navigate(`/campaigns/${campaignId}/relationships`);
+    };
+    if (formRegistrationRef.current !== null) {
+      formRegistrationRef.current.markCleanAndNavigate(navigateToRelationships);
+    } else {
+      navigateToRelationships();
     }
   }
 
@@ -180,10 +190,11 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
                 disabled={deleting}
                 type="button"
                 onClick={() => {
-                  void handleDelete();
+                  setDeleteError(null);
+                  setDeletePending(true);
                 }}
               >
-                {deleting ? "Deleting..." : "Delete Relationship"}
+                Delete Relationship
               </button>
             ) : null}
           </div>
@@ -214,6 +225,19 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
           onSubmit={handleSubmit}
         />
       </SectionPanel>
+      {deletePending && initialRelationship ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deleting}
+          recordName={`${initialRelationship.sourceEntityId} ${initialRelationship.relationshipType} ${initialRelationship.targetEntityId}`}
+          warningText="This relationship will be permanently deleted. This action cannot be undone."
+          onCancel={() => {
+            setDeleteError(null);
+            setDeletePending(false);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }
