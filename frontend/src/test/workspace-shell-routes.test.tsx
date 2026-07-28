@@ -8,6 +8,20 @@ type MockJsonResponse = {
   status?: number;
 };
 
+type DeferredValue<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+};
+
+function createDeferredValue<T>(): DeferredValue<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
 function jsonResponse({ body, ok = true, status = 200 }: MockJsonResponse): Response {
   return {
     headers: new Headers({ "Content-Type": "application/json" }),
@@ -77,6 +91,8 @@ describe("workspace-first shell routes", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    vi.doUnmock("react-router-dom");
+    vi.doUnmock("../components/CampaignWorkspaceTabs");
     vi.resetModules();
   });
 
@@ -136,6 +152,70 @@ describe("workspace-first shell routes", () => {
     await screen.findByRole("heading", { name: "Entities" });
     fireEvent.click(screen.getByRole("button", { name: "Select campaign" }));
     expect(screen.getByRole("menuitem", { name: "Frozen North" })).toHaveAttribute("href", "/campaigns/campaign-2/entities");
+  });
+
+  it("removes prior campaign workspace content while the selected campaign loads", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    const campaignTwoRequest = createDeferredValue<Response>();
+    let activeCampaignId = "campaign-1";
+
+    vi.doMock("react-router-dom", async (importOriginal) => {
+      const reactRouterDom = await importOriginal<typeof import("react-router-dom")>();
+
+      return {
+        ...reactRouterDom,
+        Outlet: ({ context }: { context: { campaign: { id: string; name: string } } }) => (
+          <section>
+            <p>{context.campaign.name} workspace content</p>
+            <a href={`/campaigns/${context.campaign.id}/entities/new`}>New Entity</a>
+            <button type="button">Delete current entity</button>
+          </section>
+        ),
+        useParams: () => ({ campaignId: activeCampaignId }),
+      };
+    });
+    vi.doMock("../components/CampaignWorkspaceTabs", () => ({
+      CampaignWorkspaceTabs: () => null,
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const requestUrl = getRequestUrl(input);
+
+        if (requestUrl.endsWith("/campaigns/campaign-1")) {
+          return Promise.resolve(jsonResponse({ body: campaigns[0] }));
+        }
+
+        if (requestUrl.endsWith("/campaigns/campaign-2")) {
+          return campaignTwoRequest.promise;
+        }
+
+        return Promise.resolve(jsonResponse({ body: [] }));
+      }),
+    );
+
+    const { CampaignWorkspacePage } = await import("../routes/CampaignWorkspacePage");
+
+    const { rerender } = render(<CampaignWorkspacePage />);
+
+    expect(await screen.findByText("Shadows of Glass workspace content")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "New Entity" })).toHaveAttribute("href", "/campaigns/campaign-1/entities/new");
+    expect(screen.getByRole("button", { name: "Delete current entity" })).toBeInTheDocument();
+
+    activeCampaignId = "campaign-2";
+    rerender(<CampaignWorkspacePage />);
+
+    expect(await screen.findByRole("heading", { name: "Loading campaign" })).toBeInTheDocument();
+    expect(screen.queryByText("Shadows of Glass workspace content")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New Entity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete current entity" })).not.toBeInTheDocument();
+
+    campaignTwoRequest.resolve(jsonResponse({ body: campaigns[1] }));
+
+    expect(await screen.findByText("Frozen North workspace content")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "New Entity" })).toHaveAttribute("href", "/campaigns/campaign-2/entities/new");
+    expect(screen.queryByText("Shadows of Glass workspace content")).not.toBeInTheDocument();
   });
 
   it("updates the switcher when a campaign mutation refreshes the directory", async () => {

@@ -7,9 +7,9 @@ import { RequestStateBlock } from "../components/RequestStateBlock";
 import type { Campaign } from "../types/campaigns";
 
 type CampaignWorkspaceState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { campaign: Campaign; status: "ready" };
+  | { campaignId: string | undefined; status: "loading" }
+  | { campaignId: string | undefined; message: string; status: "error" }
+  | { campaign: Campaign; campaignId: string; status: "ready" };
 
 export type CampaignWorkspaceContext = {
   campaign: Campaign;
@@ -17,26 +17,34 @@ export type CampaignWorkspaceContext = {
 
 export function CampaignWorkspacePage() {
   const { campaignId } = useParams();
-  const [pageState, setPageState] = useState<CampaignWorkspaceState>({ status: "loading" });
+  const [pageState, setPageState] = useState<CampaignWorkspaceState>({ campaignId, status: "loading" });
 
   useEffect(() => {
     const abortController = new AbortController();
+    let isCurrentRequest = true;
+
+    setPageState({ campaignId, status: "loading" });
 
     async function loadCampaign() {
       if (!campaignId) {
-        setPageState({ message: "Campaign route is missing an identifier.", status: "error" });
+        setPageState({ campaignId, message: "Campaign route is missing an identifier.", status: "error" });
         return;
       }
 
       try {
         const campaign = await getCampaign(campaignId, { signal: abortController.signal });
-        setPageState({ campaign, status: "ready" });
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setPageState({ campaign, campaignId, status: "ready" });
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (!isCurrentRequest || (error instanceof DOMException && error.name === "AbortError")) {
           return;
         }
 
         setPageState({
+          campaignId,
           message: error instanceof Error ? error.message : "Unknown campaign load failure.",
           status: "error",
         });
@@ -46,11 +54,12 @@ export function CampaignWorkspacePage() {
     void loadCampaign();
 
     return () => {
+      isCurrentRequest = false;
       abortController.abort();
     };
   }, [campaignId]);
 
-  if (pageState.status === "loading") {
+  if (pageState.campaignId !== campaignId || pageState.status === "loading") {
     return <RequestStateBlock message="Loading the campaign workspace and its current details." title="Loading campaign" />;
   }
 
