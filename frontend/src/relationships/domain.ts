@@ -13,6 +13,8 @@ export const RELATIONSHIP_CERTAINTY_STATUS_OPTIONS = [
   { label: "Rumored", value: "rumored" },
 ] as const;
 
+export const RELATIONSHIP_ENTITY_FILTER_PARAM = "entity_id";
+
 export type RelationshipFamilyValue = string;
 export type RelationshipLifecycleStatusValue = (typeof RELATIONSHIP_LIFECYCLE_STATUS_OPTIONS)[number]["value"];
 export type RelationshipVisibilityStatusValue = (typeof RELATIONSHIP_VISIBILITY_STATUS_OPTIONS)[number]["value"];

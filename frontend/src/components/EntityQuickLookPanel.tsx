@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listCampaignEntities } from "../api/entities";
 import { listRelationships } from "../api/relationships";
 import { formatEntityTypeLabel } from "../entities/entityTypes";
+import { RELATIONSHIP_ENTITY_FILTER_PARAM } from "../relationships/domain";
 import { buildEntityNameMap, buildImportantRelationshipPreview } from "../relationships/presentation";
 import type { Entity } from "../types/entities";
 import type { Relationship } from "../types/relationships";
@@ -18,6 +19,7 @@ type EntityQuickLookPanelProps = {
 export function EntityQuickLookPanel({ entity, isDeleting = false, onClose, onDelete }: EntityQuickLookPanelProps) {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
+  const relationshipSearchParams = new URLSearchParams({ [RELATIONSHIP_ENTITY_FILTER_PARAM]: entity.id });
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -87,7 +89,7 @@ export function EntityQuickLookPanel({ entity, isDeleting = false, onClose, onDe
         <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/entities/${entity.id}`}>
           Full Profile
         </Link>
-        <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/relationships`}>
+        <Link className="secondary-button" to={`/campaigns/${entity.campaignId}/relationships?${relationshipSearchParams}`}>
           Relationship Management
         </Link>
         <Link className="primary-button" to={`/campaigns/${entity.campaignId}/entities/${entity.id}/edit`}>

@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import { formatEntityTypeLabel } from "../entities/entityTypes";
+import { RELATIONSHIP_ENTITY_FILTER_PARAM } from "../relationships/domain";
 import { buildEntityNameMap, groupEntityRelationships } from "../relationships/presentation";
 import type { Campaign } from "../types/campaigns";
 import type { Entity } from "../types/entities";
@@ -105,13 +106,17 @@ export function EntityDetailPage() {
     pageState.relationships,
     buildEntityNameMap(pageState.relatedEntities),
   );
+  const relationshipSearchParams = new URLSearchParams({ [RELATIONSHIP_ENTITY_FILTER_PARAM]: pageState.entity.id });
 
   return (
     <div className="page-stack workspace-surface">
       <PageHeader
         actions={
           <div className="action-row">
-            <Link className="secondary-button" to={`/campaigns/${pageState.campaign.id}/relationships`}>
+            <Link
+              className="secondary-button"
+              to={`/campaigns/${pageState.campaign.id}/relationships?${relationshipSearchParams}`}
+            >
               Relationships
             </Link>
             <Link className="primary-button" to={`/campaigns/${pageState.campaign.id}/entities/${pageState.entity.id}/edit`}>

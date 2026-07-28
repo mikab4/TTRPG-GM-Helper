@@ -6,6 +6,7 @@ import { deleteRelationship, listRelationships } from "../api/relationships";
 import { listRelationshipTypes } from "../api/relationshipTypes";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
+import { RELATIONSHIP_ENTITY_FILTER_PARAM } from "../relationships/domain";
 import { buildEntityNameMap, buildRelationshipPhrase, formatRelationshipStatus } from "../relationships/presentation";
 import type { Entity } from "../types/entities";
 import type { Relationship } from "../types/relationships";
@@ -30,7 +31,7 @@ export function CampaignRelationshipsTab() {
   const [activeEntityIndex, setActiveEntityIndex] = useState(0);
   const expectedEntityFilterUpdateRef = useRef<ExpectedEntityFilterUpdate>(null);
   const previousCampaignIdRef = useRef(campaign.id);
-  const selectedEntityId = searchParams.get("entity_id") ?? "";
+  const selectedEntityId = searchParams.get(RELATIONSHIP_ENTITY_FILTER_PARAM) ?? "";
   const selectedRelationshipType = searchParams.get("relationship_type") ?? "";
 
   async function handleDelete(relationship: Relationship) {
@@ -107,9 +108,9 @@ export function CampaignRelationshipsTab() {
       const nextSearchParams = new URLSearchParams(searchParams);
 
       if (entityId) {
-        nextSearchParams.set("entity_id", entityId);
+        nextSearchParams.set(RELATIONSHIP_ENTITY_FILTER_PARAM, entityId);
       } else {
-        nextSearchParams.delete("entity_id");
+        nextSearchParams.delete(RELATIONSHIP_ENTITY_FILTER_PARAM);
       }
 
       if (relationshipType) {

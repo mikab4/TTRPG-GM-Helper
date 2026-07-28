@@ -1283,6 +1283,10 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/entities/entity-1",
     );
+    expect(within(quickLookPanel).getByRole("link", { name: "Relationship Management" })).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-1/relationships?entity_id=entity-1",
+    );
     expect(within(quickLookPanel).getByRole("link", { name: "Edit Entity" })).toHaveAttribute(
       "href",
       "/campaigns/campaign-1/entities/entity-1/edit",
@@ -1570,7 +1574,7 @@ describe("campaign and entity frontend routes", () => {
     );
     expect(within(quickLookPanel).getByRole("link", { name: "Relationship Management" })).toHaveAttribute(
       "href",
-      "/campaigns/campaign-1/relationships",
+      "/campaigns/campaign-1/relationships?entity_id=entity-1",
     );
     expect(within(quickLookPanel).getByRole("link", { name: "Edit Entity" })).toHaveAttribute(
       "href",
@@ -1865,6 +1869,10 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/entities/entity-1/edit",
     );
+    const relationshipsAction = screen
+      .getAllByRole("link", { name: "Relationships" })
+      .find((link) => link.classList.contains("secondary-button"));
+    expect(relationshipsAction).toHaveAttribute("href", "/campaigns/campaign-1/relationships?entity_id=entity-1");
     expect(screen.getByRole("button", { name: "Delete Entity" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Back To Campaign" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save Entity" })).toBeNull();
