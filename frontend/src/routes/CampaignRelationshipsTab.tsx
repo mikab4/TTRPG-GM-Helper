@@ -1,5 +1,5 @@
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { listCampaignEntities } from "../api/entities";
 import { deleteRelationship, listRelationships } from "../api/relationships";
@@ -17,15 +17,19 @@ type RelationshipTabState =
   | { status: "error"; message: string }
   | { entities: Entity[]; relationships: Relationship[]; relationshipTypes: RelationshipType[]; status: "ready" };
 
+type ExpectedEntityFilterUpdate = { entityId: string } | null;
+
 export function CampaignRelationshipsTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [relationshipState, setRelationshipState] = useState<RelationshipTabState>({
     status: "loading",
   });
-  const [entityNameQuery, setEntityNameQuery] = useState("");
+  const [entityNameQuery, setEntityNameQuery] = useState<string | null>(null);
   const [isEntityPickerOpen, setIsEntityPickerOpen] = useState(false);
   const [activeEntityIndex, setActiveEntityIndex] = useState(0);
+  const expectedEntityFilterUpdateRef = useRef<ExpectedEntityFilterUpdate>(null);
+  const previousCampaignIdRef = useRef(campaign.id);
   const selectedEntityId = searchParams.get("entity_id") ?? "";
   const selectedRelationshipType = searchParams.get("relationship_type") ?? "";
 
@@ -80,7 +84,7 @@ export function CampaignRelationshipsTab() {
   );
 
   const selectedEntity = relationshipState.status === "ready" ? entitiesById.get(selectedEntityId) : undefined;
-  const entityPickerValue = entityNameQuery || selectedEntity?.name || "";
+  const entityPickerValue = entityNameQuery ?? selectedEntity?.name ?? "";
   const matchingEntities =
     relationshipState.status === "ready" && entityNameQuery
       ? relationshipState.entities.filter((entity) =>
@@ -98,29 +102,64 @@ export function CampaignRelationshipsTab() {
         )
       : [];
 
-  function updateRelationshipFilters(entityId: string, relationshipType: string) {
-    const nextSearchParams = new URLSearchParams(searchParams);
+  const updateRelationshipFilters = useCallback(
+    (entityId: string, relationshipType: string, { replace = false }: { replace?: boolean } = {}) => {
+      const nextSearchParams = new URLSearchParams(searchParams);
 
-    if (entityId) {
-      nextSearchParams.set("entity_id", entityId);
-    } else {
-      nextSearchParams.delete("entity_id");
-    }
+      if (entityId) {
+        nextSearchParams.set("entity_id", entityId);
+      } else {
+        nextSearchParams.delete("entity_id");
+      }
 
-    if (relationshipType) {
-      nextSearchParams.set("relationship_type", relationshipType);
-    } else {
-      nextSearchParams.delete("relationship_type");
-    }
+      if (relationshipType) {
+        nextSearchParams.set("relationship_type", relationshipType);
+      } else {
+        nextSearchParams.delete("relationship_type");
+      }
 
-    setSearchParams(nextSearchParams);
-  }
+      setSearchParams(nextSearchParams, { replace });
+    },
+    [searchParams, setSearchParams],
+  );
 
   function selectEntityFilter(entity: Entity) {
-    setEntityNameQuery(entity.name);
+    setEntityNameQuery(null);
     setIsEntityPickerOpen(false);
+    expectedEntityFilterUpdateRef.current = { entityId: entity.id };
     updateRelationshipFilters(entity.id, selectedRelationshipType);
   }
+
+  useEffect(() => {
+    if (previousCampaignIdRef.current === campaign.id) {
+      return;
+    }
+
+    previousCampaignIdRef.current = campaign.id;
+    expectedEntityFilterUpdateRef.current = null;
+    setEntityNameQuery(null);
+    setIsEntityPickerOpen(false);
+  }, [campaign.id]);
+
+  useEffect(() => {
+    if (expectedEntityFilterUpdateRef.current?.entityId === selectedEntityId) {
+      expectedEntityFilterUpdateRef.current = null;
+      return;
+    }
+
+    expectedEntityFilterUpdateRef.current = null;
+    setEntityNameQuery(null);
+  }, [selectedEntityId]);
+
+  useEffect(() => {
+    if (relationshipState.status !== "ready" || !selectedEntityId || entitiesById.has(selectedEntityId)) {
+      return;
+    }
+
+    expectedEntityFilterUpdateRef.current = { entityId: "" };
+    setEntityNameQuery(null);
+    updateRelationshipFilters("", selectedRelationshipType, { replace: true });
+  }, [entitiesById, relationshipState.status, selectedEntityId, selectedRelationshipType, updateRelationshipFilters]);
 
   return (
     <div className="page-stack">
@@ -161,9 +200,15 @@ export function CampaignRelationshipsTab() {
                   type="search"
                   value={entityPickerValue}
                   onChange={(event) => {
-                    setEntityNameQuery(event.target.value);
+                    const nextEntityNameQuery = event.target.value;
+                    setEntityNameQuery(nextEntityNameQuery);
                     setIsEntityPickerOpen(true);
                     setActiveEntityIndex(0);
+
+                    if (selectedEntityId) {
+                      expectedEntityFilterUpdateRef.current = { entityId: "" };
+                      updateRelationshipFilters("", selectedRelationshipType);
+                    }
                   }}
                   onFocus={() => {
                     setIsEntityPickerOpen(true);
