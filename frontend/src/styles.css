@@ -22,6 +22,7 @@
   --paper-line: #e7e5e4;
   --paper-text: #1c1917;
   --paper-text-muted: #78716c;
+  --workspace-nav-emphasis: #7e22ce;
   --shadow-deep: 0 24px 60px rgba(0, 0, 0, 0.34);
   --shadow-paper: 0 18px 34px rgba(12, 12, 14, 0.12);
   font-family: "Inter", "Segoe UI", sans-serif;
@@ -775,14 +776,14 @@ h4 {
 .campaign-workspace-sidebar-link:hover,
 .campaign-workspace-sidebar-link:focus-visible {
   border-color: #e9d5ff;
-  color: var(--deep);
+  color: var(--workspace-nav-emphasis);
   background: rgba(255, 255, 255, 0.86);
   outline: none;
 }
 
 .campaign-workspace-sidebar-link-active {
   border-color: #e9d5ff;
-  color: var(--deep);
+  color: var(--workspace-nav-emphasis);
   background: #ffffff;
   box-shadow: 0 2px 8px rgba(126, 34, 206, 0.1);
 }

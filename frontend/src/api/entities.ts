@@ -2,12 +2,6 @@ import { apiRequest } from "./client";
 import type { EntityTypeValue } from "../entities/entityTypes";
 import type { Entity, EntityCreate, EntityUpdate } from "../types/entities";
 
-type EntityListOptions = {
-  campaignId?: string;
-  entityType?: EntityTypeValue;
-  signal?: AbortSignal;
-};
-
 function parseEntity(payload: unknown): Entity {
   if (
     typeof payload !== "object" ||
@@ -94,26 +88,15 @@ function serializeEntityUpdate(entityUpdate: EntityUpdate): string {
   return JSON.stringify(payload);
 }
 
-function buildEntityQueryString(options: EntityListOptions): string {
+function buildEntityTypeQueryString(entityType?: EntityTypeValue): string {
   const searchParams = new URLSearchParams();
 
-  if (options.campaignId) {
-    searchParams.set("campaign_id", options.campaignId);
-  }
-
-  if (options.entityType) {
-    searchParams.set("type", options.entityType);
+  if (entityType) {
+    searchParams.set("type", entityType);
   }
 
   const encodedSearchParams = searchParams.toString();
   return encodedSearchParams ? `?${encodedSearchParams}` : "";
-}
-
-export async function listEntities(options: EntityListOptions = {}): Promise<Entity[]> {
-  const payload = await apiRequest(`/entities${buildEntityQueryString(options)}`, {
-    signal: options.signal,
-  });
-  return parseEntityList(payload);
 }
 
 export async function listCampaignEntities(
@@ -121,7 +104,7 @@ export async function listCampaignEntities(
   entityType?: EntityTypeValue,
   signal?: AbortSignal,
 ): Promise<Entity[]> {
-  const payload = await apiRequest(`/campaigns/${campaignId}/entities${buildEntityQueryString({ entityType })}`, {
+  const payload = await apiRequest(`/campaigns/${campaignId}/entities${buildEntityTypeQueryString(entityType)}`, {
     signal,
   });
   return parseEntityList(payload);

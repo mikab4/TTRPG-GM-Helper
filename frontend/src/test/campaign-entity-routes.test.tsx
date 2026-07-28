@@ -609,6 +609,10 @@ describe("campaign and entity frontend routes", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/campaigns/campaign-1/relationships");
+    });
   });
 
   it("keeps an incompatible saved relationship visible on edit and warns instead of clearing it", async () => {
@@ -1157,8 +1161,8 @@ describe("campaign and entity frontend routes", () => {
     expect(quickLookPanel.className).toContain("quick-look-panel-paper");
 
     expect(within(quickLookPanel).getByRole("heading", { name: "Summary" })).toBeInTheDocument();
-    expect(within(quickLookPanel).getByRole("heading", { name: "Source Asset" })).toBeInTheDocument();
-    expect(within(quickLookPanel).getByText("asset-1")).toBeInTheDocument();
+    expect(within(quickLookPanel).queryByRole("heading", { name: "Source Asset" })).toBeNull();
+    expect(within(quickLookPanel).queryByText("asset-1")).toBeNull();
     expect(within(quickLookPanel).queryByRole("heading", { name: "Core Details" })).toBeNull();
     expect(within(quickLookPanel).queryByRole("heading", { name: "Appears In" })).toBeNull();
     expect(

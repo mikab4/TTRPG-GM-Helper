@@ -66,12 +66,6 @@ export function EntityQuickLookPanel({ entity, isDeleting = false, onClose, onDe
           <h4>Summary</h4>
           <p>{entity.summary ?? "No summary recorded yet."}</p>
         </section>
-        {entity.sourceAssetId ? (
-          <section className="quick-look-section">
-            <h4>Source Asset</h4>
-            <p>{entity.sourceAssetId}</p>
-          </section>
-        ) : null}
         <section className="quick-look-section">
           <h4>Relationships</h4>
           {relationshipPreview.length > 0 ? (
