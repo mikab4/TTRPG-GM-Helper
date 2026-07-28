@@ -26,6 +26,7 @@ Completed in this branch:
 - A selected-entity roster-card treatment for the open quick-look record.
 - Workspace delete feedback and duplicate-submit protection for entities.
 - Entity deletion cascades related relationship rows through matching ORM and database cascade configuration.
+- Unsaved campaign, entity, and relationship form changes now block internal navigation and browser unload until saved or explicitly discarded.
 
 Sessions and Assets remain deferred to the follow-up handoff; no frontend routes or controls for them were added here.
 

@@ -1,4 +1,6 @@
-import { useState, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+
+import { useUnsavedChanges, type UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 
 type CampaignFormValues = {
   description: string;
@@ -10,13 +12,38 @@ type CampaignFormProps = {
   submitLabel: string;
   submitError: string | null;
   submitting: boolean;
-  onSubmit: (values: CampaignFormValues) => Promise<void>;
+  onRegistrationChange?: (registration: UnsavedChangesRegistration | null) => void;
+  onSubmit: (values: CampaignFormValues, registration: UnsavedChangesRegistration) => Promise<void>;
 };
 
-export function CampaignForm({ initialValues, submitLabel, submitError, submitting, onSubmit }: CampaignFormProps) {
+export function CampaignForm({
+  initialValues,
+  submitLabel,
+  submitError,
+  submitting,
+  onRegistrationChange,
+  onSubmit,
+}: CampaignFormProps) {
+  const { registerForm } = useUnsavedChanges();
+  const registrationRef = useRef<UnsavedChangesRegistration | null>(null);
   const [name, setName] = useState(initialValues.name);
   const [description, setDescription] = useState(initialValues.description);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const registration = registerForm();
+    registrationRef.current = registration;
+    onRegistrationChange?.(registration);
+
+    return () => {
+      registration.unregister();
+      onRegistrationChange?.(null);
+    };
+  }, [onRegistrationChange, registerForm]);
+
+  useEffect(() => {
+    registrationRef.current?.setDirty(name !== initialValues.name || description !== initialValues.description);
+  }, [description, initialValues.description, initialValues.name, name]);
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,10 +56,18 @@ export function CampaignForm({ initialValues, submitLabel, submitError, submitti
 
     setNameError(null);
 
-    await onSubmit({
-      description,
-      name: trimmedName,
-    });
+    const registration = registrationRef.current;
+    if (registration === null) {
+      return;
+    }
+
+    await onSubmit(
+      {
+        description,
+        name: trimmedName,
+      },
+      registration,
+    );
   }
 
   return (

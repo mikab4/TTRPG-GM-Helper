@@ -1,4 +1,6 @@
-import { useMemo, useState, type SyntheticEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
+
+import { useUnsavedChanges, type UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 
 import {
   ENTITY_TYPE_OPTIONS,
@@ -29,7 +31,8 @@ type EntityFormProps = {
   submitError: string | null;
   submitLabel: string;
   submitting: boolean;
-  onSubmit: (values: EntityFormValues) => Promise<void>;
+  onRegistrationChange?: (registration: UnsavedChangesRegistration | null) => void;
+  onSubmit: (values: EntityFormValues, registration: UnsavedChangesRegistration) => Promise<void>;
 };
 
 export function EntityForm({
@@ -40,7 +43,10 @@ export function EntityForm({
   submitLabel,
   submitting,
   onSubmit,
+  onRegistrationChange,
 }: EntityFormProps) {
+  const { registerForm } = useUnsavedChanges();
+  const registrationRef = useRef<UnsavedChangesRegistration | null>(null);
   const [campaignId, setCampaignId] = useState(initialValues.campaignId);
   const [type, setType] = useState(initialValues.type);
   const [name, setName] = useState(initialValues.name);
@@ -54,6 +60,26 @@ export function EntityForm({
     () => Boolean(type) && !ENTITY_TYPE_OPTIONS.some((entityTypeOption) => entityTypeOption.value === type),
     [type],
   );
+
+  useEffect(() => {
+    const registration = registerForm();
+    registrationRef.current = registration;
+    onRegistrationChange?.(registration);
+
+    return () => {
+      registration.unregister();
+      onRegistrationChange?.(null);
+    };
+  }, [onRegistrationChange, registerForm]);
+
+  useEffect(() => {
+    registrationRef.current?.setDirty(
+      selectedCampaignId !== (fixedCampaignId ?? initialValues.campaignId) ||
+        type !== initialValues.type ||
+        name !== initialValues.name ||
+        summary !== initialValues.summary,
+    );
+  }, [fixedCampaignId, initialValues, name, selectedCampaignId, summary, type]);
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,12 +116,20 @@ export function EntityForm({
       return;
     }
 
-    await onSubmit({
-      campaignId: selectedCampaignId,
-      name: trimmedName,
-      summary,
-      type,
-    });
+    const registration = registrationRef.current;
+    if (registration === null) {
+      return;
+    }
+
+    await onSubmit(
+      {
+        campaignId: selectedCampaignId,
+        name: trimmedName,
+        summary,
+        type,
+      },
+      registration,
+    );
   }
 
   return (

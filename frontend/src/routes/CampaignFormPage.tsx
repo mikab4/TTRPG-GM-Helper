@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import { useCampaignDirectory } from "../app/CampaignDirectoryContext";
+import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 
 type CampaignFormPageProps = {
   mode: "create" | "edit";
@@ -78,7 +79,7 @@ export function CampaignFormPage({ mode }: CampaignFormPageProps) {
     };
   }, [campaignId, mode]);
 
-  async function handleSubmit(values: { description: string; name: string }) {
+  async function handleSubmit(values: { description: string; name: string }, registration: UnsavedChangesRegistration) {
     if (pageState.status !== "ready") {
       return;
     }
@@ -94,7 +95,9 @@ export function CampaignFormPage({ mode }: CampaignFormPageProps) {
           ownerId: pageState.ownerId,
         });
         await refreshCampaigns();
-        await navigate(`/campaigns/${createdCampaign.id}`);
+        registration.markCleanAndNavigate(() => {
+          void navigate(`/campaigns/${createdCampaign.id}`);
+        });
         return;
       }
 
@@ -107,7 +110,9 @@ export function CampaignFormPage({ mode }: CampaignFormPageProps) {
         name: values.name,
       });
       await refreshCampaigns();
-      await navigate(`/campaigns/${updatedCampaign.id}`);
+      registration.markCleanAndNavigate(() => {
+        void navigate(`/campaigns/${updatedCampaign.id}`);
+      });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown campaign save failure.");
     } finally {

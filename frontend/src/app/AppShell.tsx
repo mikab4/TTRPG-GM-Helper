@@ -6,6 +6,8 @@ import { applyEntityTypeMigration, getEntityTypeCompatibilityReport } from "../a
 import { listCampaigns } from "../api/campaigns";
 import { CompatibilityMigrationPanel } from "../components/CompatibilityMigrationPanel";
 import { CampaignDirectoryProvider } from "./CampaignDirectoryContext";
+import { UnsavedChangesProvider } from "./UnsavedChangesContext";
+import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import type {
   EntityTypeCompatibilityReport,
   EntityTypeMigrationMapping,
@@ -119,89 +121,92 @@ export function AppShell() {
       : undefined;
 
   return (
-    <CampaignDirectoryProvider value={{ refreshCampaigns }}>
-      <div className="shell">
-        <header className="shell-header">
-          <div className="shell-header-content">
-            <p className="shell-brand">Campaign Workspace</p>
-            <div ref={campaignSwitcherRef} className="campaign-switcher">
-              <button
-                aria-label="Select campaign"
-                aria-expanded={isCampaignMenuOpen}
-                aria-haspopup="menu"
-                className="campaign-switcher-button"
-                type="button"
-                onClick={() => {
-                  setIsCampaignMenuOpen((isOpen) => !isOpen);
-                }}
-              >
-                <span className="campaign-switcher-name">{activeCampaign?.name ?? "Select a campaign"}</span>
-                <span className="campaign-switcher-kind">
-                  Campaign
-                  <ChevronDown aria-hidden="true" size={14} strokeWidth={2.3} />
-                </span>
-              </button>
-              {isCampaignMenuOpen ? (
-                <div aria-label="Campaign switcher" className="campaign-switcher-menu" role="menu">
-                  <p>Select active campaign</p>
-                  {campaignListState.status === "loading" ? (
-                    <span className="campaign-switcher-status">Loading campaigns…</span>
-                  ) : null}
-                  {campaignListState.status === "error" ? (
-                    <span className="campaign-switcher-status">Campaigns unavailable.</span>
-                  ) : null}
-                  {campaignListState.status === "ready"
-                    ? campaignListState.campaigns.map((campaign) => (
-                        <Link
-                          key={campaign.id}
-                          role="menuitem"
-                          to={getCampaignSwitcherPath(location.pathname, campaign.id)}
-                          onClick={() => {
-                            setIsCampaignMenuOpen(false);
-                          }}
-                        >
-                          {campaign.name}
-                        </Link>
-                      ))
-                    : null}
-                  <Link
-                    role="menuitem"
-                    to="/campaigns"
-                    onClick={() => {
-                      setIsCampaignMenuOpen(false);
-                    }}
-                  >
-                    Campaign Registry
-                  </Link>
-                </div>
-              ) : null}
+    <UnsavedChangesProvider>
+      <CampaignDirectoryProvider value={{ refreshCampaigns }}>
+        <UnsavedChangesGuard />
+        <div className="shell">
+          <header className="shell-header">
+            <div className="shell-header-content">
+              <p className="shell-brand">Campaign Workspace</p>
+              <div ref={campaignSwitcherRef} className="campaign-switcher">
+                <button
+                  aria-label="Select campaign"
+                  aria-expanded={isCampaignMenuOpen}
+                  aria-haspopup="menu"
+                  className="campaign-switcher-button"
+                  type="button"
+                  onClick={() => {
+                    setIsCampaignMenuOpen((isOpen) => !isOpen);
+                  }}
+                >
+                  <span className="campaign-switcher-name">{activeCampaign?.name ?? "Select a campaign"}</span>
+                  <span className="campaign-switcher-kind">
+                    Campaign
+                    <ChevronDown aria-hidden="true" size={14} strokeWidth={2.3} />
+                  </span>
+                </button>
+                {isCampaignMenuOpen ? (
+                  <div aria-label="Campaign switcher" className="campaign-switcher-menu" role="menu">
+                    <p>Select active campaign</p>
+                    {campaignListState.status === "loading" ? (
+                      <span className="campaign-switcher-status">Loading campaigns…</span>
+                    ) : null}
+                    {campaignListState.status === "error" ? (
+                      <span className="campaign-switcher-status">Campaigns unavailable.</span>
+                    ) : null}
+                    {campaignListState.status === "ready"
+                      ? campaignListState.campaigns.map((campaign) => (
+                          <Link
+                            key={campaign.id}
+                            role="menuitem"
+                            to={getCampaignSwitcherPath(location.pathname, campaign.id)}
+                            onClick={() => {
+                              setIsCampaignMenuOpen(false);
+                            }}
+                          >
+                            {campaign.name}
+                          </Link>
+                        ))
+                      : null}
+                    <Link
+                      role="menuitem"
+                      to="/campaigns"
+                      onClick={() => {
+                        setIsCampaignMenuOpen(false);
+                      }}
+                    >
+                      Campaign Registry
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             </div>
+          </header>
+          <div className="shell-body">
+            <main className="shell-main">
+              {compatibilityState.status === "loading" ? (
+                <section className="panel compatibility-panel compatibility-loading-panel">
+                  <h2 className="font-ui">Checking Data Compatibility</h2>
+                  <p>Reviewing stored entity types before opening the workspace.</p>
+                </section>
+              ) : null}
+              {compatibilityState.status === "ready" && compatibilityState.report.hasIssues ? (
+                <CompatibilityMigrationPanel
+                  migrationError={migrationError}
+                  migrationResult={migrationResult}
+                  report={compatibilityState.report}
+                  submitting={isMigrating}
+                  onSubmit={handleApplyEntityTypeMigration}
+                />
+              ) : null}
+              {compatibilityState.status !== "loading" &&
+              !(compatibilityState.status === "ready" && compatibilityState.report.hasIssues) ? (
+                <Outlet />
+              ) : null}
+            </main>
           </div>
-        </header>
-        <div className="shell-body">
-          <main className="shell-main">
-            {compatibilityState.status === "loading" ? (
-              <section className="panel compatibility-panel compatibility-loading-panel">
-                <h2 className="font-ui">Checking Data Compatibility</h2>
-                <p>Reviewing stored entity types before opening the workspace.</p>
-              </section>
-            ) : null}
-            {compatibilityState.status === "ready" && compatibilityState.report.hasIssues ? (
-              <CompatibilityMigrationPanel
-                migrationError={migrationError}
-                migrationResult={migrationResult}
-                report={compatibilityState.report}
-                submitting={isMigrating}
-                onSubmit={handleApplyEntityTypeMigration}
-              />
-            ) : null}
-            {compatibilityState.status !== "loading" &&
-            !(compatibilityState.status === "ready" && compatibilityState.report.hasIssues) ? (
-              <Outlet />
-            ) : null}
-          </main>
         </div>
-      </div>
-    </CampaignDirectoryProvider>
+      </CampaignDirectoryProvider>
+    </UnsavedChangesProvider>
   );
 }

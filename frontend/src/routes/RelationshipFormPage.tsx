@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getCampaign } from "../api/campaigns";
 import { listCampaignEntities } from "../api/entities";
@@ -7,6 +7,7 @@ import { listRelationshipFamilies } from "../api/relationshipFamilies";
 import { getRelationship, createRelationship, updateRelationship, deleteRelationship } from "../api/relationships";
 import { listRelationshipTypes } from "../api/relationshipTypes";
 import { RelationshipForm, type RelationshipFormValues } from "../components/RelationshipForm";
+import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
@@ -39,6 +40,7 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const formRegistrationRef = useRef<UnsavedChangesRegistration | null>(null);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -87,7 +89,11 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
     };
   }, [campaignId, mode, relationshipId]);
 
-  async function handleSubmit(values: RelationshipFormValues) {
+  const handleRegistrationChange = useCallback((registration: UnsavedChangesRegistration | null) => {
+    formRegistrationRef.current = registration;
+  }, []);
+
+  async function handleSubmit(values: RelationshipFormValues, registration: UnsavedChangesRegistration) {
     if (pageState.status !== "ready" || !campaignId) {
       return;
     }
@@ -115,7 +121,9 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
               visibilityStatus: values.visibilityStatus,
             });
 
-      await navigate(`/campaigns/${savedRelationship.campaignId}/relationships`);
+      registration.markCleanAndNavigate(() => {
+        void navigate(`/campaigns/${savedRelationship.campaignId}/relationships`);
+      });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown relationship save failure.");
     } finally {
@@ -133,7 +141,14 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
 
     try {
       await deleteRelationship(campaignId, relationshipId);
-      await navigate(`/campaigns/${campaignId}/relationships`);
+      const navigateToRelationships = () => {
+        void navigate(`/campaigns/${campaignId}/relationships`);
+      };
+      if (formRegistrationRef.current !== null) {
+        formRegistrationRef.current.markCleanAndNavigate(navigateToRelationships);
+      } else {
+        navigateToRelationships();
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown relationship delete failure.");
     } finally {
@@ -195,6 +210,7 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
           submitError={submitError}
           submitLabel={mode === "edit" ? "Save Relationship" : "Create Relationship"}
           submitting={submitting}
+          onRegistrationChange={handleRegistrationChange}
           onSubmit={handleSubmit}
         />
       </SectionPanel>

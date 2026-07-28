@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
 import type { Campaign } from "../types/campaigns";
+import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 
 type EntityFormPageProps = {
   source: "campaign" | "global";
@@ -57,7 +58,7 @@ export function EntityFormPage({ source }: EntityFormPageProps) {
     };
   }, [source]);
 
-  async function handleSubmit(values: EntityFormValues) {
+  async function handleSubmit(values: EntityFormValues, registration: UnsavedChangesRegistration) {
     setSubmitting(true);
     setSubmitError(null);
 
@@ -68,7 +69,9 @@ export function EntityFormPage({ source }: EntityFormPageProps) {
         summary: values.summary.trim() || null,
         type: values.type,
       });
-      await navigate(`/campaigns/${createdEntity.campaignId}/entities/${createdEntity.id}`);
+      registration.markCleanAndNavigate(() => {
+        void navigate(`/campaigns/${createdEntity.campaignId}/entities/${createdEntity.id}`);
+      });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown entity save failure.");
     } finally {

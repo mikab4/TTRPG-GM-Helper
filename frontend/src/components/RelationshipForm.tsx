@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -10,6 +10,7 @@ import {
   type RelationshipVisibilityStatusValue,
 } from "../relationships/domain";
 import { isEntityTypeValue } from "../entities/entityTypes";
+import { useUnsavedChanges, type UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import type { Entity } from "../types/entities";
 import type { RelationshipFamilyOption } from "../types/relationshipFamilies";
 import type { RelationshipType } from "../types/relationshipTypes";
@@ -33,7 +34,8 @@ type RelationshipFormProps = {
   submitError: string | null;
   submitLabel: string;
   submitting: boolean;
-  onSubmit: (values: RelationshipFormValues) => Promise<void>;
+  onRegistrationChange?: (registration: UnsavedChangesRegistration | null) => void;
+  onSubmit: (values: RelationshipFormValues, registration: UnsavedChangesRegistration) => Promise<void>;
 };
 
 export function RelationshipForm({
@@ -46,7 +48,10 @@ export function RelationshipForm({
   submitLabel,
   submitting,
   onSubmit,
+  onRegistrationChange,
 }: RelationshipFormProps) {
+  const { registerForm } = useUnsavedChanges();
+  const registrationRef = useRef<UnsavedChangesRegistration | null>(null);
   const [sourceEntityId, setSourceEntityId] = useState(initialValues.sourceEntityId);
   const [targetEntityId, setTargetEntityId] = useState(initialValues.targetEntityId);
   const [relationshipType, setRelationshipType] = useState(initialValues.relationshipType);
@@ -58,6 +63,44 @@ export function RelationshipForm({
   const [certaintyStatus, setCertaintyStatus] = useState(initialValues.certaintyStatus);
   const [notes, setNotes] = useState(initialValues.notes);
   const [hasUserChangedRelationshipTypeConstraints, setHasUserChangedRelationshipTypeConstraints] = useState(false);
+
+  const initialRelationshipGroup =
+    relationshipTypes.find((typeOption) => typeOption.key === initialValues.relationshipType)?.family ?? "";
+
+  useEffect(() => {
+    const registration = registerForm();
+    registrationRef.current = registration;
+    onRegistrationChange?.(registration);
+
+    return () => {
+      registration.unregister();
+      onRegistrationChange?.(null);
+    };
+  }, [onRegistrationChange, registerForm]);
+
+  useEffect(() => {
+    registrationRef.current?.setDirty(
+      sourceEntityId !== initialValues.sourceEntityId ||
+        targetEntityId !== initialValues.targetEntityId ||
+        relationshipType !== initialValues.relationshipType ||
+        relationshipGroup !== initialRelationshipGroup ||
+        lifecycleStatus !== initialValues.lifecycleStatus ||
+        visibilityStatus !== initialValues.visibilityStatus ||
+        certaintyStatus !== initialValues.certaintyStatus ||
+        notes !== initialValues.notes,
+    );
+  }, [
+    certaintyStatus,
+    initialRelationshipGroup,
+    initialValues,
+    lifecycleStatus,
+    notes,
+    relationshipGroup,
+    relationshipType,
+    sourceEntityId,
+    targetEntityId,
+    visibilityStatus,
+  ]);
 
   const selectedRelationshipType = useMemo(
     () => relationshipTypes.find((typeOption) => typeOption.key === relationshipType),
@@ -268,15 +311,23 @@ export function RelationshipForm({
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    await onSubmit({
-      certaintyStatus,
-      lifecycleStatus,
-      notes,
-      relationshipType,
-      sourceEntityId,
-      targetEntityId,
-      visibilityStatus,
-    });
+    const registration = registrationRef.current;
+    if (registration === null) {
+      return;
+    }
+
+    await onSubmit(
+      {
+        certaintyStatus,
+        lifecycleStatus,
+        notes,
+        relationshipType,
+        sourceEntityId,
+        targetEntityId,
+        visibilityStatus,
+      },
+      registration,
+    );
   }
 
   return (

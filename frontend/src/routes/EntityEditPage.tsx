@@ -1,9 +1,10 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getCampaign } from "../api/campaigns";
 import { deleteEntity, getEntity, updateEntity } from "../api/entities";
 import { EntityForm, type EntityFormValues } from "../components/EntityForm";
+import type { UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import { PageHeader } from "../components/PageHeader";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
@@ -23,6 +24,7 @@ export function EntityEditPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const formRegistrationRef = useRef<UnsavedChangesRegistration | null>(null);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -58,7 +60,11 @@ export function EntityEditPage() {
     };
   }, [campaignId, entityId]);
 
-  async function handleSubmit(values: EntityFormValues) {
+  const handleRegistrationChange = useCallback((registration: UnsavedChangesRegistration | null) => {
+    formRegistrationRef.current = registration;
+  }, []);
+
+  async function handleSubmit(values: EntityFormValues, registration: UnsavedChangesRegistration) {
     if (pageState.status !== "ready" || !entityId) {
       return;
     }
@@ -73,7 +79,9 @@ export function EntityEditPage() {
         summary: values.summary.trim() || null,
         type: values.type,
       });
-      void navigate(`/campaigns/${pageState.campaign.id}/entities/${entityId}`);
+      registration.markCleanAndNavigate(() => {
+        void navigate(`/campaigns/${pageState.campaign.id}/entities/${entityId}`);
+      });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown entity save failure.");
     } finally {
@@ -91,7 +99,14 @@ export function EntityEditPage() {
 
     try {
       await deleteEntity(pageState.campaign.id, entityId);
-      await navigate(`/campaigns/${pageState.campaign.id}/entities`);
+      const navigateToEntityList = () => {
+        void navigate(`/campaigns/${pageState.campaign.id}/entities`);
+      };
+      if (formRegistrationRef.current !== null) {
+        formRegistrationRef.current.markCleanAndNavigate(navigateToEntityList);
+      } else {
+        navigateToEntityList();
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unknown entity delete failure.");
     } finally {
@@ -138,6 +153,7 @@ export function EntityEditPage() {
             submitError={submitError}
             submitLabel="Save Entity"
             submitting={submitting}
+            onRegistrationChange={handleRegistrationChange}
             onSubmit={handleSubmit}
           />
         </SectionPanel>
