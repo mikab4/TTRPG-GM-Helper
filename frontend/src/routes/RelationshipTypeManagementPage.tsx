@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getCampaign } from "../api/campaigns";
 import { ApiError } from "../api/client";
@@ -11,6 +11,7 @@ import {
   updateRelationshipType,
 } from "../api/relationshipTypes";
 import { PageHeader } from "../components/PageHeader";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RelationshipTypeManager } from "../components/RelationshipTypeManager";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
@@ -44,11 +45,27 @@ function getRelationshipTypeErrorMessage(error: unknown): string {
   return "Something went wrong while saving the relationship type.";
 }
 
+function getRelationshipTypeDeleteErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 422) {
+    return `This relationship type could not be deleted. ${error.message}`;
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return "Something went wrong while deleting the relationship type.";
+}
+
 export function RelationshipTypeManagementPage() {
   const { campaignId } = useParams();
   const [pageState, setPageState] = useState<RelationshipTypeManagementState>({ status: "loading" });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingDeletion, setPendingDeletion] = useState<RelationshipType | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const deletionInFlightRef = useRef(false);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -143,21 +160,53 @@ export function RelationshipTypeManagementPage() {
     }
   }
 
-  async function handleDelete(relationshipTypeKey: string) {
-    if (!campaignId) {
+  function requestDeletion(relationshipType: RelationshipType) {
+    if (deletionInFlightRef.current) {
       return;
     }
 
-    setSubmitting(true);
-    setSubmitError(null);
+    setDeleteError(null);
+    setPendingDeletion(relationshipType);
+  }
+
+  function cancelDeletion() {
+    if (isDeleting) {
+      return;
+    }
+
+    setDeleteError(null);
+    setPendingDeletion(null);
+  }
+
+  async function confirmDeletion() {
+    const relationshipType = pendingDeletion;
+    if (!campaignId || !relationshipType || deletionInFlightRef.current) {
+      return;
+    }
+
+    deletionInFlightRef.current = true;
+    setIsDeleting(true);
+    setDeleteError(null);
 
     try {
-      await deleteRelationshipType(campaignId, relationshipTypeKey);
-      await reloadRelationshipTypes();
+      await deleteRelationshipType(campaignId, relationshipType.key);
+      setPageState((currentPageState) =>
+        currentPageState.status === "ready"
+          ? {
+              ...currentPageState,
+              relationshipTypes: currentPageState.relationshipTypes.filter(
+                (listedRelationshipType) => listedRelationshipType.key !== relationshipType.key,
+              ),
+            }
+          : currentPageState,
+      );
+      setDeleteError(null);
+      setPendingDeletion(null);
     } catch (error) {
-      setSubmitError(getRelationshipTypeErrorMessage(error));
+      setDeleteError(getRelationshipTypeDeleteErrorMessage(error));
     } finally {
-      setSubmitting(false);
+      deletionInFlightRef.current = false;
+      setIsDeleting(false);
     }
   }
 
@@ -193,10 +242,20 @@ export function RelationshipTypeManagementPage() {
           submitError={submitError}
           submitting={submitting}
           onCreate={handleCreate}
-          onDelete={handleDelete}
+          onRequestDelete={requestDeletion}
           onUpdate={handleUpdate}
         />
       </SectionPanel>
+      {pendingDeletion ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={isDeleting}
+          recordName={pendingDeletion.label}
+          warningText="This custom relationship type will be permanently deleted. Types currently used by relationships cannot be deleted."
+          onCancel={cancelDeletion}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }

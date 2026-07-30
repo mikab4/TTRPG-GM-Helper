@@ -11,7 +11,7 @@ type RelationshipTypeManagerProps = {
   submitError: string | null;
   submitting: boolean;
   onCreate: (relationshipTypeCreate: RelationshipTypeCreate) => Promise<boolean>;
-  onDelete: (relationshipTypeKey: string) => Promise<void>;
+  onRequestDelete: (relationshipType: RelationshipType) => void;
   onUpdate: (relationshipTypeKey: string, relationshipTypeUpdate: RelationshipTypeUpdate) => Promise<boolean>;
 };
 
@@ -32,7 +32,7 @@ export function RelationshipTypeManager({
   submitError,
   submitting,
   onCreate,
-  onDelete,
+  onRequestDelete,
   onUpdate,
 }: RelationshipTypeManagerProps) {
   const { registerForm } = useUnsavedChanges();
@@ -372,7 +372,7 @@ export function RelationshipTypeManager({
                   disabled={submitting || editingKey === relationshipType.key}
                   type="button"
                   onClick={() => {
-                    void onDelete(relationshipType.key);
+                    onRequestDelete(relationshipType);
                   }}
                 >
                   Delete

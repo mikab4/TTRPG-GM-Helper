@@ -60,7 +60,7 @@ function RelationshipTypeManagerPage({
         submitError={null}
         submitting={false}
         onCreate={onCreate}
-        onDelete={vi.fn().mockResolvedValue(undefined)}
+        onRequestDelete={vi.fn()}
         onUpdate={onUpdate}
       />
       <Link to="/next">Leave relationship types</Link>
@@ -175,7 +175,7 @@ describe("relationship type manager unsaved changes", () => {
           submitError={null}
           submitting={false}
           onCreate={vi.fn().mockResolvedValue(true)}
-          onDelete={vi.fn().mockResolvedValue(undefined)}
+          onRequestDelete={vi.fn()}
           onUpdate={vi.fn().mockResolvedValue(true)}
         />
       </UnsavedChangesProvider>,
@@ -341,7 +341,7 @@ describe("relationship type manager unsaved changes", () => {
         submitError={null}
         submitting={submitting}
         onCreate={vi.fn().mockResolvedValue(true)}
-        onDelete={vi.fn().mockResolvedValue(undefined)}
+        onRequestDelete={vi.fn()}
         onUpdate={vi.fn().mockResolvedValue(true)}
       />
     );
