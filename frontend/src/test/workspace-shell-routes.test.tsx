@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { RouterProvider, createMemoryRouter } from "react-router-dom";
+import { RouterProvider, createMemoryRouter, type RouteObject } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type MockJsonResponse = {
@@ -87,6 +87,16 @@ function installApiMock(): void {
   );
 }
 
+async function renderLoadedCampaignRegistry(routes: RouteObject[], initialEntry: string) {
+  const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
+
+  render(<RouterProvider router={router} />);
+
+  await screen.findByRole("link", { name: "Open workspace for Shadows of Glass" });
+
+  return router;
+}
+
 describe("workspace-first shell routes", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -99,9 +109,7 @@ describe("workspace-first shell routes", () => {
   it("uses the campaign registry as the default entry point", async () => {
     installApiMock();
     const { routes } = await import("../app/routes");
-    const router = createMemoryRouter(routes, { initialEntries: ["/"] });
-
-    render(<RouterProvider router={router} />);
+    const router = await renderLoadedCampaignRegistry(routes, "/");
 
     expect(await screen.findByRole("heading", { name: "Campaigns" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/");
@@ -114,11 +122,8 @@ describe("workspace-first shell routes", () => {
   it("offers the registry and campaigns from the header switcher", async () => {
     installApiMock();
     const { routes } = await import("../app/routes");
-    const router = createMemoryRouter(routes, { initialEntries: ["/campaigns"] });
+    await renderLoadedCampaignRegistry(routes, "/campaigns");
 
-    render(<RouterProvider router={router} />);
-
-    await screen.findByRole("heading", { name: "Campaigns" });
     fireEvent.click(screen.getByRole("button", { name: "Select campaign" }));
 
     expect(screen.getByRole("menuitem", { name: "Campaign Registry" })).toHaveAttribute("href", "/campaigns");
@@ -129,11 +134,9 @@ describe("workspace-first shell routes", () => {
   it("closes the switcher when the user presses outside it", async () => {
     installApiMock();
     const { routes } = await import("../app/routes");
-    const router = createMemoryRouter(routes, { initialEntries: ["/campaigns"] });
+    await renderLoadedCampaignRegistry(routes, "/campaigns");
 
-    render(<RouterProvider router={router} />);
-
-    const campaignsHeading = await screen.findByRole("heading", { name: "Campaigns" });
+    const campaignsHeading = screen.getByRole("heading", { name: "Campaigns" });
     fireEvent.click(screen.getByRole("button", { name: "Select campaign" }));
     expect(screen.getByRole("menu", { name: "Campaign switcher" })).toBeInTheDocument();
 
