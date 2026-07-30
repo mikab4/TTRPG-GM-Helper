@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEntityNameMap, groupEntityRelationships } from "../relationships/presentation";
+import { buildEntityNameMap, buildRelationshipPhrase, groupEntityRelationships } from "../relationships/presentation";
 import type { Entity } from "../types/entities";
 import type { Relationship } from "../types/relationships";
 
@@ -73,6 +73,34 @@ function buildRelationship(overrides: Partial<Relationship>): Relationship {
 }
 
 describe("relationship presentation", () => {
+  it("uses safe names when the source entity is missing", () => {
+    const relationship = buildRelationship({
+      sourceEntityId: "missing-source-internal-id",
+      targetEntityId: "entity-2",
+      forwardLabel: "governs",
+    });
+
+    const phrase = buildRelationshipPhrase(relationship, buildEntityNameMap(entities));
+
+    expect(phrase).toBe("Unknown source governs Harbor Watch");
+    expect(phrase).not.toContain("missing-source-internal-id");
+    expect(phrase).not.toContain("entity-2");
+  });
+
+  it("uses safe names when the target entity is missing", () => {
+    const relationship = buildRelationship({
+      sourceEntityId: "entity-1",
+      targetEntityId: "missing-target-internal-id",
+      forwardLabel: "governs",
+    });
+
+    const phrase = buildRelationshipPhrase(relationship, buildEntityNameMap(entities));
+
+    expect(phrase).toBe("Rowan governs Unknown target");
+    expect(phrase).not.toContain("entity-1");
+    expect(phrase).not.toContain("missing-target-internal-id");
+  });
+
   it("uses canonical family labels for grouped relationship sections", () => {
     const groupedRelationships = groupEntityRelationships(
       "entity-1",

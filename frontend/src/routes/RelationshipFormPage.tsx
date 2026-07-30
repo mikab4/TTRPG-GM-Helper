@@ -12,6 +12,7 @@ import { PageHeader } from "../components/PageHeader";
 import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
+import { buildEntityNameMap, buildRelationshipPhrase } from "../relationships/presentation";
 import type { Campaign } from "../types/campaigns";
 import type { Entity } from "../types/entities";
 import type { RelationshipFamilyOption } from "../types/relationshipFamilies";
@@ -174,6 +175,7 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
     return <RequestStateBlock message={pageState.message} title="Relationship unavailable" tone="error" />;
   }
 
+  const entitiesById = buildEntityNameMap(pageState.entities);
   const initialRelationship = pageState.relationship;
 
   return (
@@ -229,7 +231,7 @@ export function RelationshipFormPage({ mode }: RelationshipFormPageProps) {
         <DeleteConfirmationDialog
           error={deleteError}
           isDeleting={deleting}
-          recordName={`${initialRelationship.sourceEntityId} ${initialRelationship.relationshipType} ${initialRelationship.targetEntityId}`}
+          recordName={buildRelationshipPhrase(initialRelationship, entitiesById)}
           warningText="This relationship will be permanently deleted. This action cannot be undone."
           onCancel={() => {
             setDeleteError(null);

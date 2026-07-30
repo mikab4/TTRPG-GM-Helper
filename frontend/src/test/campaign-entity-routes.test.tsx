@@ -644,7 +644,7 @@ describe("campaign and entity frontend routes", () => {
               ok: true,
               body: [
                 {
-                  id: "entity-1",
+                  id: "source-internal-42",
                   campaign_id: "campaign-1",
                   type: "person",
                   name: "Rowan",
@@ -657,7 +657,7 @@ describe("campaign and entity frontend routes", () => {
                   updated_at: "2026-04-08T12:00:00Z",
                 },
                 {
-                  id: "entity-2",
+                  id: "target-internal-84",
                   campaign_id: "campaign-1",
                   type: "person",
                   name: "Blackharbor",
@@ -716,7 +716,7 @@ describe("campaign and entity frontend routes", () => {
               ok: true,
               body: [
                 {
-                  key: "governs",
+                  key: "governs_internal",
                   label: "governs",
                   family: "political",
                   family_label: "Political",
@@ -740,9 +740,9 @@ describe("campaign and entity frontend routes", () => {
               body: {
                 id: "relationship-1",
                 campaign_id: "campaign-1",
-                source_entity_id: "entity-1",
-                target_entity_id: "entity-2",
-                relationship_type: "governs",
+                source_entity_id: "source-internal-42",
+                target_entity_id: "target-internal-84",
+                relationship_type: "governs_internal",
                 relationship_family: "political",
                 relationship_family_label: "Political",
                 forward_label: "governs",
@@ -778,12 +778,19 @@ describe("campaign and entity frontend routes", () => {
     expect(
       screen.getByText(/This saved relationship no longer matches the current entity or type rules/i),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Source Entity")).toHaveValue("entity-1");
-    expect(screen.getByLabelText("Target Entity")).toHaveValue("entity-2");
+    expect(screen.getByLabelText("Source Entity")).toHaveValue("source-internal-42");
+    expect(screen.getByLabelText("Target Entity")).toHaveValue("target-internal-84");
     expect(screen.getByLabelText("Relationship Group")).toHaveValue("political");
-    expect(screen.getByLabelText(/Relationship Type/i)).toHaveValue("governs");
+    expect(screen.getByLabelText(/Relationship Type/i)).toHaveValue("governs_internal");
     expect(screen.getByRole("option", { name: /governs \(saved, now incompatible\)/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Blackharbor \(saved, now incompatible\)/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Relationship" }));
+
+    const deleteDialog = await screen.findByRole("dialog", { name: "Delete Rowan governs Blackharbor?" });
+    expect(deleteDialog).not.toHaveTextContent("source-internal-42");
+    expect(deleteDialog).not.toHaveTextContent("target-internal-84");
+    expect(deleteDialog).not.toHaveTextContent("governs_internal");
   });
 
   it("shows the add custom type helper next to relationship type selection", async () => {
