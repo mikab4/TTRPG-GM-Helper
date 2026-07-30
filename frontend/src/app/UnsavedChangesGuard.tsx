@@ -1,13 +1,27 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useBlocker } from "react-router-dom";
 
 import { useUnsavedChanges } from "./UnsavedChangesContext";
 
+function supportsNativeModalDialog(): boolean {
+  return typeof HTMLDialogElement !== "undefined" && typeof HTMLDialogElement.prototype.showModal === "function";
+}
+
 export function UnsavedChangesGuard() {
   const { hasDirtyForms, hasDirtyFormsRef } = useUnsavedChanges();
   const blocker = useBlocker(() => hasDirtyFormsRef.current);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const isDialogOpenRef = useRef(false);
   const stayButtonRef = useRef<HTMLButtonElement>(null);
   const initiatingElementRef = useRef<HTMLElement | null>(null);
+
+  const closeDialog = useCallback(() => {
+    const dialog = dialogRef.current;
+    if (isDialogOpenRef.current && dialog && typeof dialog.close === "function") {
+      dialog.close();
+    }
+    isDialogOpenRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (!hasDirtyFormsRef.current) {
@@ -25,46 +39,51 @@ export function UnsavedChangesGuard() {
   }, [hasDirtyForms, hasDirtyFormsRef]);
 
   useEffect(() => {
-    if (blocker.state !== "blocked") {
-      return;
+    const dialog = dialogRef.current;
+
+    if (blocker.state === "blocked") {
+      initiatingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (dialog && !dialog.open && typeof dialog.showModal === "function") {
+        dialog.showModal();
+      }
+      isDialogOpenRef.current = true;
+      stayButtonRef.current?.focus();
+    } else {
+      closeDialog();
     }
 
-    initiatingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    stayButtonRef.current?.focus();
-  }, [blocker.state]);
-
-  if (blocker.state !== "blocked") {
-    return null;
-  }
+    return () => {
+      closeDialog();
+    };
+  }, [blocker.state, closeDialog]);
 
   function stayOnPage() {
+    closeDialog();
     blocker.reset?.();
-    initiatingElementRef.current?.focus();
+    window.setTimeout(() => {
+      initiatingElementRef.current?.focus();
+    }, 0);
   }
 
   return (
-    <div
-      className="unsaved-changes-backdrop"
-      onMouseDown={() => {
+    <dialog
+      ref={dialogRef}
+      aria-describedby="unsaved-changes-description"
+      aria-labelledby="unsaved-changes-title"
+      className="unsaved-changes-dialog"
+      open={!supportsNativeModalDialog() && blocker.state === "blocked"}
+      role="alertdialog"
+      onCancel={(event) => {
+        event.preventDefault();
         stayOnPage();
       }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          stayOnPage();
+        }
+      }}
     >
-      <section
-        aria-describedby="unsaved-changes-description"
-        aria-labelledby="unsaved-changes-title"
-        aria-modal="true"
-        className="unsaved-changes-dialog"
-        role="alertdialog"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            stayOnPage();
-          }
-        }}
-        onMouseDown={(event) => {
-          event.stopPropagation();
-        }}
-      >
+      <div className="unsaved-changes-dialog-content">
         <h2 id="unsaved-changes-title">Discard unsaved changes?</h2>
         <p id="unsaved-changes-description">Your edits have not been saved.</p>
         <div className="action-row">
@@ -75,13 +94,14 @@ export function UnsavedChangesGuard() {
             className="danger-button"
             type="button"
             onClick={() => {
-              blocker.proceed();
+              closeDialog();
+              blocker.proceed?.();
             }}
           >
             Discard changes
           </button>
         </div>
-      </section>
-    </div>
+      </div>
+    </dialog>
   );
 }

@@ -1553,18 +1553,19 @@ h4 {
   font-weight: 600;
 }
 
-.unsaved-changes-backdrop {
-  position: fixed;
-  z-index: 20;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
+.unsaved-changes-dialog {
+  width: min(32rem, calc(100% - 2rem));
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+}
+
+.unsaved-changes-dialog::backdrop {
   background: rgba(12, 12, 14, 0.58);
 }
 
-.unsaved-changes-dialog {
-  width: min(32rem, calc(100% - 2rem));
+.unsaved-changes-dialog-content {
   padding: 1.5rem;
   border: 1px solid var(--paper-line);
   border-radius: 16px;

@@ -22,7 +22,11 @@ type CompatibilityState =
 
 type CampaignListState = { status: "loading" } | { status: "error" } | { campaigns: Campaign[]; status: "ready" };
 
-function getCampaignSwitcherPath(currentPathname: string, campaignId: string): string {
+export function getCampaignSwitcherPath(currentPathname: string, campaignId: string): string {
+  if (/^\/campaigns\/[^/]+\/relationship-types(?:\/|$)/.test(currentPathname)) {
+    return `/campaigns/${campaignId}/relationships`;
+  }
+
   const workspaceSectionMatch = currentPathname.match(/^\/campaigns\/[^/]+\/(entities|relationships)(?:\/|$)/);
 
   if (workspaceSectionMatch === null) {

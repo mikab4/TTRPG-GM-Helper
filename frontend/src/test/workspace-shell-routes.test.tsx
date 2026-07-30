@@ -154,6 +154,20 @@ describe("workspace-first shell routes", () => {
     expect(screen.getByRole("menuitem", { name: "Frozen North" })).toHaveAttribute("href", "/campaigns/campaign-2/entities");
   });
 
+  it("switches relationship-type management to Relationships in the selected campaign", async () => {
+    installApiMock();
+    const { routes } = await import("../app/routes");
+    const router = createMemoryRouter(routes, { initialEntries: ["/campaigns/campaign-1/relationship-types"] });
+
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Select campaign" }));
+    expect(await screen.findByRole("menuitem", { name: "Frozen North" })).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-2/relationships",
+    );
+  });
+
   it("removes prior campaign workspace content while the selected campaign loads", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     const campaignTwoRequest = createDeferredValue<Response>();

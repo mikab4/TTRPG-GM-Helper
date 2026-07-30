@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction, type SyntheticEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type SyntheticEvent } from "react";
 
+import { useUnsavedChanges, type UnsavedChangesRegistration } from "../app/UnsavedChangesContext";
 import { ENTITY_TYPE_OPTIONS, formatEntityTypeLabel, type EntityTypeValue } from "../entities/entityTypes";
 import type { RelationshipFamilyOption } from "../types/relationshipFamilies";
 import type { RelationshipType, RelationshipTypeCreate, RelationshipTypeUpdate } from "../types/relationshipTypes";
@@ -14,6 +15,17 @@ type RelationshipTypeManagerProps = {
   onUpdate: (relationshipTypeKey: string, relationshipTypeUpdate: RelationshipTypeUpdate) => Promise<boolean>;
 };
 
+function normalizeAllowedTypes(allowedTypes: EntityTypeValue[]): EntityTypeValue[] {
+  return [...new Set(allowedTypes)].sort();
+}
+
+function areAllowedTypesEqual(leftAllowedTypes: EntityTypeValue[], rightAllowedTypes: EntityTypeValue[]): boolean {
+  return (
+    leftAllowedTypes.length === rightAllowedTypes.length &&
+    leftAllowedTypes.every((allowedType, index) => allowedType === rightAllowedTypes[index])
+  );
+}
+
 export function RelationshipTypeManager({
   relationshipFamilies,
   relationshipTypes,
@@ -23,6 +35,8 @@ export function RelationshipTypeManager({
   onDelete,
   onUpdate,
 }: RelationshipTypeManagerProps) {
+  const { registerForm } = useUnsavedChanges();
+  const registrationRef = useRef<UnsavedChangesRegistration | null>(null);
   const defaultRelationshipFamily = relationshipFamilies[0]?.value ?? "";
   const [label, setLabel] = useState("");
   const [family, setFamily] = useState(defaultRelationshipFamily);
@@ -34,6 +48,30 @@ export function RelationshipTypeManager({
   const [selectedAllowedTargetType, setSelectedAllowedTargetType] = useState<EntityTypeValue>("person");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
+
+  const normalizedCreateDraft = useMemo(
+    () => ({
+      allowedSourceTypes: normalizeAllowedTypes(allowedSourceTypes),
+      allowedTargetTypes: normalizeAllowedTypes(allowedTargetTypes),
+      family,
+      isSymmetric,
+      label: label.trim(),
+      reverseLabel: isSymmetric ? null : reverseLabel.trim() || null,
+    }),
+    [allowedSourceTypes, allowedTargetTypes, family, isSymmetric, label, reverseLabel],
+  );
+  const editingRelationshipType = relationshipTypes.find((relationshipType) => relationshipType.key === editingKey);
+  const createDraftIsDirty =
+    normalizedCreateDraft.label !== "" ||
+    normalizedCreateDraft.family !== defaultRelationshipFamily ||
+    normalizedCreateDraft.reverseLabel !== null ||
+    normalizedCreateDraft.isSymmetric ||
+    !areAllowedTypesEqual(normalizedCreateDraft.allowedSourceTypes, ["person"]) ||
+    !areAllowedTypesEqual(normalizedCreateDraft.allowedTargetTypes, ["person"]);
+  const renameDraftIsDirty =
+    editingRelationshipType !== undefined && editingLabel.trim() !== editingRelationshipType.label.trim();
+  const hasDirtyDraft = createDraftIsDirty || renameDraftIsDirty;
+  const canReplaceRename = editingKey === null || !renameDraftIsDirty;
 
   const sortedRelationshipTypes = useMemo(
     () =>
@@ -57,17 +95,23 @@ export function RelationshipTypeManager({
     }
   }, [defaultRelationshipFamily, family]);
 
+  useEffect(() => {
+    const registration = registerForm();
+    registrationRef.current = registration;
+
+    return () => {
+      registration.unregister();
+    };
+  }, [registerForm]);
+
+  useEffect(() => {
+    registrationRef.current?.setDirty(hasDirtyDraft);
+  }, [hasDirtyDraft]);
+
   async function handleCreate(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const createSucceeded = await onCreate({
-      allowedSourceTypes,
-      allowedTargetTypes,
-      family,
-      isSymmetric,
-      label: label.trim(),
-      reverseLabel: isSymmetric ? null : reverseLabel.trim() || null,
-    });
+    const createSucceeded = await onCreate(normalizedCreateDraft);
 
     if (!createSucceeded) {
       return;
@@ -116,6 +160,7 @@ export function RelationshipTypeManager({
           <span className="field-label">Custom Type Label</span>
           <input
             placeholder="bodyguard of"
+            disabled={submitting}
             value={label}
             onChange={(event) => {
               setLabel(event.target.value);
@@ -126,6 +171,7 @@ export function RelationshipTypeManager({
           <span className="field-label">Family</span>
           <select
             value={family}
+            disabled={submitting}
             onChange={(event) => {
               setFamily(event.target.value);
             }}
@@ -142,6 +188,7 @@ export function RelationshipTypeManager({
           <div className="relationship-type-picker">
             <select
               aria-label="Allowed Source Type"
+              disabled={submitting}
               value={selectedAllowedSourceType}
               onChange={(event) => {
                 setSelectedAllowedSourceType(event.target.value as EntityTypeValue);
@@ -155,6 +202,7 @@ export function RelationshipTypeManager({
             </select>
             <button
               className="secondary-button"
+              disabled={submitting}
               type="button"
               onClick={() => {
                 addAllowedType(selectedAllowedSourceType, setAllowedSourceTypes);
@@ -170,6 +218,7 @@ export function RelationshipTypeManager({
                 <button
                   aria-label={`Remove ${formatEntityTypeLabel(allowedSourceType)} from source types`}
                   className="text-button"
+                  disabled={submitting}
                   type="button"
                   onClick={() => {
                     removeAllowedType(allowedSourceType, setAllowedSourceTypes);
@@ -186,6 +235,7 @@ export function RelationshipTypeManager({
           <div className="relationship-type-picker">
             <select
               aria-label="Allowed Target Type"
+              disabled={submitting}
               value={selectedAllowedTargetType}
               onChange={(event) => {
                 setSelectedAllowedTargetType(event.target.value as EntityTypeValue);
@@ -199,6 +249,7 @@ export function RelationshipTypeManager({
             </select>
             <button
               className="secondary-button"
+              disabled={submitting}
               type="button"
               onClick={() => {
                 addAllowedType(selectedAllowedTargetType, setAllowedTargetTypes);
@@ -214,6 +265,7 @@ export function RelationshipTypeManager({
                 <button
                   aria-label={`Remove ${formatEntityTypeLabel(allowedTargetType)} from target types`}
                   className="text-button"
+                  disabled={submitting}
                   type="button"
                   onClick={() => {
                     removeAllowedType(allowedTargetType, setAllowedTargetTypes);
@@ -229,6 +281,7 @@ export function RelationshipTypeManager({
           <input
             className="relationship-type-checkbox"
             checked={isSymmetric}
+            disabled={submitting}
             type="checkbox"
             onChange={(event) => {
               setIsSymmetric(event.target.checked);
@@ -241,6 +294,7 @@ export function RelationshipTypeManager({
             <span className="field-label">Reverse Label</span>
             <input
               placeholder="guarded by"
+              disabled={submitting}
               value={reverseLabel}
               onChange={(event) => {
                 setReverseLabel(event.target.value);
@@ -272,6 +326,7 @@ export function RelationshipTypeManager({
                 {editingKey === relationshipType.key ? (
                   <>
                     <input
+                      disabled={submitting}
                       value={editingLabel}
                       onChange={(event) => {
                         setEditingLabel(event.target.value);
@@ -279,6 +334,7 @@ export function RelationshipTypeManager({
                     />
                     <button
                       className="text-button"
+                      disabled={submitting || !renameDraftIsDirty}
                       type="button"
                       onClick={() => {
                         void handleUpdate(relationshipType.key);
@@ -286,10 +342,22 @@ export function RelationshipTypeManager({
                     >
                       Save
                     </button>
+                    <button
+                      className="text-button"
+                      disabled={submitting}
+                      type="button"
+                      onClick={() => {
+                        setEditingKey(null);
+                        setEditingLabel("");
+                      }}
+                    >
+                      Cancel
+                    </button>
                   </>
                 ) : (
                   <button
                     className="text-button"
+                    disabled={submitting || !canReplaceRename}
                     type="button"
                     onClick={() => {
                       setEditingKey(relationshipType.key);
@@ -301,6 +369,7 @@ export function RelationshipTypeManager({
                 )}
                 <button
                   className="text-button"
+                  disabled={submitting || editingKey === relationshipType.key}
                   type="button"
                   onClick={() => {
                     void onDelete(relationshipType.key);
