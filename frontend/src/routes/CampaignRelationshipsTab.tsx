@@ -205,7 +205,7 @@ export function CampaignRelationshipsTab() {
             New Relationship
           </Link>
           <Link className="secondary-button" to={`/campaigns/${campaign.id}/relationship-types`}>
-            New Relationship Type
+            Relationship Type Management
           </Link>
         </div>
       </header>

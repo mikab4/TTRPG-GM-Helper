@@ -370,7 +370,7 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/relationships/new",
     );
-    expect(screen.getByRole("link", { name: "New Relationship Type" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Relationship Type Management" })).toHaveAttribute(
       "href",
       "/campaigns/campaign-1/relationship-types",
     );
@@ -1496,7 +1496,7 @@ describe("campaign and entity frontend routes", () => {
       expect(within(typeCards[0]).getByText("bodyguard of")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit labels" }));
     const renameInput = screen.getByDisplayValue("bodyguard of");
     fireEvent.change(renameInput, {
       target: { value: "governs" },

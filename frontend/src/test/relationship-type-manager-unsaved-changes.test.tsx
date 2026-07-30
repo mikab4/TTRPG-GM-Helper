@@ -166,7 +166,7 @@ describe("relationship type manager unsaved changes", () => {
     expect(router.state.location.pathname).toBe("/next");
   });
 
-  it("prevents replacing or deleting a dirty rename until it is cancelled", () => {
+  it("prevents replacing or deleting dirty label edits until they are cancelled", () => {
     render(
       <UnsavedChangesProvider>
         <RelationshipTypeManager
@@ -184,16 +184,16 @@ describe("relationship type manager unsaved changes", () => {
     const governsCard = screen.getByText("governs").closest("article");
     const advisesCard = screen.getByText("advises").closest("article");
     if (!governsCard || !advisesCard) throw new Error("Expected relationship type cards.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
     fireEvent.change(within(governsCard).getByDisplayValue("governs"), { target: { value: "rules" } });
 
-    expect(within(advisesCard).getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(within(advisesCard).getByRole("button", { name: "Edit labels" })).toBeDisabled();
     expect(within(governsCard).getByRole("button", { name: "Delete" })).toBeDisabled();
     fireEvent.click(within(governsCard).getByRole("button", { name: "Cancel" }));
-    expect(within(advisesCard).getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(within(advisesCard).getByRole("button", { name: "Edit labels" })).toBeEnabled();
   });
 
-  it("clears a rename guard when its normalized label returns to the baseline", () => {
+  it("clears a label-edit guard when its normalized label returns to the baseline", () => {
     const router = createMemoryRouter(
       [
         {
@@ -210,10 +210,37 @@ describe("relationship type manager unsaved changes", () => {
     render(<RouterProvider router={router} />);
     const governsCard = screen.getByText("governs").closest("article");
     if (!governsCard) throw new Error("Expected governs card.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
     fireEvent.change(within(governsCard).getByDisplayValue("governs"), { target: { value: "governs " } });
     fireEvent.click(screen.getByRole("link", { name: "Leave relationship types" }));
     expect(router.state.location.pathname).toBe("/next");
+  });
+
+  it("guards navigation after a reverse-only label edit", async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/",
+          element: <GuardedLayout />,
+          children: [
+            { index: true, element: <RelationshipTypeManagerPage /> },
+            { path: "next", element: <p>Next page</p> },
+          ],
+        },
+      ],
+      { initialEntries: ["/"] },
+    );
+    render(<RouterProvider router={router} />);
+    const governsCard = screen.getByText("governs").closest("article");
+    if (!governsCard) throw new Error("Expected governs card.");
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(governsCard).getByLabelText("Reverse label for governs"), {
+      target: { value: "is ruled by" },
+    });
+    fireEvent.click(screen.getByRole("link", { name: "Leave relationship types" }));
+
+    expect(await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/");
   });
 
   it("keeps a failed create draft guarded", async () => {
@@ -241,7 +268,7 @@ describe("relationship type manager unsaved changes", () => {
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("keeps a failed rename draft guarded", async () => {
+  it("keeps a failed label-edit draft guarded", async () => {
     const failedUpdate = vi.fn().mockResolvedValue(false);
     const router = createMemoryRouter(
       [
@@ -259,7 +286,7 @@ describe("relationship type manager unsaved changes", () => {
     render(<RouterProvider router={router} />);
     const governsCard = screen.getByText("governs").closest("article");
     if (!governsCard) throw new Error("Expected governs card.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
     fireEvent.change(within(governsCard).getByDisplayValue("governs"), { target: { value: "rules" } });
     fireEvent.click(within(governsCard).getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -269,7 +296,7 @@ describe("relationship type manager unsaved changes", () => {
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("keeps a dirty rename after successful create resets its draft", async () => {
+  it("keeps dirty label edits after successful create resets its draft", async () => {
     const successfulCreate = vi.fn().mockResolvedValue(true);
     const router = createMemoryRouter(
       [
@@ -290,7 +317,7 @@ describe("relationship type manager unsaved changes", () => {
     render(<RouterProvider router={router} />);
     const governsCard = screen.getByText("governs").closest("article");
     if (!governsCard) throw new Error("Expected governs card.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
     fireEvent.change(within(governsCard).getByDisplayValue("governs"), { target: { value: "rules" } });
     fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard" } });
     fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
@@ -304,7 +331,7 @@ describe("relationship type manager unsaved changes", () => {
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("keeps a dirty create draft after successful rename closes its edit mode", async () => {
+  it("keeps a dirty create draft after successful label editing closes its edit mode", async () => {
     const successfulUpdate = vi.fn().mockResolvedValue(true);
     const router = createMemoryRouter(
       [
@@ -323,7 +350,7 @@ describe("relationship type manager unsaved changes", () => {
     fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard" } });
     const governsCard = screen.getByText("governs").closest("article");
     if (!governsCard) throw new Error("Expected governs card.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
     fireEvent.change(within(governsCard).getByDisplayValue("governs"), { target: { value: "rules" } });
     fireEvent.click(within(governsCard).getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -333,7 +360,7 @@ describe("relationship type manager unsaved changes", () => {
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("allows an unchanged rename to switch types and disables every mutation control while submitting", () => {
+  it("allows unchanged label editing to switch types and disables every mutation control while submitting", () => {
     const manager = (submitting: boolean) => (
       <RelationshipTypeManager
         relationshipFamilies={relationshipFamilies}
@@ -349,9 +376,10 @@ describe("relationship type manager unsaved changes", () => {
     const governsCard = screen.getByText("governs").closest("article");
     const advisesCard = screen.getByText("advises").closest("article");
     if (!governsCard || !advisesCard) throw new Error("Expected relationship type cards.");
-    fireEvent.click(within(governsCard).getByRole("button", { name: "Rename" }));
-    fireEvent.click(within(advisesCard).getByRole("button", { name: "Rename" }));
+    fireEvent.click(within(governsCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.click(within(advisesCard).getByRole("button", { name: "Edit labels" }));
     expect(within(advisesCard).getByDisplayValue("advises")).toBeInTheDocument();
+    expect(within(advisesCard).getByLabelText("Reverse label for advises")).toHaveValue("advised by");
     rerender(<UnsavedChangesProvider>{manager(true)}</UnsavedChangesProvider>);
     for (const control of screen.getAllByRole("button")) expect(control).toBeDisabled();
     for (const control of screen.getAllByRole("textbox")) expect(control).toBeDisabled();

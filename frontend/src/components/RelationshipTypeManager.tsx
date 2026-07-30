@@ -47,7 +47,8 @@ export function RelationshipTypeManager({
   const [selectedAllowedSourceType, setSelectedAllowedSourceType] = useState<EntityTypeValue>("person");
   const [selectedAllowedTargetType, setSelectedAllowedTargetType] = useState<EntityTypeValue>("person");
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editingLabel, setEditingLabel] = useState("");
+  const [editingForwardLabel, setEditingForwardLabel] = useState("");
+  const [editingReverseLabel, setEditingReverseLabel] = useState("");
 
   const normalizedCreateDraft = useMemo(
     () => ({
@@ -68,10 +69,17 @@ export function RelationshipTypeManager({
     normalizedCreateDraft.isSymmetric ||
     !areAllowedTypesEqual(normalizedCreateDraft.allowedSourceTypes, ["person"]) ||
     !areAllowedTypesEqual(normalizedCreateDraft.allowedTargetTypes, ["person"]);
-  const renameDraftIsDirty =
-    editingRelationshipType !== undefined && editingLabel.trim() !== editingRelationshipType.label.trim();
-  const hasDirtyDraft = createDraftIsDirty || renameDraftIsDirty;
-  const canReplaceRename = editingKey === null || !renameDraftIsDirty;
+  const editLabelsDraftIsDirty =
+    editingRelationshipType !== undefined &&
+    (editingForwardLabel.trim() !== editingRelationshipType.label.trim() ||
+      (!editingRelationshipType.isSymmetric &&
+        editingReverseLabel.trim() !== (editingRelationshipType.reverseLabel ?? "").trim()));
+  const editLabelsAreValid =
+    editingRelationshipType !== undefined &&
+    editingForwardLabel.trim() !== "" &&
+    (editingRelationshipType.isSymmetric || editingReverseLabel.trim() !== "");
+  const hasDirtyDraft = createDraftIsDirty || editLabelsDraftIsDirty;
+  const canReplaceEditLabels = editingKey === null || !editLabelsDraftIsDirty;
 
   const sortedRelationshipTypes = useMemo(
     () =>
@@ -128,14 +136,23 @@ export function RelationshipTypeManager({
   }
 
   async function handleUpdate(relationshipTypeKey: string) {
-    const updateSucceeded = await onUpdate(relationshipTypeKey, { label: editingLabel.trim() });
+    if (!editingRelationshipType) {
+      return;
+    }
+
+    const relationshipTypeUpdate: RelationshipTypeUpdate = {
+      label: editingForwardLabel.trim(),
+      ...(editingRelationshipType.isSymmetric ? {} : { reverseLabel: editingReverseLabel.trim() }),
+    };
+    const updateSucceeded = await onUpdate(relationshipTypeKey, relationshipTypeUpdate);
 
     if (!updateSucceeded) {
       return;
     }
 
     setEditingKey(null);
-    setEditingLabel("");
+    setEditingForwardLabel("");
+    setEditingReverseLabel("");
   }
 
   function addAllowedType(nextType: EntityTypeValue, setAllowedTypes: Dispatch<SetStateAction<EntityTypeValue[]>>) {
@@ -314,6 +331,8 @@ export function RelationshipTypeManager({
           <article key={relationshipType.key} className="relationship-type-card">
             <div className="relationship-type-copy">
               <strong>{relationshipType.label}</strong>
+              <span>Forward label: {relationshipType.label}</span>
+              {relationshipType.isSymmetric ? null : <span>Reverse label: {relationshipType.reverseLabel}</span>}
               <span>
                 {relationshipType.familyLabel} · {relationshipType.isCustom ? "Custom" : "Built In"}
               </span>
@@ -325,16 +344,31 @@ export function RelationshipTypeManager({
               <div className="relationship-type-actions">
                 {editingKey === relationshipType.key ? (
                   <>
-                    <input
-                      disabled={submitting}
-                      value={editingLabel}
-                      onChange={(event) => {
-                        setEditingLabel(event.target.value);
-                      }}
-                    />
+                    <label className="field">
+                      <span className="field-label">Forward label for {relationshipType.label}</span>
+                      <input
+                        disabled={submitting}
+                        value={editingForwardLabel}
+                        onChange={(event) => {
+                          setEditingForwardLabel(event.target.value);
+                        }}
+                      />
+                    </label>
+                    {relationshipType.isSymmetric ? null : (
+                      <label className="field">
+                        <span className="field-label">Reverse label for {relationshipType.label}</span>
+                        <input
+                          disabled={submitting}
+                          value={editingReverseLabel}
+                          onChange={(event) => {
+                            setEditingReverseLabel(event.target.value);
+                          }}
+                        />
+                      </label>
+                    )}
                     <button
                       className="text-button"
-                      disabled={submitting || !renameDraftIsDirty}
+                      disabled={submitting || !editLabelsDraftIsDirty || !editLabelsAreValid}
                       type="button"
                       onClick={() => {
                         void handleUpdate(relationshipType.key);
@@ -348,7 +382,8 @@ export function RelationshipTypeManager({
                       type="button"
                       onClick={() => {
                         setEditingKey(null);
-                        setEditingLabel("");
+                        setEditingForwardLabel("");
+                        setEditingReverseLabel("");
                       }}
                     >
                       Cancel
@@ -357,14 +392,15 @@ export function RelationshipTypeManager({
                 ) : (
                   <button
                     className="text-button"
-                    disabled={submitting || !canReplaceRename}
+                    disabled={submitting || !canReplaceEditLabels}
                     type="button"
                     onClick={() => {
                       setEditingKey(relationshipType.key);
-                      setEditingLabel(relationshipType.label);
+                      setEditingForwardLabel(relationshipType.label);
+                      setEditingReverseLabel(relationshipType.isSymmetric ? "" : (relationshipType.reverseLabel ?? ""));
                     }}
                   >
-                    Rename
+                    Edit labels
                   </button>
                 )}
                 <button
