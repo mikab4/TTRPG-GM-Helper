@@ -18,9 +18,12 @@ export function CampaignDeleteDialog({ campaign, onCancel, onDeleted }: Campaign
   const deletionInFlightRef = useRef(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const campaignId = campaign?.id;
 
   useEffect(() => {
-    if (!campaign) {
+    setDeleteError(null);
+
+    if (!campaignId) {
       return;
     }
 
@@ -29,7 +32,7 @@ export function CampaignDeleteDialog({ campaign, onCancel, onDeleted }: Campaign
       dialog.showModal();
     }
     deleteButtonRef.current?.focus();
-  }, [campaign]);
+  }, [campaignId]);
 
   useEffect(() => {
     if (deleteError) {
@@ -55,6 +58,7 @@ export function CampaignDeleteDialog({ campaign, onCancel, onDeleted }: Campaign
       return;
     }
 
+    setDeleteError(null);
     closeDialog({ resetDeletionGuard: true });
     onCancel();
   }

@@ -17,6 +17,12 @@ const campaign: Campaign = {
   updatedAt: "2026-04-08T12:00:00Z",
 };
 
+const secondCampaign: Campaign = {
+  ...campaign,
+  id: "campaign-2",
+  name: "Ashen Coast",
+};
+
 describe("CampaignDeleteDialog", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -56,6 +62,53 @@ describe("CampaignDeleteDialog", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Campaign is locked.");
     expect(screen.getByRole("dialog", { name: "Delete Shadows of Glass?" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete campaign" })).toHaveFocus();
+  });
+
+  it("clears a failed deletion error after cancellation and reopening the same campaign", async () => {
+    deleteCampaignMock.mockRejectedValueOnce(new Error("Campaign is locked."));
+    const onCancel = vi.fn();
+    const { rerender } = render(<CampaignDeleteDialog campaign={campaign} onCancel={onCancel} onDeleted={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete campaign" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Campaign is locked.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    rerender(<CampaignDeleteDialog campaign={null} onCancel={onCancel} onDeleted={vi.fn()} />);
+    rerender(<CampaignDeleteDialog campaign={campaign} onCancel={onCancel} onDeleted={vi.fn()} />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears a failed deletion error when the dialog changes campaigns", async () => {
+    deleteCampaignMock.mockRejectedValueOnce(new Error("Campaign is locked."));
+    const { rerender } = render(<CampaignDeleteDialog campaign={campaign} onCancel={vi.fn()} onDeleted={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete campaign" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Campaign is locked.");
+
+    rerender(<CampaignDeleteDialog campaign={secondCampaign} onCancel={vi.fn()} onDeleted={vi.fn()} />);
+
+    expect(screen.getByRole("dialog", { name: "Delete Ashen Coast?" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed deletion error when the campaign object changes without changing its ID", async () => {
+    deleteCampaignMock.mockRejectedValueOnce(new Error("Campaign is locked."));
+    const { rerender } = render(<CampaignDeleteDialog campaign={campaign} onCancel={vi.fn()} onDeleted={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete campaign" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Campaign is locked.");
+
+    rerender(
+      <CampaignDeleteDialog
+        campaign={{ ...campaign, description: "Updated campaign description" }}
+        onCancel={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Campaign is locked.");
   });
 
   it("issues one DELETE while a deletion is pending", async () => {
