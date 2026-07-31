@@ -1,20 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function useLocalStorageState(storageKey: string, initialValue = "") {
-  const [value, setValue] = useState(initialValue);
-  const pendingHydrationKey = useRef<string | null>(null);
+  const [value, setValue] = useState(() => window.localStorage.getItem(storageKey) ?? initialValue);
 
   useEffect(() => {
-    pendingHydrationKey.current = storageKey;
-    setValue(window.localStorage.getItem(storageKey) ?? initialValue);
-  }, [initialValue, storageKey]);
-
-  useEffect(() => {
-    if (pendingHydrationKey.current === storageKey) {
-      pendingHydrationKey.current = null;
-      return;
-    }
-
     window.localStorage.setItem(storageKey, value);
   }, [storageKey, value]);
 

@@ -7,11 +7,32 @@ import { SectionPanel } from "../components/SectionPanel";
 import { useLocalStorageState } from "../hooks/useLocalStorageState";
 import type { CampaignWorkspaceContext } from "./CampaignWorkspacePage";
 
+function CampaignQuickNotes({ storageKey }: { storageKey: string }) {
+  const [quickNotes, setQuickNotes] = useLocalStorageState(storageKey);
+
+  return (
+    <SectionPanel title="Quick Notes">
+      <label className="sr-only" htmlFor="campaign-quick-notes">
+        Quick Notes
+      </label>
+      <textarea
+        id="campaign-quick-notes"
+        className="campaign-quick-notes"
+        placeholder="Draft session ideas..."
+        rows={5}
+        value={quickNotes}
+        onChange={(event) => {
+          setQuickNotes(event.target.value);
+        }}
+      />
+    </SectionPanel>
+  );
+}
+
 export function CampaignOverviewTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const quickNotesStorageKey = `gm-workspace:campaign-quick-notes:${campaign.id}`;
   const { refreshCampaigns } = useCampaignDirectory();
-  const [quickNotes, setQuickNotes] = useLocalStorageState(quickNotesStorageKey);
   const navigate = useNavigate();
   const [campaignPendingDeletion, setCampaignPendingDeletion] = useState(false);
 
@@ -59,21 +80,7 @@ export function CampaignOverviewTab() {
         <SectionPanel title="Recent Activity">
           <p className="campaign-support-copy">No recent activity is available yet.</p>
         </SectionPanel>
-        <SectionPanel title="Quick Notes">
-          <label className="sr-only" htmlFor="campaign-quick-notes">
-            Quick Notes
-          </label>
-          <textarea
-            id="campaign-quick-notes"
-            className="campaign-quick-notes"
-            placeholder="Draft session ideas..."
-            rows={5}
-            value={quickNotes}
-            onChange={(event) => {
-              setQuickNotes(event.target.value);
-            }}
-          />
-        </SectionPanel>
+        <CampaignQuickNotes key={campaign.id} storageKey={quickNotesStorageKey} />
       </div>
     </div>
   );
