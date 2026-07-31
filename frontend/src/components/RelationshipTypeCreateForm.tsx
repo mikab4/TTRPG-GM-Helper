@@ -37,6 +37,7 @@ export function RelationshipTypeCreateForm({
   const [targetTypes, setTargetTypes] = useState<EntityTypeValue[]>(["person"]);
   const [sourcePicker, setSourcePicker] = useState<EntityTypeValue>("person");
   const [targetPicker, setTargetPicker] = useState<EntityTypeValue>("person");
+  const [validationError, setValidationError] = useState<string | null>(null);
   const value = useMemo(
     () => ({
       label: label.trim(),
@@ -74,6 +75,15 @@ export function RelationshipTypeCreateForm({
   }
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (value.label === "") {
+      setValidationError("Enter a custom type label.");
+      return;
+    }
+    if (!value.isSymmetric && value.reverseLabel === null) {
+      setValidationError("Enter a reverse label for an asymmetric type.");
+      return;
+    }
+    setValidationError(null);
     if (await onCreate(value)) {
       setLabel("");
       setReverseLabel("");
@@ -154,6 +164,7 @@ export function RelationshipTypeCreateForm({
           value={label}
           onChange={(event) => {
             setLabel(event.target.value);
+            setValidationError(null);
           }}
         />
       </label>
@@ -183,6 +194,7 @@ export function RelationshipTypeCreateForm({
           type="checkbox"
           onChange={(event) => {
             setIsSymmetric(event.target.checked);
+            setValidationError(null);
           }}
         />
         <span className="field-label">Symmetric type</span>
@@ -196,11 +208,12 @@ export function RelationshipTypeCreateForm({
             value={reverseLabel}
             onChange={(event) => {
               setReverseLabel(event.target.value);
+              setValidationError(null);
             }}
           />
         </label>
       )}
-      {submitError ? <p className="field-error">{submitError}</p> : null}
+      {(validationError ?? submitError) ? <p className="field-error">{validationError ?? submitError}</p> : null}
       <button className="secondary-button" disabled={submitting} type="submit">
         {submitting ? "Saving..." : "Add Custom Type"}
       </button>

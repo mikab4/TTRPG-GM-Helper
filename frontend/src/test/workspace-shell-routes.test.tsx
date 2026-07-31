@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter, type RouteObject } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -171,6 +171,20 @@ describe("workspace-first shell routes", () => {
         "href",
         "/campaigns/campaign-2/relationships",
       );
+    },
+  );
+
+  it.each(["/campaigns/campaign-1/relationship-types", "/campaigns/campaign-1/relationship-types/new"])(
+    "keeps Relationships active for relationship-type supporting routes",
+    async (initialEntry) => {
+      installApiMock();
+      const { routes } = await import("../app/routes");
+      const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
+
+      render(<RouterProvider router={router} />);
+
+      const workspaceSidebar = await screen.findByRole("navigation", { name: "Campaign Workspace" });
+      expect(within(workspaceSidebar).getByRole("link", { name: "Relationships" })).toHaveAttribute("aria-current", "page");
     },
   );
 

@@ -395,7 +395,7 @@ export function RelationshipForm({
           Relationship Type{" "}
           <span className="field-label-helper">
             (
-            <Link className="text-link" to={`/campaigns/${campaignId}/relationship-types`}>
+            <Link className="text-link" to={`/campaigns/${campaignId}/relationship-types/new`}>
               Add custom type
             </Link>
             )

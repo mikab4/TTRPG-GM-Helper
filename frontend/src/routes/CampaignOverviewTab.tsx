@@ -57,7 +57,7 @@ export function CampaignOverviewTab() {
       </SectionPanel>
       <div className="campaign-overview-grid">
         <SectionPanel title="Recent Activity">
-          <p className="campaign-support-copy">Syncing with chronological log...</p>
+          <p className="campaign-support-copy">No recent activity is available yet.</p>
         </SectionPanel>
         <SectionPanel title="Quick Notes">
           <label className="sr-only" htmlFor="campaign-quick-notes">

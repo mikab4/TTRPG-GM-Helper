@@ -150,6 +150,8 @@ describe("campaign and entity frontend routes", () => {
     expect(within(workspaceSidebar).getByRole("link", { name: "Relationships" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Campaign Summary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent Activity" })).toBeInTheDocument();
+    expect(screen.getByText("No recent activity is available yet.")).toBeInTheDocument();
+    expect(screen.queryByText("Syncing with chronological log...")).toBeNull();
     expect(screen.getByRole("heading", { name: "Quick Notes" })).toBeInTheDocument();
     expect(screen.getByText("Urban intrigue campaign")).toBeInTheDocument();
     expect(container.querySelector(".campaign-workspace")).not.toBeNull();
@@ -907,7 +909,7 @@ describe("campaign and entity frontend routes", () => {
 
     expect(screen.getByRole("link", { name: /Add custom type/i })).toHaveAttribute(
       "href",
-      "/campaigns/campaign-1/relationship-types",
+      "/campaigns/campaign-1/relationship-types/new",
     );
   });
 

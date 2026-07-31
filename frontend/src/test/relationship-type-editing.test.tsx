@@ -17,6 +17,7 @@ type RelationshipTypeResponse = {
 };
 
 type ApiMockOptions = {
+  listTypesFailsAfterPatch?: boolean;
   postFails?: boolean;
   patchFails?: boolean;
   relationshipFamiliesFail?: boolean;
@@ -115,7 +116,7 @@ function installApiMock(options: ApiMockOptions = {}) {
       if (url.includes("/relationship-types?campaign_id=")) {
         calls.listTypes += 1;
         return Promise.resolve(
-          options.relationshipTypesFail
+          options.relationshipTypesFail || (options.listTypesFailsAfterPatch && calls.patch.length > 0)
             ? jsonResponse({ detail: "Types unavailable" }, 500)
             : jsonResponse(relationshipTypes),
         );
@@ -263,6 +264,21 @@ describe("relationship type routes", () => {
     expect(screen.queryByRole("heading", { name: "Create Custom Relationship Type" })).toBeNull();
   });
 
+  it("does not submit a blank forward label or a blank asymmetric reverse label", async () => {
+    const calls = installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types/new"]);
+    await screen.findByRole("heading", { name: "Create Custom Relationship Type" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
+    expect(await screen.findByText("Enter a custom type label.")).toBeInTheDocument();
+    expect(calls.post).toBe(0);
+
+    fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard of" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
+    expect(await screen.findByText("Enter a reverse label for an asymmetric type.")).toBeInTheDocument();
+    expect(calls.post).toBe(0);
+  });
+
   it("saves both asymmetric labels and serializes them in the PATCH request", async () => {
     const calls = installApiMock();
     await renderApplication(["/campaigns/campaign-1/relationship-types"]);
@@ -293,6 +309,22 @@ describe("relationship type routes", () => {
     fireEvent.click(within(relationshipCard).getByRole("button", { name: "Save" }));
     await screen.findByText("Forward label: sworn siblings");
     expect(calls.patch).toEqual([{ body: { label: "sworn siblings" }, key: "older" }]);
+  });
+
+  it("keeps a successful label update when the subsequent type reload would fail", async () => {
+    const calls = installApiMock({ listTypesFailsAfterPatch: true });
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    const relationshipCard = card("newer custom");
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(relationshipCard).getByLabelText("Forward label for newer custom"), {
+      target: { value: "protects" },
+    });
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Forward label: protects")).toBeInTheDocument();
+    expect(calls.listTypes).toBe(1);
+    expect(screen.queryByText(/could not be saved/i)).toBeNull();
   });
 
   it("does not save blank directional labels and restores both labels when editing is cancelled", async () => {

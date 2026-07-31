@@ -88,18 +88,6 @@ export function RelationshipTypeManagementPage() {
     };
   }, [campaign.id]);
 
-  async function reloadRelationshipTypes() {
-    if (pageState.status !== "ready") {
-      return;
-    }
-
-    const relationshipTypes = await listRelationshipTypes(campaign.id);
-    setPageState({
-      relationshipTypes,
-      status: "ready",
-    });
-  }
-
   async function handleUpdate(
     relationshipTypeKey: string,
     relationshipTypeUpdate: RelationshipTypeUpdate,
@@ -107,8 +95,17 @@ export function RelationshipTypeManagementPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await updateRelationshipType(campaign.id, relationshipTypeKey, relationshipTypeUpdate);
-      await reloadRelationshipTypes();
+      const updatedRelationshipType = await updateRelationshipType(campaign.id, relationshipTypeKey, relationshipTypeUpdate);
+      setPageState((currentPageState) =>
+        currentPageState.status === "ready"
+          ? {
+              ...currentPageState,
+              relationshipTypes: currentPageState.relationshipTypes.map((relationshipType) =>
+                relationshipType.key === relationshipTypeKey ? updatedRelationshipType : relationshipType,
+              ),
+            }
+          : currentPageState,
+      );
       return true;
     } catch (error) {
       setSubmitError(getRelationshipTypeErrorMessage(error));
