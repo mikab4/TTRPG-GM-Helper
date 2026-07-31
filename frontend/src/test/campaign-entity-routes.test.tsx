@@ -1285,7 +1285,7 @@ describe("campaign and entity frontend routes", () => {
     expect(screen.queryByText("Blackharbor")).toBeNull();
   });
 
-  it("renders relationship type management on its own campaign route", async () => {
+  it("renders relationship type inventory on its own campaign route", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
     let createdTypeVisible = false;
     vi.stubGlobal(
@@ -1464,50 +1464,13 @@ describe("campaign and entity frontend routes", () => {
       "href",
       "/campaigns/campaign-1/relationships",
     );
-    expect(screen.getByRole("heading", { name: "Existing Relationship Types" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Allowed Source Type")).toBeInTheDocument();
-    expect(screen.getByLabelText("Allowed Target Type")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Custom Type Label"), {
-      target: { value: "governs" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
-
-    expect(
-      await screen.findByText("A relationship type with that label already exists in this campaign."),
-    ).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Custom Type Label"), {
-      target: { value: "bodyguard of" },
-    });
-    fireEvent.change(screen.getByLabelText("Reverse Label"), {
-      target: { value: "guarded by" },
-    });
-    fireEvent.change(screen.getByLabelText("Allowed Target Type"), {
-      target: { value: "organization" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add target type" }));
-    expect(screen.getByRole("button", { name: "Remove Organization from target types" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
-
-    await waitFor(() => {
-      const typeCards = screen.getAllByRole("article");
-      expect(within(typeCards[0]).getByText("bodyguard of")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit labels" }));
-    const renameInput = screen.getByDisplayValue("bodyguard of");
-    fireEvent.change(renameInput, {
-      target: { value: "governs" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(
-      await screen.findByText("A relationship type with that label already exists in this campaign."),
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("governs")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Create custom type" })[0]).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-1/relationship-types/new",
+    );
+    expect(screen.getByRole("heading", { name: "Custom Relationship Types" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built-in Relationship Types" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Allowed Source Type")).toBeNull();
   });
 
   it("renders the entity full profile on the main entity route", async () => {

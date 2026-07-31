@@ -12,6 +12,7 @@ import { EntityEditPage } from "../routes/EntityEditPage";
 import { EntityFormPage } from "../routes/EntityFormPage";
 import { RelationshipFormPage } from "../routes/RelationshipFormPage";
 import { RelationshipTypeManagementPage } from "../routes/RelationshipTypeManagementPage";
+import { RelationshipTypeCreatePage } from "../routes/RelationshipTypeCreatePage";
 
 export const routes: RouteObject[] = [
   {
@@ -82,7 +83,10 @@ export const routes: RouteObject[] = [
           },
           {
             path: "relationship-types",
-            element: <RelationshipTypeManagementPage />,
+            children: [
+              { index: true, element: <RelationshipTypeManagementPage /> },
+              { path: "new", element: <RelationshipTypeCreatePage /> },
+            ],
           },
         ],
       },

@@ -30,6 +30,12 @@ Completed in this branch:
 
 Sessions and Assets remain deferred to the follow-up handoff; no frontend routes or controls for them were added here.
 
+### Approved relationship-type management follow-up
+
+Relationship-type management is a campaign-scoped supporting workflow reached from Relationships. It opens at `/campaigns/:campaignId/relationship-types` as an inventory: custom types sort newest first and support inline label editing and deletion; built-in types sort alphabetically and remain read-only. The inventory has explicit loading and API-error states, and an empty-custom-types state that still leaves the header’s `Create custom type` action available.
+
+The inventory consumes the workspace campaign context and fetches only relationship types. Creation uses `/campaigns/:campaignId/relationship-types/new`, consumes that same context, and fetches only relationship families; both routes have matching loading and API-error states. Its submit action prevents duplicate requests. A successful creation clears its unsaved-change registration and redirects with history replacement to the inventory, which then fetches fresh type data. Dirty creation drafts and dirty inline label edits both protect internal navigation and campaign switching. Switching campaigns from either relationship-type route goes to the selected campaign’s Relationships page.
+
 ---
 
 ## Non-negotiable visual and interaction contract

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -16,262 +16,341 @@ type RelationshipTypeResponse = {
   updated_at: string;
 };
 
+type ApiMockOptions = {
+  postFails?: boolean;
+  patchFails?: boolean;
+  relationshipFamiliesFail?: boolean;
+  relationshipTypes?: RelationshipTypeResponse[];
+  relationshipTypesFail?: boolean;
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     headers: new Headers({ "Content-Type": "application/json" }),
     json: () => Promise.resolve(body),
-    ok: status >= 200 && status < 300,
+    ok: status < 300,
     status,
   } as Response;
 }
 
-function getRequestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") {
-    return input;
-  }
-
-  if (input instanceof URL) {
-    return input.toString();
-  }
-
-  return input.url;
-}
-
-function createRelationshipTypeResponse(
+function relationshipType(
   key: string,
   label: string,
-  reverseLabel: string | null,
-  isSymmetric: boolean,
+  createdAt: string,
+  isCustom = true,
+  reverseLabel: string | null = null,
 ): RelationshipTypeResponse {
   return {
     allowed_source_types: ["person"],
     allowed_target_types: ["person"],
-    created_at: "2026-07-31T12:00:00Z",
+    created_at: createdAt,
     family: "social",
     family_label: "Social",
-    is_custom: true,
-    is_symmetric: isSymmetric,
+    is_custom: isCustom,
+    is_symmetric: reverseLabel === null,
     key,
     label,
     reverse_label: reverseLabel,
+    updated_at: createdAt,
+  };
+}
+
+function campaign(id: string, name: string) {
+  return {
+    created_at: "2026-07-31T12:00:00Z",
+    description: null,
+    id,
+    name,
+    owner_id: "owner-1",
     updated_at: "2026-07-31T12:00:00Z",
   };
 }
 
-function installRelationshipTypeApiMock(options?: { patchFails?: boolean }) {
-  const patchRequests: Array<{ body: Record<string, unknown>; key: string }> = [];
-  const relationshipTypes = [
-    createRelationshipTypeResponse("bodyguard_of", "bodyguard of", "guarded by", false),
-    createRelationshipTypeResponse("sibling_oath", "sibling oath", null, true),
-  ];
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
 
+function requestBody(init: RequestInit | undefined): string {
+  return typeof init?.body === "string" ? init.body : "{}";
+}
+
+function installApiMock(options: ApiMockOptions = {}) {
+  const relationshipTypes = options.relationshipTypes ?? [
+    relationshipType("older", "older custom", "2026-07-01T00:00:00Z"),
+    relationshipType("newer", "newer custom", "2026-07-02T00:00:00Z", true, "newer reverse"),
+    relationshipType("allies", "allies", "2020-01-01T00:00:00Z", false),
+    relationshipType("betrays", "betrays", "2020-01-01T00:00:00Z", false, "betrayed by"),
+  ];
+  const calls = {
+    families: 0,
+    listTypes: 0,
+    patch: [] as Array<{ body: Record<string, unknown>; key: string }>,
+    post: 0,
+  };
   vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const requestUrl = getRequestUrl(input);
-
-      if (requestUrl.endsWith("/campaigns/campaign-1")) {
+      const url = requestUrl(input);
+      if (url.endsWith("/compatibility/entity-types"))
+        return Promise.resolve(jsonResponse({ has_issues: false, issue_count: 0, issues: [] }));
+      if (url.endsWith("/campaigns"))
         return Promise.resolve(
-          jsonResponse({
-            created_at: "2026-07-31T12:00:00Z",
-            description: "Urban intrigue campaign",
-            id: "campaign-1",
-            name: "Shadows of Glass",
-            owner_id: "owner-1",
-            updated_at: "2026-07-31T12:00:00Z",
-          }),
+          jsonResponse([campaign("campaign-1", "Shadows of Glass"), campaign("campaign-2", "Ashes of Dawn")]),
+        );
+      if (url.endsWith("/campaigns/campaign-1"))
+        return Promise.resolve(jsonResponse(campaign("campaign-1", "Shadows of Glass")));
+      if (url.endsWith("/campaigns/campaign-2"))
+        return Promise.resolve(jsonResponse(campaign("campaign-2", "Ashes of Dawn")));
+      if (url.endsWith("/relationship-families")) {
+        calls.families += 1;
+        return Promise.resolve(
+          options.relationshipFamiliesFail
+            ? jsonResponse({ detail: "Families unavailable" }, 500)
+            : jsonResponse([{ label: "Social", value: "social" }]),
         );
       }
-
-      if (requestUrl.endsWith("/relationship-families")) {
-        return Promise.resolve(jsonResponse([{ label: "Social", value: "social" }]));
+      if (url.includes("/relationship-types?campaign_id=")) {
+        calls.listTypes += 1;
+        return Promise.resolve(
+          options.relationshipTypesFail
+            ? jsonResponse({ detail: "Types unavailable" }, 500)
+            : jsonResponse(relationshipTypes),
+        );
       }
-
-      if (requestUrl.includes("/relationship-types?campaign_id=campaign-1")) {
-        return Promise.resolve(jsonResponse(relationshipTypes));
-      }
-
-      const patchMatch = requestUrl.match(/relationship-types\/(bodyguard_of|sibling_oath)$/);
-      if (patchMatch && init?.method === "PATCH") {
-        const body = JSON.parse(typeof init.body === "string" ? init.body : "{}") as Record<string, unknown>;
-        const key = patchMatch[1];
-        patchRequests.push({ body, key });
-
-        if (options?.patchFails) {
+      if (url.endsWith("/campaigns/campaign-1/relationship-types") && init?.method === "POST") {
+        calls.post += 1;
+        const body = JSON.parse(requestBody(init)) as {
+          label: string;
+          reverse_label: string | null;
+          is_symmetric: boolean;
+        };
+        if (options.postFails) {
           return Promise.resolve(jsonResponse({ detail: "Relationship type label already exists for this campaign." }, 422));
         }
-
-        const relationshipType = relationshipTypes.find((candidate) => candidate.key === key);
-        if (!relationshipType) {
-          throw new Error(`Unknown relationship type key: ${key}`);
-        }
-        relationshipType.label = typeof body.label === "string" ? body.label : relationshipType.label;
-        if ("reverse_label" in body) {
-          relationshipType.reverse_label = body.reverse_label as string | null;
-        }
-
-        return Promise.resolve(jsonResponse(relationshipType));
+        relationshipTypes.push(
+          relationshipType(
+            "bodyguard_of",
+            body.label,
+            "2026-07-31T12:00:00Z",
+            true,
+            body.is_symmetric ? null : body.reverse_label,
+          ),
+        );
+        return Promise.resolve(jsonResponse(relationshipTypes.at(-1)));
       }
-
-      throw new Error(`Unhandled request URL: ${requestUrl}`);
+      const patchMatch = url.match(/relationship-types\/([^/]+)$/);
+      if (patchMatch && init?.method === "PATCH") {
+        const body = JSON.parse(requestBody(init)) as Record<string, unknown>;
+        calls.patch.push({ body, key: patchMatch[1] });
+        if (options.patchFails) {
+          return Promise.resolve(jsonResponse({ detail: "Relationship type label already exists for this campaign." }, 422));
+        }
+        const updatedType = relationshipTypes.find((candidate) => candidate.key === patchMatch[1]);
+        if (!updatedType) throw new Error(`Unknown relationship type key: ${patchMatch[1]}`);
+        if (typeof body.label === "string") updatedType.label = body.label;
+        if ("reverse_label" in body) updatedType.reverse_label = body.reverse_label as string | null;
+        return Promise.resolve(jsonResponse(updatedType));
+      }
+      throw new Error(`Unhandled request URL: ${url}`);
     }),
   );
-
-  return { patchRequests };
+  return calls;
 }
 
-async function renderRelationshipTypeManagementPage() {
-  const [{ UnsavedChangesProvider }, { RelationshipTypeManagementPage }] = await Promise.all([
-    import("../app/UnsavedChangesContext"),
-    import("../routes/RelationshipTypeManagementPage"),
-  ]);
-  const router = createMemoryRouter(
-    [
-      {
-        path: "/campaigns/:campaignId/relationship-types",
-        element: (
-          <UnsavedChangesProvider>
-            <RelationshipTypeManagementPage />
-          </UnsavedChangesProvider>
-        ),
-      },
-    ],
-    { initialEntries: ["/campaigns/campaign-1/relationship-types"] },
-  );
-
+async function renderApplication(initialEntries: string[], initialIndex = initialEntries.length - 1) {
+  const { routes } = await import("../app/routes");
+  const router = createMemoryRouter(routes, { initialEntries, initialIndex });
   render(<RouterProvider router={router} />);
-  await screen.findByRole("heading", { name: "Relationship Type Management" });
+  return router;
 }
 
-function getCard(label: string): HTMLElement {
-  const card = screen.getByText(label).closest("article");
-  if (!card) {
-    throw new Error(`Expected ${label} relationship type card.`);
-  }
-
-  return card;
+function card(label: string): HTMLElement {
+  const result = screen.getByText(label).closest("article");
+  if (!result) throw new Error(`Missing relationship type card ${label}.`);
+  return result;
 }
 
-describe("relationship type directional label editing", () => {
+describe("relationship type routes", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
-    vi.resetModules();
   });
 
-  it("displays, edits, and serializes both asymmetric directional labels", async () => {
-    const { patchRequests } = installRelationshipTypeApiMock();
-    await renderRelationshipTypeManagementPage();
-    const bodyguardCard = getCard("bodyguard of");
+  it("loads the shipped inventory route with custom newest-first and built-ins alphabetical", async () => {
+    installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
 
-    expect(within(bodyguardCard).getByText("Forward label: bodyguard of")).toBeInTheDocument();
-    expect(within(bodyguardCard).getByText("Reverse label: guarded by")).toBeInTheDocument();
+    expect(screen.getAllByRole("strong").map((element) => element.textContent)).toEqual([
+      "newer custom",
+      "older custom",
+      "allies",
+      "betrays",
+    ]);
+    expect(within(card("allies")).queryByRole("button", { name: /Edit labels|Delete/ })).toBeNull();
+    expect(within(card("newer custom")).getByRole("button", { name: "Edit labels" })).toBeEnabled();
+    expect(within(card("newer custom")).getByText("Reverse label: newer reverse")).toBeInTheDocument();
+  });
 
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Edit labels" }));
-    expect(within(bodyguardCard).getByLabelText("Forward label for bodyguard of")).toHaveValue("bodyguard of");
-    const reverseLabelInput = within(bodyguardCard).getByLabelText("Reverse label for bodyguard of");
-    expect(reverseLabelInput).toHaveValue("guarded by");
-    fireEvent.change(reverseLabelInput, { target: { value: "protected by" } });
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Save" }));
+  it("shows a contextual creation action when the inventory has no custom types", async () => {
+    installApiMock({ relationshipTypes: [relationshipType("allies", "allies", "2020-01-01T00:00:00Z", false)] });
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByText("No custom relationship types yet. Create one to tailor this campaign.");
+    expect(screen.getAllByRole("link", { name: "Create custom type" })).toHaveLength(2);
+  });
 
-    await waitFor(() => {
-      expect(patchRequests).toEqual([
-        { body: { label: "bodyguard of", reverse_label: "protected by" }, key: "bodyguard_of" },
-      ]);
+  it("renders the inventory load failure through the real workspace route", async () => {
+    installApiMock({ relationshipTypesFail: true });
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    expect(await screen.findByRole("heading", { name: "Relationship types unavailable" })).toBeInTheDocument();
+  });
+
+  it("directly loads the creation route without fetching the inventory", async () => {
+    const calls = installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types/new"]);
+    expect(await screen.findByRole("heading", { name: "Create Custom Relationship Type" })).toBeInTheDocument();
+    expect(calls.families).toBe(1);
+    expect(calls.listTypes).toBe(0);
+  });
+
+  it("renders the creation route load failure", async () => {
+    installApiMock({ relationshipFamiliesFail: true });
+    await renderApplication(["/campaigns/campaign-1/relationship-types/new"]);
+    expect(await screen.findByRole("heading", { name: "Relationship types unavailable" })).toBeInTheDocument();
+  });
+
+  it("guards dirty creation Back navigation and dirty inline edits during campaign switching", async () => {
+    installApiMock();
+    const createRouter = await renderApplication(["/campaigns/campaign-1/relationship-types/new"]);
+    await screen.findByRole("heading", { name: "Create Custom Relationship Type" });
+    fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard of" } });
+    fireEvent.click(screen.getByRole("link", { name: "Back To Relationship Types" }));
+    expect(await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
+    expect(createRouter.state.location.pathname).toBe("/campaigns/campaign-1/relationship-types/new");
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    fireEvent.click(within(card("newer custom")).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(card("newer custom")).getByLabelText("Forward label for newer custom"), {
+      target: { value: "revised" },
     });
-    expect(within(getCard("bodyguard of")).getByText("Reverse label: protected by")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
-    fireEvent.click(within(getCard("bodyguard of")).getByRole("button", { name: "Edit labels" }));
-    expect(within(getCard("bodyguard of")).getByLabelText("Forward label for bodyguard of")).toHaveValue("bodyguard of");
-    expect(within(getCard("bodyguard of")).getByLabelText("Reverse label for bodyguard of")).toHaveValue("protected by");
+    fireEvent.click(screen.getByRole("button", { name: "Select campaign" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ashes of Dawn" }));
+    expect(await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
   });
 
-  it("preserves both asymmetric drafts after a failed save", async () => {
-    installRelationshipTypeApiMock({ patchFails: true });
-    await renderRelationshipTypeManagementPage();
-    const bodyguardCard = getCard("bodyguard of");
+  it("clears the creation guard, prevents double submit, and replaces the completed form history entry", async () => {
+    const calls = installApiMock();
+    const router = await renderApplication([
+      "/campaigns/campaign-1/relationship-types",
+      "/campaigns/campaign-1/relationship-types/new",
+    ]);
+    await screen.findByRole("heading", { name: "Create Custom Relationship Type" });
+    fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard of" } });
+    fireEvent.change(screen.getByLabelText("Reverse Label"), { target: { value: "guarded by" } });
+    const submit = screen.getByRole("button", { name: "Add Custom Type" });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    expect(calls.post).toBe(1);
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    expect(await screen.findByRole("heading", { name: "Relationship Type Management" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create Custom Relationship Type" })).toBeNull();
+  });
 
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Edit labels" }));
-    fireEvent.change(within(bodyguardCard).getByLabelText("Forward label for bodyguard of"), {
+  it("saves both asymmetric labels and serializes them in the PATCH request", async () => {
+    const calls = installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    const relationshipCard = card("newer custom");
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(relationshipCard).getByLabelText("Forward label for newer custom"), {
       target: { value: "protects" },
     });
-    fireEvent.change(within(bodyguardCard).getByLabelText("Reverse label for bodyguard of"), {
+    fireEvent.change(within(relationshipCard).getByLabelText("Reverse label for newer custom"), {
       target: { value: "protected by" },
     });
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Save" }));
+    await screen.findByText("Forward label: protects");
+    expect(calls.patch).toEqual([{ body: { label: "protects", reverse_label: "protected by" }, key: "newer" }]);
+  });
 
+  it("omits the reverse label when saving a symmetric type", async () => {
+    const calls = installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    const relationshipCard = card("older custom");
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(relationshipCard).getByLabelText("Forward label for older custom"), {
+      target: { value: "sworn siblings" },
+    });
+    expect(within(relationshipCard).queryByLabelText("Reverse label for older custom")).toBeNull();
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Save" }));
+    await screen.findByText("Forward label: sworn siblings");
+    expect(calls.patch).toEqual([{ body: { label: "sworn siblings" }, key: "older" }]);
+  });
+
+  it("does not save blank directional labels and restores both labels when editing is cancelled", async () => {
+    installApiMock();
+    await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    const relationshipCard = card("newer custom");
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    const forwardLabel = within(relationshipCard).getByLabelText("Forward label for newer custom");
+    const reverseLabel = within(relationshipCard).getByLabelText("Reverse label for newer custom");
+    fireEvent.change(forwardLabel, { target: { value: " " } });
+    expect(within(relationshipCard).getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.change(forwardLabel, { target: { value: "protects" } });
+    fireEvent.change(reverseLabel, { target: { value: " " } });
+    expect(within(relationshipCard).getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    expect(within(relationshipCard).getByLabelText("Forward label for newer custom")).toHaveValue("newer custom");
+    expect(within(relationshipCard).getByLabelText("Reverse label for newer custom")).toHaveValue("newer reverse");
+  });
+
+  it("preserves a failed asymmetric edit and keeps it guarded", async () => {
+    installApiMock({ patchFails: true });
+    const router = await renderApplication(["/campaigns/campaign-1/relationship-types"]);
+    await screen.findByRole("heading", { name: "Relationship Type Management" });
+    const relationshipCard = card("newer custom");
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Edit labels" }));
+    fireEvent.change(within(relationshipCard).getByLabelText("Forward label for newer custom"), {
+      target: { value: "protects" },
+    });
+    fireEvent.change(within(relationshipCard).getByLabelText("Reverse label for newer custom"), {
+      target: { value: "protected by" },
+    });
+    fireEvent.click(within(relationshipCard).getByRole("button", { name: "Save" }));
     expect(
       await screen.findByText("A relationship type with that label already exists in this campaign."),
     ).toBeInTheDocument();
-    expect(within(bodyguardCard).getByLabelText("Forward label for bodyguard of")).toHaveValue("protects");
-    expect(within(bodyguardCard).getByLabelText("Reverse label for bodyguard of")).toHaveValue("protected by");
-    expect(within(bodyguardCard).getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(within(relationshipCard).getByLabelText("Forward label for newer custom")).toHaveValue("protects");
+    expect(within(relationshipCard).getByLabelText("Reverse label for newer custom")).toHaveValue("protected by");
+    fireEvent.click(screen.getByRole("link", { name: "Back To Relationships" }));
+    expect(await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/campaigns/campaign-1/relationship-types");
   });
 
-  it("omits reverse labels from symmetric cards, forms, and PATCH payloads", async () => {
-    const { patchRequests } = installRelationshipTypeApiMock();
-    await renderRelationshipTypeManagementPage();
-    const siblingOathCard = getCard("sibling oath");
-
-    expect(within(siblingOathCard).getByText("Forward label: sibling oath")).toBeInTheDocument();
-    expect(within(siblingOathCard).queryByText(/^Reverse label:/)).toBeNull();
-    fireEvent.click(within(siblingOathCard).getByRole("button", { name: "Edit labels" }));
-    expect(within(siblingOathCard).getByLabelText("Forward label for sibling oath")).toHaveValue("sibling oath");
-    expect(within(siblingOathCard).queryByLabelText("Reverse label for sibling oath")).toBeNull();
-    fireEvent.change(within(siblingOathCard).getByLabelText("Forward label for sibling oath"), {
-      target: { value: "sworn siblings" },
-    });
-    fireEvent.click(within(siblingOathCard).getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(patchRequests).toEqual([{ body: { label: "sworn siblings" }, key: "sibling_oath" }]);
-    });
-  });
-
-  it("disables save for blank required directional labels", async () => {
-    installRelationshipTypeApiMock();
-    await renderRelationshipTypeManagementPage();
-    const bodyguardCard = getCard("bodyguard of");
-    const siblingOathCard = getCard("sibling oath");
-
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Edit labels" }));
-    fireEvent.change(within(bodyguardCard).getByLabelText("Forward label for bodyguard of"), { target: { value: "   " } });
-    expect(within(bodyguardCard).getByRole("button", { name: "Save" })).toBeDisabled();
-    fireEvent.change(within(bodyguardCard).getByLabelText("Forward label for bodyguard of"), {
-      target: { value: "bodyguard of" },
-    });
-    fireEvent.change(within(bodyguardCard).getByLabelText("Reverse label for bodyguard of"), { target: { value: "   " } });
-    expect(within(bodyguardCard).getByRole("button", { name: "Save" })).toBeDisabled();
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Cancel" }));
-
-    fireEvent.click(within(siblingOathCard).getByRole("button", { name: "Edit labels" }));
-    fireEvent.change(within(siblingOathCard).getByLabelText("Forward label for sibling oath"), {
-      target: { value: "   " },
-    });
-    expect(within(siblingOathCard).getByRole("button", { name: "Save" })).toBeDisabled();
-    fireEvent.change(within(siblingOathCard).getByLabelText("Forward label for sibling oath"), {
-      target: { value: "sworn siblings" },
-    });
-    expect(within(siblingOathCard).getByRole("button", { name: "Save" })).toBeEnabled();
-  });
-
-  it("restores both asymmetric drafts after cancelling an edit", async () => {
-    installRelationshipTypeApiMock();
-    await renderRelationshipTypeManagementPage();
-    const bodyguardCard = getCard("bodyguard of");
-
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Edit labels" }));
-    fireEvent.change(within(bodyguardCard).getByLabelText("Forward label for bodyguard of"), {
-      target: { value: "protects" },
-    });
-    fireEvent.change(within(bodyguardCard).getByLabelText("Reverse label for bodyguard of"), {
-      target: { value: "protected by" },
-    });
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(bodyguardCard).getByRole("button", { name: "Edit labels" }));
-
-    expect(within(bodyguardCard).getByLabelText("Forward label for bodyguard of")).toHaveValue("bodyguard of");
-    expect(within(bodyguardCard).getByLabelText("Reverse label for bodyguard of")).toHaveValue("guarded by");
+  it("preserves a failed creation draft and keeps it guarded", async () => {
+    installApiMock({ postFails: true });
+    const router = await renderApplication(["/campaigns/campaign-1/relationship-types/new"]);
+    await screen.findByRole("heading", { name: "Create Custom Relationship Type" });
+    fireEvent.change(screen.getByLabelText("Custom Type Label"), { target: { value: "bodyguard of" } });
+    fireEvent.change(screen.getByLabelText("Reverse Label"), { target: { value: "guarded by" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Custom Type" }));
+    expect(
+      await screen.findByText("A relationship type with that label already exists in this campaign."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Custom Type Label")).toHaveValue("bodyguard of");
+    expect(screen.getByLabelText("Reverse Label")).toHaveValue("guarded by");
+    fireEvent.click(screen.getByRole("link", { name: "Back To Relationship Types" }));
+    expect(await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/campaigns/campaign-1/relationship-types/new");
   });
 });
