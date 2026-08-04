@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_asset_storage, get_db_session
 from app.config import Settings, get_settings
+from app.enums import SourceAssetMediaFamily
 from app.schemas import AssetCreateFormData, AssetResponse, AssetUpdate
 from app.services import AssetUploadTooLargeError, ConflictError, NotFoundError, UnsupportedMediaTypeError, asset_service
 from app.services.asset_storage import AssetStorage
@@ -77,11 +78,16 @@ def create_asset(
 
 
 @router.get("/campaigns/{campaign_id}/assets", response_model=list[AssetResponse])
-def list_assets(campaign_id: UUID, db_session: DbSession) -> list[AssetResponse]:
+def list_assets(
+    campaign_id: UUID,
+    db_session: DbSession,
+    media_family: SourceAssetMediaFamily | None = None,
+) -> list[AssetResponse]:
     try:
         listed_assets = asset_service.list_assets(
             db_session,
             campaign_id=campaign_id,
+            media_family=media_family,
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

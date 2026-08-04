@@ -8,7 +8,12 @@ from fastapi import UploadFile
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from app.enums import ParseStatus, SourceAssetLifecycleStatus, SourceAssetStorageStatus
+from app.enums import (
+    ParseStatus,
+    SourceAssetLifecycleStatus,
+    SourceAssetMediaFamily,
+    SourceAssetStorageStatus,
+)
 from app.models import Entity, ExtractionJob, Relationship, SourceAsset
 from app.models import Session as CampaignSession
 from app.models.base import utcnow
@@ -22,18 +27,19 @@ from app.services.errors import (
     UnsupportedMediaTypeError,
 )
 
-SUPPORTED_MEDIA_TYPES = {
-    "application/pdf",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "text/csv",
-    "text/markdown",
-    "text/plain",
+MEDIA_FAMILY_BY_MEDIA_TYPE = {
+    "application/pdf": SourceAssetMediaFamily.DOCUMENT,
+    "text/markdown": SourceAssetMediaFamily.DOCUMENT,
+    "text/plain": SourceAssetMediaFamily.DOCUMENT,
+    "application/vnd.ms-excel": SourceAssetMediaFamily.SPREADSHEET,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": SourceAssetMediaFamily.SPREADSHEET,
+    "text/csv": SourceAssetMediaFamily.SPREADSHEET,
+    "image/gif": SourceAssetMediaFamily.IMAGE,
+    "image/jpeg": SourceAssetMediaFamily.IMAGE,
+    "image/png": SourceAssetMediaFamily.IMAGE,
+    "image/webp": SourceAssetMediaFamily.IMAGE,
 }
+SUPPORTED_MEDIA_TYPES = frozenset(MEDIA_FAMILY_BY_MEDIA_TYPE)
 MEDIA_TYPE_ALIASES = {
     "text/x-markdown": "text/markdown",
 }
@@ -105,6 +111,7 @@ def list_assets(
     db_session: Session,
     *,
     campaign_id: UUID,
+    media_family: SourceAssetMediaFamily | None = None,
 ) -> list[SourceAsset]:
     ensure_campaign_exists(db_session, campaign_id)
     statement = (
@@ -112,6 +119,8 @@ def list_assets(
         .where(SourceAsset.campaign_id == campaign_id)
         .order_by(SourceAsset.created_at.desc(), SourceAsset.id)
     )
+    if media_family is not None:
+        statement = statement.where(SourceAsset.media_type.in_(_media_types_for_family(media_family)))
     return list(db_session.scalars(statement))
 
 
@@ -323,6 +332,12 @@ def _normalize_media_type(raw_media_type: str | None) -> str:
         return "application/octet-stream"
 
     return MEDIA_TYPE_ALIASES.get(normalized_media_type, normalized_media_type)
+
+
+def _media_types_for_family(media_family: SourceAssetMediaFamily) -> tuple[str, ...]:
+    return tuple(
+        media_type for media_type, supported_family in MEDIA_FAMILY_BY_MEDIA_TYPE.items() if supported_family is media_family
+    )
 
 
 def _validate_session_link(

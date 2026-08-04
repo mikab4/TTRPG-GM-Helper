@@ -254,6 +254,141 @@ def test_list_assets_returns_campaign_assets_without_triggering_parse(
     ]
 
 
+def test_list_assets_without_media_family_returns_all_asset_families(
+    api_request,
+    campaign_factory,
+    source_asset_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Campaign document",
+        media_type="application/pdf",
+    )
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Campaign spreadsheet",
+        media_type="text/csv",
+    )
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Campaign image",
+        media_type="image/png",
+    )
+
+    # Act
+    response = api_request("GET", f"/api/campaigns/{stored_campaign.id}/assets")
+
+    # Assert
+    assert response.status_code == 200
+    assert {asset_data["title"] for asset_data in response.json()} == {
+        "Campaign document",
+        "Campaign spreadsheet",
+        "Campaign image",
+    }
+
+
+@pytest.mark.parametrize(
+    ("media_family", "matching_media_type"),
+    [
+        ("document", "application/pdf"),
+        ("spreadsheet", "text/csv"),
+        ("image", "image/png"),
+    ],
+)
+def test_list_assets_filters_assets_by_media_family(
+    api_request,
+    campaign_factory,
+    source_asset_factory,
+    media_family: str,
+    matching_media_type: str,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Matching asset",
+        media_type=matching_media_type,
+    )
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Non-matching asset",
+        media_type="image/jpeg" if media_family != "image" else "text/plain",
+    )
+
+    # Act
+    response = api_request(
+        "GET",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        params={"media_family": media_family},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert [asset_data["title"] for asset_data in response.json()] == ["Matching asset"]
+
+
+@pytest.mark.parametrize(
+    ("media_type", "media_family"),
+    [
+        ("application/pdf", "document"),
+        ("text/markdown", "document"),
+        ("text/plain", "document"),
+        ("application/vnd.ms-excel", "spreadsheet"),
+        ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "spreadsheet"),
+        ("text/csv", "spreadsheet"),
+        ("image/gif", "image"),
+        ("image/jpeg", "image"),
+        ("image/png", "image"),
+        ("image/webp", "image"),
+    ],
+)
+def test_list_assets_maps_each_supported_media_type_to_its_documented_family(
+    api_request,
+    campaign_factory,
+    source_asset_factory,
+    media_type: str,
+    media_family: str,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+    source_asset_factory(
+        campaign=stored_campaign,
+        title="Mapped asset",
+        media_type=media_type,
+    )
+
+    # Act
+    response = api_request(
+        "GET",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        params={"media_family": media_family},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert [asset_data["title"] for asset_data in response.json()] == ["Mapped asset"]
+
+
+def test_list_assets_returns_422_for_unknown_media_family(
+    api_request,
+    campaign_factory,
+) -> None:
+    # Arrange
+    stored_campaign = campaign_factory()
+
+    # Act
+    response = api_request(
+        "GET",
+        f"/api/campaigns/{stored_campaign.id}/assets",
+        params={"media_family": "audio"},
+    )
+
+    # Assert
+    assert response.status_code == 422
+
+
 def test_get_asset_returns_stored_record_without_triggering_parse(
     api_request,
     campaign_factory,

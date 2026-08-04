@@ -54,6 +54,12 @@ class SourceAssetTruthStatus(StrEnum):
     SUBJECTIVE = "subjective"
 
 
+class SourceAssetMediaFamily(StrEnum):
+    DOCUMENT = "document"
+    SPREADSHEET = "spreadsheet"
+    IMAGE = "image"
+
+
 class ParseStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
