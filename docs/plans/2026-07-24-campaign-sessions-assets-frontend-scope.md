@@ -35,8 +35,24 @@ Implement this only after the campaign workspace layout handoff is complete. It 
 - The upload form may support upload-only, upload to an existing session, and new-session-then-upload. The last option calls `POST /sessions`, then multipart `POST /assets`; do not add a combined backend endpoint.
 - If the asset upload fails after session creation, retain the created session identity and entered upload values so retrying does not create a duplicate session.
 - Asset filters use supported media families. Keep missing assets visible with lifecycle/storage status and no parser, Sync, Analyze, Relink, or replacement behavior.
+- Use full-page routes for individual Session and Asset details and edits. Asset detail is metadata-only until a separately scoped file-content endpoint exists.
+- The Assets media-family dropdown is server-filtered. Add a campaign-scoped `media_family` query parameter to the asset-list contract, with the controlled values `document`, `spreadsheet`, and `image`; the backend owns the MIME-type-to-family mapping.
+- The Session form maps its user-facing title to `session_label`. `session_number` and `session_label` are each optional, but the form requires at least one; Session details use `session_label` as their heading and fall back to `Session {session_number}`.
+- Detail pages resolve their existing linked records with campaign-scoped list reads: Session detail lists assets and filters them by `session_id`; Asset detail lists sessions and matches its `session_id`. Do not add aggregate/detail endpoints for this v1 presentation.
+- The upload surface accepts one file per submission, matching the existing multipart API. Do not add a multi-file queue or its extra partial-failure behavior.
+- Partial-upload retry may retain the selected `File` only while the upload screen remains mounted. After navigation or refresh, retain the created Session identity and non-file values but require file reselection.
+- The static mockup may show exploratory controls such as private notes, linked entities, and file download/view. They are not implementation scope unless a backend contract is added in a later plan.
 
 ## Route and component plan
+
+### Prerequisite: add the campaign-scoped asset media-family filter
+
+This backend contract must land before the Assets frontend is implemented.
+
+1. Extend only `GET /campaigns/{campaign_id}/assets` with an optional `SourceAssetMediaFamily` `StrEnum`-validated `media_family` query parameter. Its values are `document`, `spreadsheet`, and `image`; omit it to return all campaign assets.
+2. Keep MIME-type-to-family mapping backend-owned: PDFs, plain text, and Markdown are documents; CSV, XLS, and XLSX are spreadsheets; GIF, JPEG, PNG, and WebP are images. Do not infer a family from a filename.
+3. An invalid media-family value returns FastAPI's ordinary `422` validation response. Do not add another endpoint or a derived `media_family` field to Asset responses; `media_type` remains the stored source fact.
+4. Add backend API tests for each family, omitted-filter behavior, campaign scoping, and invalid input.
 
 ### Task 3: Add campaign-scoped sessions and assets routes plus typed clients
 
@@ -49,22 +65,23 @@ Implement this only after the campaign workspace layout handoff is complete. It 
 - Create: `frontend/src/routes/CampaignSessionsTab.tsx`
 - Create: `frontend/src/routes/CampaignAssetsTab.tsx`
 - Create: session/asset form and detail components only where existing form components cannot be reused
+- Modify: `frontend/src/app/AppShell.tsx`
 - Modify: `frontend/src/components/CampaignWorkspaceTabs.tsx` or its layout-plan replacement
 - Modify: `frontend/src/app/routes.tsx`
 - Modify: `frontend/src/styles.css`
 - Test: `frontend/src/test/` focused API and route tests
 
-1. Add `/campaigns/:campaignId/sessions` and `/campaigns/:campaignId/assets` as workspace children, then add their sidebar entries. Add detail/edit routes only where the existing route design requires dedicated inspection/editing pages.
-2. Implement typed Session CRUD and multipart Asset client functions that match the existing backend contracts.
+1. Add `/campaigns/:campaignId/sessions` and `/campaigns/:campaignId/assets` as workspace children, then add their sidebar entries. Add `/campaigns/:campaignId/sessions/:sessionId`, `/campaigns/:campaignId/sessions/:sessionId/edit`, `/campaigns/:campaignId/assets/:assetId`, and `/campaigns/:campaignId/assets/:assetId/edit` as full-page workspace routes. Update the campaign-switcher path helper so switching campaigns preserves the Sessions or Assets workspace section.
+2. Implement typed Session CRUD and multipart Asset client functions that match the approved backend contracts, including the planned campaign-scoped `media_family` asset-list filter.
 3. Show loading, empty, error, delete, lifecycle, and storage states. Normal list/detail reads do not trigger parsing and do not expose parser status.
-4. Implement one asset upload surface with drag/drop and a browse button. Support upload-only, upload to an existing session, and new-session-then-upload modes through one upload flow.
+4. Implement one single-file asset upload surface with drag/drop and a browse button. Support upload-only, upload to an existing session, and new-session-then-upload modes through one upload flow. Register all Session and Asset new/edit forms with the established unsaved-changes guard.
 5. Preserve partial-success state after a session is created but its asset upload fails, including the created session identity and entered values needed to retry only the upload.
 6. Keep asset media-family filtering API-supported. Do not add a global assets/sessions API, a combined backend endpoint, a file-replacement endpoint, or a public parse action.
 
 ### Verification, documentation, and handoff
 
 1. Add API-client and route tests for sessions, assets, multipart upload modes, partial-success retry, lifecycle/storage status visibility, and backend conflict messaging.
-2. Add route tests proving Sessions and Assets are campaign-scoped workspace children and the campaign switcher preserves the current Sessions or Assets section when switching campaigns.
+2. Add route tests proving Sessions and Assets are campaign-scoped workspace children, the campaign switcher preserves the current Sessions or Assets section when switching campaigns, linked-record detail reads remain campaign-scoped, and new/edit forms participate in the unsaved-changes guard.
 3. Run `npm test -- --run`, `npm run lint`, `npm run format:check`, and `npm run build` from `frontend/`.
 4. Update README only if visible navigation or setup instructions change. Keep the task-8 source-of-truth plans aligned with the campaign-scoped, parser-free UI contract.
 

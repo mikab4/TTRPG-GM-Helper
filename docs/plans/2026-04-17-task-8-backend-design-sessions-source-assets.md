@@ -99,7 +99,7 @@ Add enum-backed values for:
 - asset parse status
 - asset parser kind
 - parse result status
-- supported media families if the backend constrains them in v1
+- supported media families, using a `SourceAssetMediaFamily` `StrEnum` with `document`, `spreadsheet`, and `image`
 
 ## Migration Strategy
 
@@ -211,6 +211,11 @@ Rules:
   - may link to an existing session via `session_id`
   - must not create a session inline
 - `GET /campaigns/{campaign_id}/assets`
+  - accepts an optional enum-validated `media_family` query parameter with `document`, `spreadsheet`, and `image`
+  - omitting `media_family` returns all campaign assets
+  - backend maps supported MIME types to those families: PDF, plain text, and Markdown are documents; CSV, XLS, and XLSX are spreadsheets; GIF, JPEG, PNG, and WebP are images.
+  - invalid values use FastAPI's normal `422` validation response
+  - list responses continue to expose the stored `media_type`; do not add a derived `media_family` response field
 - `GET /campaigns/{campaign_id}/assets/{asset_id}`
 - `PATCH /campaigns/{campaign_id}/assets/{asset_id}`
 - `DELETE /campaigns/{campaign_id}/assets/{asset_id}`
@@ -372,7 +377,7 @@ Update all source-of-truth docs that still describe the old shape:
 - asset upload stores original file metadata correctly
 - asset can link to an existing session
 - asset rejects cross-campaign session links
-- unsupported media types or corrupt uploads fail clearly
+- unsupported media types fail clearly; format-specific corrupt-upload validation is deferred to the canonical parser workflow
 - asset list/detail reads do not trigger parsing
 
 ### Next-branch parse workflow tests

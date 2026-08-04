@@ -1,5 +1,20 @@
 # Possible Technical Debt
 
+## DOCX and ODT source-asset support
+
+DOCX and ODT uploads are deliberately outside the current upload allowlist. Accepting either format safely needs more than trusting the multipart MIME type or checking a couple of ZIP member names.
+
+Reintroduce them only with the canonical parsing workflow and a bounded package-inspection boundary that:
+- enforces compressed upload size before ZIP inspection;
+- rejects unsafe ZIP metadata, including duplicate or unsafe member names, encrypted members, unsupported compression, excessive member counts, excessive per-member or total expanded size, and excessive compression ratios;
+- identifies DOCX from coherent OPC content-type and root-relationship metadata, and ODT from its `mimetype` plus `META-INF/manifest.xml` metadata;
+- records semantic parsing failures as visible parse state instead of treating upload-time package identity checks as full document validation.
+
+Why this is deferred now:
+- task 8 has no canonical DOCX/ODT parser yet;
+- a partial upload-time validator would add a security-sensitive maintenance surface without delivering reliable document support;
+- PDF, text, spreadsheet, and image ingestion cover the current frontend workflow without requiring ZIP-package semantics.
+
 ## World-owned reusable assets
 
 Task 8 keeps each source asset campaign-owned because its current schema, storage, ownership validation, provenance rules, and list APIs are all campaign-scoped.
