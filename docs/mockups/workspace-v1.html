@@ -63,6 +63,13 @@
       .upload { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 10px; border: 1px solid #eadbff; border-radius: 50%; color: var(--deep); background: white; }
       .drop h3 { font-size: 14px; }
       .drop p { margin-top: 4px; color: var(--muted); font-size: 11px; }
+      .dropzone { display: flex; flex-direction: column; align-items: center; padding: 28px 20px; border: 2px dashed #c084fc; border-radius: 16px; text-align: center; background: linear-gradient(135deg, #ffffff, #fcf8ff); transition: border-color .2s ease; }
+      .dropzone:hover { border-color: var(--deep); }
+      .upload-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 10px; border: 1px solid #eadbff; border-radius: 50%; color: var(--deep); font-size: 20px; background: white; box-shadow: 0 4px 10px #7e22ce14; }
+      .dropzone h3 { font-size: 14px; }
+      .dropzone p { margin-top: 4px; color: var(--muted); font-size: 11px; }
+      .choose-file { margin-top: 14px; padding: 9px 18px; border: 0; border-radius: 10px; color: white; font-size: 12px; font-weight: 800; background: var(--ink); box-shadow: 0 2px 8px #0000001f; transition: all .2s ease; }
+      .choose-file:hover { background: var(--deep); transform: translateY(-1px); }
       .library { margin-top: 20px; overflow: hidden; }
       .library-tools { display: flex; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #faf9f7; }
       input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #d6d3d1; border-radius: 10px; color: var(--ink); background: white; outline: none; }
@@ -125,8 +132,29 @@
 
         <section class="view" id="assets">
           <header class="viewhead"><div><h2>Assets</h2><p>Evidence, maps, and reference files linked to <span class="active-campaign">The Shattered Coast</span>.</p></div></header>
-          <section class="drop"><div class="upload">⇧</div><h3>Add assets to <span class="active-campaign">The Shattered Coast</span></h3><p>Drag files here to link them to this campaign, or browse local storage.</p><button class="add">+ Choose file or source</button></section>
-          <section class="library card"><div class="library-tools"><label class="search-wrap"><input placeholder="Search assets or keywords…" /></label><select><option>All types (3)</option><option>Documents</option><option>Spreadsheets</option><option>Images</option></select></div><article class="row" data-view="asset-detail"><div class="file pdf">PDF</div><div class="rowmain"><div class="rowname">Session 04 — The Sunken Archive</div><div class="meta"><span>1.2 MB</span><span class="tag session">Session 04</span><span class="tag canon">Canonical</span></div></div><button class="secondary">View</button></article><article class="row" data-view="asset-detail"><div class="file xls">XLS</div><div class="rowmain"><div class="rowname">Dockside Factions.xlsx</div><div class="meta"><span>45 KB</span><span>Not linked to a session</span></div></div><button class="secondary">View</button></article><article class="row" data-view="asset-detail"><div class="file jpg">JPG</div><div class="rowmain"><div class="rowname">Old Coast Map.jpg</div><div class="meta"><span class="tag missing">File missing</span><span>Session 02</span></div></div><button class="secondary">View</button></article></section>
+          <div id="dropzone-container">
+            <section class="dropzone" id="dropzone-prompt">
+              <div class="upload-icon">⇧</div>
+              <h3>Add Assets to <span class="active-campaign">The Shattered Coast</span></h3>
+              <p>Drag files here to link them to this campaign, or browse local storage.</p>
+              <button class="choose-file" type="button" onclick="triggerFileSelect()">+ Choose File or Source</button>
+              <input type="file" id="asset-file-input" style="display:none" onchange="handleFileChosen(event)" />
+            </section>
+            <section class="card" id="asset-upload-config" style="display:none;padding:20px;border:2px solid var(--purple);background:#fcf8ff;margin-bottom:20px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+                <div><h3 style="font-size:14px;font-weight:800;color:var(--deep)">Configure Asset Metadata</h3><p style="font-size:11px;color:var(--muted);margin-top:2px" id="upload-file-info">File ready: <strong>Coastal_Cave_Map.pdf</strong> (1.4 MB)</p></div>
+                <button class="secondary" style="padding:4px 10px;font-size:11px" type="button" onclick="cancelAssetUpload()">Cancel</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                <div class="field" style="margin-bottom:0"><label for="new-asset-title">Display Title</label><input id="new-asset-title" type="text" placeholder="e.g. Coastal Cave Map" /></div>
+                <div class="field" style="margin-bottom:0"><label for="new-asset-truth">Truth Status</label><select id="new-asset-truth"><option value="canon" selected>Canon (Verified Truth)</option><option value="reference">Reference Material</option><option value="rumor">In-Game Rumor / Handout</option></select></div>
+                <div class="field" style="margin-bottom:0"><label for="new-asset-session">Link to Session</label><select id="new-asset-session" onchange="toggleQuickSessionInput(this.value)"><option value="Session 04">Session 04 — The Sunken Archive</option><option value="Session 02">Session 02 — Arrival at Dockside</option><option value="Unlinked" selected>Unlinked / General Reference</option><option value="new_session">+ Create New Session...</option></select></div>
+              </div>
+              <div class="field" id="new-session-quick-wrap" style="display:none;margin-top:14px;margin-bottom:0;padding:12px;background:white;border:1px dashed var(--purple);border-radius:10px"><label for="new-session-title-input" style="color:var(--deep)">✨ Name for New Session</label><input id="new-session-title-input" type="text" placeholder="e.g. Session 05 — Blackreef Vault Infiltration" /></div>
+              <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px"><button class="add" type="button" onclick="saveNewAsset()">+ Save &amp; Link Asset</button></div>
+            </section>
+          </div>
+          <section class="library card"><div class="library-tools"><label class="search-wrap"><input id="asset-search" type="search" placeholder="Search assets or keywords…" /></label><select id="asset-type-filter" aria-label="Filter assets by type"><option value="all">All types (3)</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="image">Images</option></select></div><div id="asset-list"><article class="row" data-type="document" data-search="session 04 sunken archive pdf" data-view="asset-detail"><div class="file pdf">PDF</div><div class="rowmain"><div class="rowname">Session 04 — The Sunken Archive</div><div class="meta"><span>1.2 MB</span><span class="tag session">Session 04</span><span class="tag canon">Canon</span></div></div><button class="secondary">View</button></article><article class="row" data-type="spreadsheet" data-search="dockside factions spreadsheet xls" data-view="asset-detail"><div class="file xls">XLS</div><div class="rowmain"><div class="rowname">Dockside Factions.xlsx</div><div class="meta"><span>45 KB</span><span class="tag">Reference</span><span>Not linked to a session</span></div></div><button class="secondary">View</button></article><article class="row" data-type="image" data-search="old coast map jpg session 02" data-view="asset-detail"><div class="file jpg">JPG</div><div class="rowmain"><div class="rowname">Old Coast Map.jpg</div><div class="meta"><span class="tag session">Session 02</span><span class="tag canon">Map</span></div></div><button class="secondary">View</button></article></div></section>
         </section>
 
         <section class="view" id="asset-detail">
@@ -147,6 +175,43 @@
       const navButtons = [...document.querySelectorAll('.nav button')];
       function showView(viewId) { const activeWorkspaceSection = viewId.startsWith('session-') ? 'sessions' : viewId.startsWith('asset-') ? 'assets' : viewId; views.forEach((view) => view.classList.toggle('active', view.id === viewId)); navButtons.forEach((button) => button.classList.toggle('active', button.dataset.view === activeWorkspaceSection)); window.scrollTo({ top: 0, behavior: 'smooth' }); }
       document.querySelectorAll('[data-view]').forEach((control) => control.addEventListener('click', (event) => { event.preventDefault(); showView(control.dataset.view); }));
+
+      function triggerFileSelect() { document.querySelector('#asset-file-input').click(); }
+      function handleFileChosen(event) { const file = event.target.files[0]; if (file) showAssetUploadConfig(file.name, file.size); }
+      function showAssetUploadConfig(filename, fileSize) {
+        document.querySelector('#dropzone-prompt').style.display = 'none';
+        document.querySelector('#asset-upload-config').style.display = 'block';
+        document.querySelector('#upload-file-info').innerHTML = `File ready: <strong>${filename}</strong> (${fileSize ? `${(fileSize / 1024 / 1024).toFixed(1)} MB` : '1.4 MB'})`;
+        const titleInput = document.querySelector('#new-asset-title');
+        titleInput.value = filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+        titleInput.focus();
+      }
+      function cancelAssetUpload() { document.querySelector('#asset-upload-config').style.display = 'none'; document.querySelector('#dropzone-prompt').style.display = 'flex'; document.querySelector('#asset-file-input').value = ''; document.querySelector('#new-session-quick-wrap').style.display = 'none'; document.querySelector('#new-asset-session').value = 'Unlinked'; }
+      function toggleQuickSessionInput(value) { const quickWrap = document.querySelector('#new-session-quick-wrap'); quickWrap.style.display = value === 'new_session' ? 'block' : 'none'; if (value === 'new_session') document.querySelector('#new-session-title-input').focus(); }
+      function saveNewAsset() {
+        const title = document.querySelector('#new-asset-title').value || 'Untitled Asset';
+        const truth = document.querySelector('#new-asset-truth').value;
+        let session = document.querySelector('#new-asset-session').value;
+        if (session === 'new_session') {
+          const newSessionFull = document.querySelector('#new-session-title-input').value.trim() || 'Session 05 — New Logged Session';
+          session = newSessionFull.includes('—') ? newSessionFull.split('—')[0].trim() : newSessionFull;
+          const sessionSelect = document.querySelector('#new-asset-session');
+          const newSessionOption = document.createElement('option');
+          newSessionOption.value = session;
+          newSessionOption.textContent = newSessionFull;
+          newSessionOption.selected = true;
+          sessionSelect.insertBefore(newSessionOption, sessionSelect.lastElementChild);
+        }
+        const newRow = document.createElement('article');
+        newRow.className = 'row'; newRow.dataset.type = 'document'; newRow.dataset.search = `${title.toLowerCase()} pdf`; newRow.dataset.view = 'asset-detail';
+        newRow.innerHTML = `<div class="file pdf">PDF</div><div class="rowmain"><div class="rowname">${title}</div><div class="meta"><span>1.4 MB</span>${session !== 'Unlinked' ? `<span class="tag session">${session}</span>` : ''}<span class="tag canon">${truth === 'canon' ? 'Canon' : truth === 'rumor' ? 'Rumor' : 'Reference'}</span></div></div><button class="secondary">View</button>`;
+        newRow.addEventListener('click', () => showView('asset-detail'));
+        document.querySelector('#asset-list').prepend(newRow);
+        cancelAssetUpload();
+      }
+      function refreshAssets() { const query = document.querySelector('#asset-search').value.toLowerCase().trim(); const type = document.querySelector('#asset-type-filter').value; document.querySelectorAll('#asset-list .row').forEach((row) => { row.hidden = !((type === 'all' || row.dataset.type === type) && row.dataset.search.includes(query)); }); }
+      document.querySelector('#asset-search').addEventListener('input', refreshAssets);
+      document.querySelector('#asset-type-filter').addEventListener('change', refreshAssets);
     </script>
   </body>
 </html>

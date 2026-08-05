@@ -1,7 +1,7 @@
 import { apiBaseUrl } from "../config";
 
 type ApiRequestOptions = {
-  body?: string;
+  body?: BodyInit;
   headers?: Record<string, string>;
   method?: "DELETE" | "GET" | "PATCH" | "POST";
   signal?: AbortSignal;

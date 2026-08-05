@@ -267,4 +267,60 @@ describe("frontend resource APIs", () => {
     const firstCall = fetchSpy.mock.calls[0] as [string, RequestInit] | undefined;
     expect(firstCall?.[0]).toBe("http://example.test/api/relationship-families");
   });
+
+  it("lists sessions and creates an asset with the campaign-scoped contracts", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "asset-1",
+            campaign_id: "campaign-1",
+            session_id: "session-1",
+            title: "Harbor map",
+            truth_status: "uncertain",
+            media_type: "image/png",
+            original_filename: "harbor.png",
+            file_size_bytes: 1200,
+            lifecycle_status: "active",
+            storage_status: "available",
+            metadata: {},
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-08T12:00:00Z",
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { listSessions } = await import("../api/sessions");
+    const { createAsset, listAssets } = await import("../api/assets");
+
+    await listSessions("campaign-1");
+    await expect(
+      createAsset("campaign-1", {
+        file: new File(["map"], "harbor.png", { type: "image/png" }),
+        sessionId: "session-1",
+        title: "Harbor map",
+        truthStatus: "uncertain",
+      }),
+    ).resolves.toMatchObject({ storageStatus: "available" });
+    await listAssets("campaign-1", { mediaFamily: "image" });
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/sessions");
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets");
+    const assetRequest = fetchSpy.mock.calls[1]?.[1] as RequestInit | undefined;
+    expect(assetRequest).toMatchObject({ method: "POST" });
+    expect(assetRequest?.body).toBeInstanceOf(FormData);
+    expect(fetchSpy.mock.calls[2]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets?media_family=image");
+  });
 });

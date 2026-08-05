@@ -19,6 +19,14 @@ export function formatSessionName(session: CampaignSession): string {
   );
 }
 
+export function formatLinkedSessionName(session: CampaignSession): string {
+  if (session.sessionNumber !== null && session.sessionLabel) {
+    return `Session ${String(session.sessionNumber)} — ${session.sessionLabel}`;
+  }
+
+  return formatSessionName(session);
+}
+
 export function CampaignSessionsTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const [pageState, setPageState] = useState<SessionsState>({ status: "loading" });
