@@ -1,4 +1,4 @@
-import { GitFork, LayoutDashboard, Users } from "lucide-react";
+import { FileArchive, GitFork, LayoutDashboard, ScrollText, Users } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
 type CampaignWorkspaceTabsProps = {
@@ -9,6 +9,8 @@ const workspaceSections = [
   { icon: LayoutDashboard, label: "Overview", path: "" },
   { icon: Users, label: "Entities", path: "entities" },
   { icon: GitFork, label: "Relationships", path: "relationships" },
+  { icon: ScrollText, label: "Sessions", path: "sessions" },
+  { icon: FileArchive, label: "Assets", path: "assets" },
 ] as const;
 
 export function CampaignWorkspaceTabs({ campaignId }: CampaignWorkspaceTabsProps) {

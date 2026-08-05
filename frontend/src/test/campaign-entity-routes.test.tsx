@@ -148,6 +148,14 @@ describe("campaign and entity frontend routes", () => {
     expect(within(workspaceSidebar).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
     expect(within(workspaceSidebar).getByRole("link", { name: "Entities" })).toBeInTheDocument();
     expect(within(workspaceSidebar).getByRole("link", { name: "Relationships" })).toBeInTheDocument();
+    expect(within(workspaceSidebar).getByRole("link", { name: "Sessions" })).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-1/sessions",
+    );
+    expect(within(workspaceSidebar).getByRole("link", { name: "Assets" })).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-1/assets",
+    );
     expect(screen.getByRole("heading", { name: "Campaign Summary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent Activity" })).toBeInTheDocument();
     expect(screen.getByText("No recent activity is available yet.")).toBeInTheDocument();

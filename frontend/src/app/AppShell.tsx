@@ -27,7 +27,9 @@ export function getCampaignSwitcherPath(currentPathname: string, campaignId: str
     return `/campaigns/${campaignId}/relationships`;
   }
 
-  const workspaceSectionMatch = currentPathname.match(/^\/campaigns\/[^/]+\/(entities|relationships)(?:\/|$)/);
+  const workspaceSectionMatch = currentPathname.match(
+    /^\/campaigns\/[^/]+\/(entities|relationships|sessions|assets)(?:\/|$)/,
+  );
 
   if (workspaceSectionMatch === null) {
     return `/campaigns/${campaignId}`;

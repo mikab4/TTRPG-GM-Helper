@@ -2,6 +2,10 @@ import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { AppShell } from "./AppShell";
 import { CampaignEntitiesTab } from "../routes/CampaignEntitiesTab";
+import { CampaignAssetsTab } from "../routes/CampaignAssetsTab";
+import { CampaignSessionsTab } from "../routes/CampaignSessionsTab";
+import { AssetDetailPage } from "../routes/AssetDetailPage";
+import { AssetEditPage } from "../routes/AssetEditPage";
 import { CampaignFormPage } from "../routes/CampaignFormPage";
 import { CampaignOverviewTab } from "../routes/CampaignOverviewTab";
 import { CampaignRelationshipsTab } from "../routes/CampaignRelationshipsTab";
@@ -13,6 +17,8 @@ import { EntityFormPage } from "../routes/EntityFormPage";
 import { RelationshipFormPage } from "../routes/RelationshipFormPage";
 import { RelationshipTypeManagementPage } from "../routes/RelationshipTypeManagementPage";
 import { RelationshipTypeCreatePage } from "../routes/RelationshipTypeCreatePage";
+import { SessionDetailPage } from "../routes/SessionDetailPage";
+import { SessionFormPage } from "../routes/SessionFormPage";
 
 export const routes: RouteObject[] = [
   {
@@ -75,6 +81,23 @@ export const routes: RouteObject[] = [
                 path: ":relationshipId/edit",
                 element: <RelationshipFormPage mode="edit" />,
               },
+            ],
+          },
+          {
+            path: "sessions",
+            children: [
+              { index: true, element: <CampaignSessionsTab /> },
+              { path: "new", element: <SessionFormPage mode="create" /> },
+              { path: ":sessionId", element: <SessionDetailPage /> },
+              { path: ":sessionId/edit", element: <SessionFormPage mode="edit" /> },
+            ],
+          },
+          {
+            path: "assets",
+            children: [
+              { index: true, element: <CampaignAssetsTab /> },
+              { path: ":assetId", element: <AssetDetailPage /> },
+              { path: ":assetId/edit", element: <AssetEditPage /> },
             ],
           },
           {

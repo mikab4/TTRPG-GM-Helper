@@ -14,4 +14,16 @@ describe("getCampaignSwitcherPath", () => {
       "/campaigns/campaign-2/relationships",
     );
   });
+
+  it("keeps the selected workspace section when switching campaigns", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    const { getCampaignSwitcherPath } = await import("../app/AppShell");
+
+    expect(getCampaignSwitcherPath("/campaigns/campaign-1/sessions/session-1/edit", "campaign-2")).toBe(
+      "/campaigns/campaign-2/sessions",
+    );
+    expect(getCampaignSwitcherPath("/campaigns/campaign-1/assets/asset-1", "campaign-2")).toBe(
+      "/campaigns/campaign-2/assets",
+    );
+  });
 });
