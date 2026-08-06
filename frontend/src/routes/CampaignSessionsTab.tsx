@@ -104,6 +104,11 @@ export function CampaignSessionsTab() {
             <div className="session-list">
               {pageState.sessions.map((session) => (
                 <article key={session.id} className="session-row session-card">
+                  <Link
+                    aria-label={`Open ${formatSessionName(session)}`}
+                    className="session-card-link"
+                    to={`/campaigns/${campaign.id}/sessions/${session.id}`}
+                  />
                   <div className="session-row-main">
                     <div className="session-row-meta">
                       <strong>Session {session.sessionNumber ?? "—"}</strong>
@@ -114,8 +119,8 @@ export function CampaignSessionsTab() {
                     <p className="session-summary">{session.summary ?? "No recap recorded yet."}</p>
                   </div>
                   <div className="session-actions">
-                    <Link className="session-secondary" to={`/campaigns/${campaign.id}/sessions/${session.id}`}>
-                      View Session →
+                    <Link className="session-secondary" to={`/campaigns/${campaign.id}/sessions/${session.id}/edit`}>
+                      Edit
                     </Link>
                     <button
                       className="session-delete"

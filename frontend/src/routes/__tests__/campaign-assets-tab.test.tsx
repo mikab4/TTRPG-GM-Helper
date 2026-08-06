@@ -201,7 +201,7 @@ describe("CampaignAssetsTab", () => {
     });
   });
 
-  it("renders the library row with the mockup metadata treatment and the retained delete action", async () => {
+  it("opens an asset from its row and keeps Edit beside Delete", async () => {
     listAssets.mockResolvedValue([uploadedAsset]);
     listSessions.mockResolvedValue([linkedSession]);
     await renderAssetsTab();
@@ -211,7 +211,12 @@ describe("CampaignAssetsTab", () => {
     expect(screen.getByText("PDF")).toBeInTheDocument();
     expect(screen.getByText("Canon")).toBeInTheDocument();
     expect(screen.getByText("Session 4 — The Sunken Archive")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Session 04 — The Sunken Archive" })).toHaveAttribute(
+      "href",
+      "/campaigns/campaign-1/assets/asset-1",
+    );
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/campaigns/campaign-1/assets/asset-1/edit");
+    expect(screen.queryByRole("link", { name: "View" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
@@ -227,6 +232,7 @@ describe("CampaignAssetsTab", () => {
     expect(screen.getByText("Status:")).toBeInTheDocument();
     expect(screen.getByText("Linked Session")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Session 4 — The Sunken Archive/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Asset" })).toBeInTheDocument();
   });
 
   it("does not show an unavailable error when the initial asset-edit request is aborted during navigation cleanup", async () => {

@@ -1655,6 +1655,7 @@ h4 {
 }
 
 .session-card {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1664,6 +1665,16 @@ h4 {
   border-radius: 16px;
   background: #fdfcfb;
   box-shadow: 0 4px 12px #0000000a;
+}
+.session-card-link {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+}
+.session-card-link:focus-visible {
+  outline: 3px solid #7e22ce;
+  outline-offset: 2px;
 }
 .session-list {
   display: flex;
@@ -1696,7 +1707,9 @@ h4 {
   font-size: 12px;
 }
 .session-actions {
-  display: grid;
+  position: relative;
+  z-index: 2;
+  display: flex;
   gap: 6px;
   justify-items: stretch;
 }
@@ -1844,12 +1857,24 @@ h4 {
 }
 
 .asset-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
   border-bottom: 1px solid #eeeae6;
   background: #fdfcfb;
+}
+
+.asset-card-link {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+
+.asset-card-link:focus-visible {
+  outline: 3px solid #7e22ce;
+  outline-offset: -3px;
 }
 
 .asset-row:hover {
@@ -2143,11 +2168,13 @@ h4 {
 }
 
 .asset-row .row-actions {
+  position: relative;
+  z-index: 2;
   flex-wrap: nowrap;
   gap: 8px;
 }
 
-.asset-view-button,
+.asset-edit-button,
 .asset-delete-button {
   display: inline-flex;
   align-items: center;
@@ -2160,7 +2187,7 @@ h4 {
   white-space: nowrap;
 }
 
-.asset-view-button {
+.asset-edit-button {
   border: 1px solid #d6d3d1;
   color: #44403c;
   background: #ffffff;
@@ -2237,6 +2264,11 @@ h4 {
   border-radius: 12px;
   background: linear-gradient(135deg, #6b21a8, #581c87);
   outline: none;
+}
+
+.asset-detail-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .asset-detail-grid {

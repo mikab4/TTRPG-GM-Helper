@@ -372,6 +372,11 @@ export function CampaignAssetsTab() {
             <div className="asset-list">
               {visibleAssets.map((asset) => (
                 <article key={asset.id} className="asset-row">
+                  <Link
+                    aria-label={`Open ${asset.title ?? asset.originalFilename}`}
+                    className="asset-card-link"
+                    to={`/campaigns/${campaign.id}/assets/${asset.id}`}
+                  />
                   <span className={`asset-file-type ${assetFileTypeClass(asset.mediaType)}`}>
                     {assetTypeLabel(asset.mediaType)}
                   </span>
@@ -391,8 +396,8 @@ export function CampaignAssetsTab() {
                     </p>
                   </div>
                   <div className="row-actions">
-                    <Link className="asset-view-button" to={`/campaigns/${campaign.id}/assets/${asset.id}`}>
-                      View
+                    <Link className="asset-edit-button" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
+                      Edit
                     </Link>
                     <button
                       className="asset-delete-button"

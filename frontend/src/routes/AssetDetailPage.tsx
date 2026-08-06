@@ -1,7 +1,8 @@
-import { Link, useOutletContext, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
-import { getAsset } from "../api/assets";
+import { deleteAsset, getAsset } from "../api/assets";
+import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { listSessions } from "../api/sessions";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import type { SourceAsset } from "../types/assets";
@@ -30,9 +31,14 @@ function formatUploadDate(createdAt: string) {
 export function AssetDetailPage() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const { assetId } = useParams();
+  const navigate = useNavigate();
   const [asset, setAsset] = useState<SourceAsset | null>(null);
   const [linkedSession, setLinkedSession] = useState<CampaignSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deletionInFlightRef = useRef(false);
   useEffect(() => {
     if (!assetId) return;
     const abortController = new AbortController();
@@ -52,6 +58,23 @@ export function AssetDetailPage() {
       abortController.abort();
     };
   }, [assetId, campaign.id]);
+
+  async function confirmDeletion() {
+    if (!asset || deletionInFlightRef.current) return;
+    deletionInFlightRef.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAsset(campaign.id, asset.id);
+      void navigate(`/campaigns/${campaign.id}/assets`);
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : "Unable to delete asset.");
+    } finally {
+      deletionInFlightRef.current = false;
+      setDeleting(false);
+    }
+  }
+
   if (error) return <RequestStateBlock message={error} title="Asset unavailable" tone="error" />;
   if (!asset) return <RequestStateBlock message="Loading asset metadata." title="Loading asset" />;
   return (
@@ -72,9 +95,21 @@ export function AssetDetailPage() {
           </div>
           <h2>{asset.title ?? asset.originalFilename}</h2>
         </div>
-        <Link className="asset-detail-edit" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
-          ✎ Edit Metadata
-        </Link>
+        <div className="asset-detail-actions">
+          <Link className="asset-detail-edit" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
+            ✎ Edit Metadata
+          </Link>
+          <button
+            className="asset-delete-button"
+            type="button"
+            onClick={() => {
+              setDeleteError(null);
+              setDeletePending(true);
+            }}
+          >
+            Delete Asset
+          </button>
+        </div>
       </header>
       <div className="asset-detail-grid">
         <article className="asset-detail-card">
@@ -114,6 +149,19 @@ export function AssetDetailPage() {
           </article>
         </aside>
       </div>
+      {deletePending ? (
+        <DeleteConfirmationDialog
+          error={deleteError}
+          isDeleting={deleting}
+          recordName={asset.title ?? asset.originalFilename}
+          warningText="This asset will be permanently deleted when its backing file can be removed."
+          onCancel={() => {
+            setDeleteError(null);
+            setDeletePending(false);
+          }}
+          onConfirm={() => void confirmDeletion()}
+        />
+      ) : null}
     </div>
   );
 }
