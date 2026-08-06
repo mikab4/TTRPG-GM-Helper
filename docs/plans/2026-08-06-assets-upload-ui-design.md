@@ -15,7 +15,7 @@ Make the campaign Assets page match the updated `docs/mockups/workspace-v1.html`
 
 ## Presentation
 
-Use the mockup's purple dashed upload surface, bordered metadata card, compact library toolbar, file-type blocks, and metadata chips. The library keeps View and Delete controls; Delete is the one deliberate deviation from the static mockup because it already supports the required asset lifecycle workflow.
+Use the mockup's purple dashed upload surface, bordered metadata card, compact library toolbar, file-type blocks, and metadata chips. Each library row opens the asset detail view, with adjacent Edit and Delete actions. Delete is the one deliberate deviation from the static mockup because it already supports the required asset lifecycle workflow.
 
 ## Constraints
 
