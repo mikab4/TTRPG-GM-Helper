@@ -11,7 +11,7 @@ Make the campaign Assets page match the updated `docs/mockups/workspace-v1.html`
 - The configuration card shows Display Title, Truth Status, and Link to Session in one desktop row.
 - Selecting `Create a new session` reveals an inline session-title field.
 - Cancel clears the selected file and restores the drop zone.
-- A successful upload restores the drop zone and prepends the created asset to the library.
+- A successful upload restores the drop zone and refreshes the active server-filtered library.
 
 ## Presentation
 

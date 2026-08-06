@@ -1,5 +1,14 @@
 import { Link, useOutletContext } from "react-router-dom";
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type SyntheticEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type SyntheticEvent,
+} from "react";
 
 import { createAsset, deleteAsset, listAssets } from "../api/assets";
 import { createSession, listSessions } from "../api/sessions";
@@ -28,6 +37,12 @@ type AssetUploadRetryDraft = {
 type UploadRecoveryStatus = "ordinary" | "durable-retry" | "non-durable-retry" | "upload-succeeded-cleanup-failed";
 
 type RetryDraftReadResult = { draft: AssetUploadRetryDraft | null; storageAvailable: boolean };
+
+type AssetListScope = { campaignId: string; mediaFamily: SourceAssetMediaFamily | "" };
+
+type AssetListRequestOutcome = { status: "applied" | "stale" } | { message: string; status: "error" };
+
+type AssetListRequest = AssetListScope & { abortController: AbortController; generation: number };
 
 const retryDraftStorageKey = (campaignId: string) => `gm-workspace:campaign-asset-upload-retry:v1:${campaignId}`;
 
@@ -144,11 +159,22 @@ function defaultAssetTitle(filename: string) {
   return filename.replace(/\.[^/.]+$/, "").replaceAll("_", " ");
 }
 
+function hasSameAssetListScope(firstScope: AssetListScope, secondScope: AssetListScope) {
+  return firstScope.campaignId === secondScope.campaignId && firstScope.mediaFamily === secondScope.mediaFamily;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function CampaignAssetsTab() {
   const { campaign } = useOutletContext<CampaignWorkspaceContext>();
   const { registerForm } = useUnsavedChanges();
   const registrationRef = useRef<ReturnType<typeof registerForm> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeAssetListScopeRef = useRef<AssetListScope>({ campaignId: campaign.id, mediaFamily: "" });
+  const assetListRequestRef = useRef<AssetListRequest | null>(null);
+  const assetListRequestGenerationRef = useRef(0);
   const [pageState, setPageState] = useState<AssetsState>({ status: "loading" });
   const [sessions, setSessions] = useState<CampaignSession[]>([]);
   const [mediaFamily, setMediaFamily] = useState<SourceAssetMediaFamily | "">("");
@@ -168,6 +194,41 @@ export function CampaignAssetsTab() {
   const [pendingDeletion, setPendingDeletion] = useState<SourceAsset | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  activeAssetListScopeRef.current = { campaignId: campaign.id, mediaFamily };
+  const requestAssetList = useCallback(async (requestedScope: AssetListScope): Promise<AssetListRequestOutcome> => {
+    assetListRequestRef.current?.abortController.abort();
+    const assetListRequest: AssetListRequest = {
+      ...requestedScope,
+      abortController: new AbortController(),
+      generation: assetListRequestGenerationRef.current + 1,
+    };
+    assetListRequestGenerationRef.current = assetListRequest.generation;
+    assetListRequestRef.current = assetListRequest;
+
+    try {
+      const assets = await listAssets(requestedScope.campaignId, {
+        mediaFamily: requestedScope.mediaFamily || undefined,
+        signal: assetListRequest.abortController.signal,
+      });
+      if (
+        assetListRequestGenerationRef.current !== assetListRequest.generation ||
+        !hasSameAssetListScope(activeAssetListScopeRef.current, requestedScope)
+      ) {
+        return { status: "stale" };
+      }
+      setPageState({ assets, status: "ready" });
+      return { status: "applied" };
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        assetListRequestGenerationRef.current !== assetListRequest.generation ||
+        !hasSameAssetListScope(activeAssetListScopeRef.current, requestedScope)
+      ) {
+        return { status: "stale" };
+      }
+      return { message: error instanceof Error ? error.message : "Unable to load assets.", status: "error" };
+    }
+  }, []);
   useEffect(() => {
     const registration = registerForm();
     registrationRef.current = registration;
@@ -201,23 +262,27 @@ export function CampaignAssetsTab() {
     );
   }, [file, newSessionLabel, newSessionNumber, newSessionPlayedOn, recoveryStatus, selectedSessionId, title, truthStatus]);
   useEffect(() => {
-    const abortController = new AbortController();
+    const requestedScope: AssetListScope = { campaignId: campaign.id, mediaFamily };
+    const sessionsAbortController = new AbortController();
     void Promise.all([
-      listAssets(campaign.id, { mediaFamily: mediaFamily || undefined, signal: abortController.signal }),
-      listSessions(campaign.id, { signal: abortController.signal }),
+      requestAssetList(requestedScope),
+      listSessions(campaign.id, { signal: sessionsAbortController.signal }),
     ])
-      .then(([assets, listedSessions]) => {
-        setPageState({ assets, status: "ready" });
+      .then(([assetListRequestOutcome, listedSessions]) => {
         setSessions(listedSessions);
+        if (assetListRequestOutcome.status === "error")
+          setPageState({ message: assetListRequestOutcome.message, status: "error" });
       })
       .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError"))
-          setPageState({ message: error instanceof Error ? error.message : "Unable to load assets.", status: "error" });
+        if (!isAbortError(error))
+          setPageState({ message: error instanceof Error ? error.message : "Unable to load sessions.", status: "error" });
       });
     return () => {
-      abortController.abort();
+      sessionsAbortController.abort();
+      if (hasSameAssetListScope(activeAssetListScopeRef.current, requestedScope))
+        assetListRequestRef.current?.abortController.abort();
     };
-  }, [campaign.id, mediaFamily]);
+  }, [campaign.id, mediaFamily, requestAssetList]);
   function acceptFile(nextFile: File | null) {
     setFile(nextFile);
     setUploadError(null);
@@ -320,10 +385,8 @@ export function CampaignAssetsTab() {
         setUploadError("Recovery details could not be saved. Keep this page open before retrying.");
         return;
       }
-      const createdAsset = await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
-      setPageState((state) =>
-        state.status === "ready" ? { assets: [createdAsset, ...state.assets], status: "ready" } : state,
-      );
+      await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
+      const assetListRequestOutcome = await requestAssetList(activeAssetListScopeRef.current);
       if (sessionId && selectedSessionId === "new" && !removeRetryDraft(retryDraftStorageKey(campaign.id))) {
         setFile(null);
         setRecoveryStatus("upload-succeeded-cleanup-failed");
@@ -333,6 +396,12 @@ export function CampaignAssetsTab() {
         );
       } else {
         cancelUpload();
+        if (assetListRequestOutcome.status === "error") {
+          setPageState({
+            message: `The asset uploaded successfully, but the library could not be refreshed: ${assetListRequestOutcome.message}`,
+            status: "error",
+          });
+        }
       }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Unable to upload the asset.");

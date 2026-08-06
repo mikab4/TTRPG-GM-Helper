@@ -42,6 +42,15 @@ const linkedSession: CampaignSession = {
   updatedAt: "2026-08-06T00:00:00Z",
 };
 
+const uploadedImageAsset: SourceAsset = {
+  ...uploadedAsset,
+  id: "asset-image-1",
+  mediaType: "image/png",
+  originalFilename: "coastal-cave-map.png",
+  sessionId: null,
+  title: "Coastal Cave Map",
+};
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useOutletContext: () => mockUseOutletContext() };
@@ -73,6 +82,17 @@ function retryDraft(overrides: Partial<Record<string, unknown>> = {}) {
     version: 1,
     ...overrides,
   };
+}
+
+function deferredValue<T>() {
+  let reject: ((reason?: unknown) => void) | undefined;
+  let resolve: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  if (!resolve || !reject) throw new Error("Deferred promise callbacks were not initialized.");
+  return { promise, reject, resolve };
 }
 
 function DirtyStateProbe() {
@@ -243,6 +263,80 @@ describe("CampaignAssetsTab", () => {
         summary: null,
       });
     });
+  });
+
+  it("keeps the newer media-family view when an older post-upload refresh settles", async () => {
+    const postUploadDocumentResponse = deferredValue<SourceAsset[]>();
+    listAssets
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(() => postUploadDocumentResponse.promise)
+      .mockResolvedValueOnce([uploadedImageAsset]);
+    createAsset.mockResolvedValue(uploadedImageAsset);
+
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+    fireEvent.change(screen.getByLabelText("Asset family"), { target: { value: "document" } });
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ mediaFamily: "document" }));
+    });
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["map"], "coastal-cave-map.png", { type: "image/png" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenCalledTimes(3);
+      expect(listAssets).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ mediaFamily: "document" }));
+    });
+
+    fireEvent.change(screen.getByLabelText("Asset family"), { target: { value: "image" } });
+    expect(await screen.findByText("Coastal Cave Map")).toBeInTheDocument();
+
+    postUploadDocumentResponse.resolve([]);
+    await waitFor(() => {
+      expect(screen.getByText("Coastal Cave Map")).toBeInTheDocument();
+    });
+  });
+
+  it("clears completed upload state when the post-upload list refresh fails", async () => {
+    listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["map"], "coastal-cave-map.png", { type: "image/png" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByText(/uploaded successfully, but the library could not be refreshed/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ Save & Link Asset" })).not.toBeInTheDocument();
+    expect(createAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cleanup recovery visible when refresh and retry-draft cleanup both fail", async () => {
+    const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
+    const retryStorageKey = retryDraftStorageKey("campaign-1");
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
+      if (key === retryStorageKey) throw new Error("Storage cleanup unavailable");
+      originalRemoveItem(key);
+    });
+    listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByRole("heading", { name: "Asset uploaded successfully" })).toBeInTheDocument();
+    expect(screen.getByText(/saved recovery cleanup failed/i)).toBeInTheDocument();
+    expect(listAssets).toHaveBeenCalledTimes(2);
+    removeItem.mockRestore();
   });
 
   it("persists a complete retry draft before an asset upload failure", async () => {
