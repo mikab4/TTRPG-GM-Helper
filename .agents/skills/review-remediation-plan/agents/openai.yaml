@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Remediation Plan"
+  short_description: "Review one remediation plan in isolation"
+  default_prompt: "Use $review-remediation-plan to review this pasted finding and proposed remediation plan."

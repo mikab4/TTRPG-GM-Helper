@@ -1,0 +1,4 @@
+interface:
+  display_name: "Planning Review Remediations"
+  short_description: "Turn review findings into approved plans"
+  default_prompt: "Use $planning-review-remediations to turn this review finding into a plan without implementing it."
