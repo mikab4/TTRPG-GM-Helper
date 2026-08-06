@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { UnsavedChangesProvider } from "../../app/UnsavedChangesContext";
+import { UnsavedChangesProvider, useUnsavedChanges } from "../../app/UnsavedChangesContext";
 import type { SourceAsset } from "../../types/assets";
 import type { CampaignSession } from "../../types/sessions";
 import type { CampaignWorkspaceContext } from "../CampaignWorkspacePage";
@@ -59,27 +59,67 @@ vi.mock("../../api/sessions", () => ({
   listSessions,
 }));
 
-function renderAssetsTab() {
-  mockUseOutletContext.mockReturnValue({
+const retryDraftStorageKey = (campaignId: string) => `gm-workspace:campaign-asset-upload-retry:v1:${campaignId}`;
+
+function retryDraft(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    createdSessionId: "session-retry-1",
+    newSessionLabel: "Blackreef Vault Infiltration",
+    newSessionNumber: "5",
+    newSessionPlayedOn: "2026-08-06",
+    selectedSessionId: "new",
+    title: "Recovered archive",
+    truthStatus: "canonical",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function DirtyStateProbe() {
+  const { hasDirtyForms } = useUnsavedChanges();
+  return <output data-testid="dirty-state">{String(hasDirtyForms)}</output>;
+}
+
+function campaignContext(campaignId = "campaign-1"): CampaignWorkspaceContext {
+  return {
     campaign: {
       createdAt: "2026-08-06T00:00:00Z",
       description: "",
-      id: "campaign-1",
-      name: "The Shattered Coast",
+      id: campaignId,
+      name: campaignId === "campaign-1" ? "The Shattered Coast" : "The Ember March",
       ownerId: "owner-1",
       updatedAt: "2026-08-06T00:00:00Z",
     },
-  });
+  };
+}
 
-  return import("../CampaignAssetsTab").then(({ CampaignAssetsTab }) =>
-    render(
+function renderAssetsTab(campaignId = "campaign-1") {
+  mockUseOutletContext.mockReturnValue(campaignContext(campaignId));
+
+  return import("../CampaignAssetsTab").then(({ CampaignAssetsTab }) => {
+    const rendered = render(
       <UnsavedChangesProvider>
         <MemoryRouter>
           <CampaignAssetsTab />
+          <DirtyStateProbe />
         </MemoryRouter>
       </UnsavedChangesProvider>,
-    ),
-  );
+    );
+    return {
+      ...rendered,
+      rerenderForCampaign(nextCampaignId: string) {
+        mockUseOutletContext.mockReturnValue(campaignContext(nextCampaignId));
+        rendered.rerender(
+          <UnsavedChangesProvider>
+            <MemoryRouter>
+              <CampaignAssetsTab />
+              <DirtyStateProbe />
+            </MemoryRouter>
+          </UnsavedChangesProvider>,
+        );
+      },
+    };
+  });
 }
 
 function renderAssetDetailPage() {
@@ -134,11 +174,15 @@ function renderAssetEditPage() {
 
 describe("CampaignAssetsTab", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     listAssets.mockResolvedValue([]);
     listSessions.mockResolvedValue([]);
+    createAsset.mockResolvedValue(uploadedAsset);
+    createSession.mockResolvedValue(linkedSession);
   });
 
   afterEach(() => {
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -200,6 +244,89 @@ describe("CampaignAssetsTab", () => {
       });
     });
   });
+
+  it("persists a complete retry draft before an asset upload failure", async () => {
+    createAsset.mockRejectedValueOnce(new Error("Storage unavailable"));
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Truth status"), { target: { value: "subjective" } });
+    fireEvent.change(screen.getByLabelText("Session number"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Date played"), { target: { value: "2026-08-06" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(createAsset).toHaveBeenCalled();
+    });
+    expect(JSON.parse(window.localStorage.getItem(retryDraftStorageKey("campaign-1")) ?? "null")).toEqual({
+      createdSessionId: "session-4",
+      newSessionLabel: "Blackreef Vault Infiltration",
+      newSessionNumber: "5",
+      newSessionPlayedOn: "2026-08-06",
+      selectedSessionId: "new",
+      title: "session-five",
+      truthStatus: "subjective",
+      version: 1,
+    });
+    expect(createAsset).toHaveBeenCalledWith("campaign-1", expect.objectContaining({ sessionId: "session-4" }));
+  });
+
+  it("hydrates a campaign retry without restoring a file and reuses its created session", async () => {
+    window.localStorage.setItem(retryDraftStorageKey("campaign-1"), JSON.stringify(retryDraft()));
+    const firstRender = await renderAssetsTab();
+
+    expect(await screen.findByText("Session created. Retrying will upload to this same session.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Display title")).toHaveValue("Recovered archive");
+    expect(screen.getByLabelText("Choose asset file")).toHaveValue("");
+    firstRender.unmount();
+
+    await renderAssetsTab();
+    await screen.findByText("Session created. Retrying will upload to this same session.");
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["retry"], "replacement.txt", { type: "text/plain" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(createAsset).toHaveBeenCalled();
+    });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(createAsset).toHaveBeenCalledWith("campaign-1", expect.objectContaining({ sessionId: "session-retry-1" }));
+  });
+
+  it("does not render a campaign A retry while campaign B is active", async () => {
+    window.localStorage.setItem(retryDraftStorageKey("campaign-1"), JSON.stringify(retryDraft()));
+    const rendered = await renderAssetsTab();
+    await screen.findByText("Session created. Retrying will upload to this same session.");
+
+    rendered.rerenderForCampaign("campaign-2");
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Add Assets to The Ember March" })).toBeInTheDocument();
+    });
+    expect(screen.queryByDisplayValue("Recovered archive")).not.toBeInTheDocument();
+    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
+  });
+
+  it.each(["{invalid", JSON.stringify(retryDraft({ createdSessionId: " ", version: 2 }))])(
+    "clears malformed retry storage and shows an ordinary upload form",
+    async (storedDraft) => {
+      const removeItem = vi.spyOn(Storage.prototype, "removeItem");
+      window.localStorage.setItem(retryDraftStorageKey("campaign-1"), storedDraft);
+
+      await renderAssetsTab();
+
+      expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("Recovered archive")).not.toBeInTheDocument();
+      expect(removeItem).toHaveBeenCalledWith(retryDraftStorageKey("campaign-1"));
+      removeItem.mockRestore();
+    },
+  );
 
   it("opens an asset from its row and keeps Edit beside Delete", async () => {
     listAssets.mockResolvedValue([uploadedAsset]);

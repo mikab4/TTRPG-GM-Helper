@@ -1,5 +1,5 @@
 import { Link, useOutletContext } from "react-router-dom";
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type SyntheticEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type SyntheticEvent } from "react";
 
 import { createAsset, deleteAsset, listAssets } from "../api/assets";
 import { createSession, listSessions } from "../api/sessions";
@@ -13,6 +13,106 @@ import { formatLinkedSessionName } from "./CampaignSessionsTab";
 import type { CampaignWorkspaceContext } from "./CampaignWorkspacePage";
 
 type AssetsState = { status: "loading" } | { message: string; status: "error" } | { assets: SourceAsset[]; status: "ready" };
+
+type AssetUploadRetryDraft = {
+  version: 1;
+  createdSessionId: string;
+  selectedSessionId: "new";
+  title: string;
+  truthStatus: SourceAssetTruthStatus;
+  newSessionLabel: string;
+  newSessionNumber: string;
+  newSessionPlayedOn: string;
+};
+
+type UploadRecoveryStatus = "ordinary" | "durable-retry" | "non-durable-retry" | "upload-succeeded-cleanup-failed";
+
+type RetryDraftReadResult = { draft: AssetUploadRetryDraft | null; storageAvailable: boolean };
+
+const retryDraftStorageKey = (campaignId: string) => `gm-workspace:campaign-asset-upload-retry:v1:${campaignId}`;
+
+function isSourceAssetTruthStatus(value: unknown): value is SourceAssetTruthStatus {
+  return value === "canonical" || value === "subjective" || value === "uncertain";
+}
+
+function validateRetryDraft(value: unknown): AssetUploadRetryDraft | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.version !== 1 ||
+    typeof candidate.createdSessionId !== "string" ||
+    !candidate.createdSessionId.trim() ||
+    candidate.selectedSessionId !== "new" ||
+    typeof candidate.title !== "string" ||
+    !isSourceAssetTruthStatus(candidate.truthStatus) ||
+    typeof candidate.newSessionLabel !== "string" ||
+    typeof candidate.newSessionNumber !== "string" ||
+    typeof candidate.newSessionPlayedOn !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    createdSessionId: candidate.createdSessionId,
+    newSessionLabel: candidate.newSessionLabel,
+    newSessionNumber: candidate.newSessionNumber,
+    newSessionPlayedOn: candidate.newSessionPlayedOn,
+    selectedSessionId: "new",
+    title: candidate.title,
+    truthStatus: candidate.truthStatus,
+    version: 1,
+  };
+}
+
+function removeRetryDraft(storageKey: string): boolean {
+  try {
+    window.localStorage.removeItem(storageKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readRetryDraft(campaignId: string): RetryDraftReadResult {
+  const storageKey = retryDraftStorageKey(campaignId);
+  let serializedDraft: string | null;
+  try {
+    serializedDraft = window.localStorage.getItem(storageKey);
+  } catch {
+    return { draft: null, storageAvailable: false };
+  }
+  if (serializedDraft === null) return { draft: null, storageAvailable: true };
+
+  try {
+    const draft = validateRetryDraft(JSON.parse(serializedDraft));
+    if (draft) return { draft, storageAvailable: true };
+  } catch {
+    // Invalid records are removed below, leaving this campaign in the ordinary state.
+  }
+
+  removeRetryDraft(storageKey);
+  return { draft: null, storageAvailable: true };
+}
+
+function writeRetryDraft(campaignId: string, draft: AssetUploadRetryDraft): boolean {
+  const whitelistedDraft: AssetUploadRetryDraft = {
+    createdSessionId: draft.createdSessionId,
+    newSessionLabel: draft.newSessionLabel,
+    newSessionNumber: draft.newSessionNumber,
+    newSessionPlayedOn: draft.newSessionPlayedOn,
+    selectedSessionId: "new",
+    title: draft.title,
+    truthStatus: draft.truthStatus,
+    version: 1,
+  };
+  try {
+    window.localStorage.setItem(retryDraftStorageKey(campaignId), JSON.stringify(whitelistedDraft));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function formatBytes(bytes: number) {
   return bytes < 1024 * 1024
@@ -61,6 +161,8 @@ export function CampaignAssetsTab() {
   const [newSessionNumber, setNewSessionNumber] = useState("");
   const [newSessionPlayedOn, setNewSessionPlayedOn] = useState("");
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
+  const [recoveryStatus, setRecoveryStatus] = useState<UploadRecoveryStatus>("ordinary");
+  const [recoveryCampaignId, setRecoveryCampaignId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<SourceAsset | null>(null);
@@ -71,19 +173,33 @@ export function CampaignAssetsTab() {
     registrationRef.current = registration;
     return registration.unregister;
   }, [registerForm]);
+  useLayoutEffect(() => {
+    const { draft } = readRetryDraft(campaign.id);
+
+    setFile(null);
+    setTitle(draft?.title ?? "");
+    setTruthStatus(draft?.truthStatus ?? "uncertain");
+    setSelectedSessionId(draft?.selectedSessionId ?? "");
+    setNewSessionLabel(draft?.newSessionLabel ?? "");
+    setNewSessionNumber(draft?.newSessionNumber ?? "");
+    setNewSessionPlayedOn(draft?.newSessionPlayedOn ?? "");
+    setCreatedSessionId(draft?.createdSessionId ?? null);
+    setRecoveryStatus(draft ? "durable-retry" : "ordinary");
+    setRecoveryCampaignId(draft ? campaign.id : null);
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [campaign.id]);
   useEffect(() => {
-    registrationRef.current?.setDirty(
-      Boolean(
-        file ||
-        title ||
-        selectedSessionId ||
-        newSessionLabel ||
-        newSessionNumber ||
-        newSessionPlayedOn ||
-        truthStatus !== "uncertain",
-      ),
+    const hasOrdinaryEdits = Boolean(
+      title || selectedSessionId || newSessionLabel || newSessionNumber || newSessionPlayedOn || truthStatus !== "uncertain",
     );
-  }, [file, newSessionLabel, newSessionNumber, newSessionPlayedOn, selectedSessionId, title, truthStatus]);
+    registrationRef.current?.setDirty(
+      Boolean(file) ||
+        recoveryStatus === "non-durable-retry" ||
+        recoveryStatus === "upload-succeeded-cleanup-failed" ||
+        (recoveryStatus === "ordinary" && hasOrdinaryEdits),
+    );
+  }, [file, newSessionLabel, newSessionNumber, newSessionPlayedOn, recoveryStatus, selectedSessionId, title, truthStatus]);
   useEffect(() => {
     const abortController = new AbortController();
     void Promise.all([
@@ -107,6 +223,33 @@ export function CampaignAssetsTab() {
     setUploadError(null);
     if (nextFile && !title) setTitle(defaultAssetTitle(nextFile.name));
   }
+  function draftFor(
+    createdId: string,
+    nextValues = {
+      newSessionLabel,
+      newSessionNumber,
+      newSessionPlayedOn,
+      title,
+      truthStatus,
+    },
+  ): AssetUploadRetryDraft {
+    return {
+      createdSessionId: createdId,
+      newSessionLabel: nextValues.newSessionLabel,
+      newSessionNumber: nextValues.newSessionNumber,
+      newSessionPlayedOn: nextValues.newSessionPlayedOn,
+      selectedSessionId: "new",
+      title: nextValues.title,
+      truthStatus: nextValues.truthStatus,
+      version: 1,
+    };
+  }
+  function persistRetryDraft(createdId: string, nextValues?: Parameters<typeof draftFor>[1]) {
+    const wasWritten = writeRetryDraft(campaign.id, draftFor(createdId, nextValues));
+    setRecoveryStatus(wasWritten ? "durable-retry" : "non-durable-retry");
+    setRecoveryCampaignId(campaign.id);
+    return wasWritten;
+  }
   function cancelUpload() {
     setFile(null);
     setTitle("");
@@ -116,9 +259,30 @@ export function CampaignAssetsTab() {
     setNewSessionNumber("");
     setNewSessionPlayedOn("");
     setCreatedSessionId(null);
+    setRecoveryStatus("ordinary");
+    setRecoveryCampaignId(null);
     setUploadError(null);
     registrationRef.current?.setDirty(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+  function discardRetry() {
+    if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
+      setUploadError("The saved recovery could not be cleared. Retry cleanup before changing this upload.");
+      return;
+    }
+    cancelUpload();
+  }
+  function dismissCleanupWarning() {
+    setFile(null);
+    setRecoveryStatus("ordinary");
+    setRecoveryCampaignId(null);
+    setUploadError(null);
+  }
+  function updateRetryField(setValue: (value: string) => void, value: string, nextValues: Parameters<typeof draftFor>[1]) {
+    setValue(value);
+    if (createdSessionId && !persistRetryDraft(createdSessionId, nextValues)) {
+      setUploadError("Recovery details could not be saved. Keep this page open before retrying.");
+    }
   }
   async function submitUpload(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,14 +309,31 @@ export function CampaignAssetsTab() {
         sessionId = createdSession.id;
         setCreatedSessionId(sessionId);
         setSessions((current) => [...current, createdSession]);
+        if (!persistRetryDraft(sessionId)) {
+          setUploadError("The session was created, but recovery could not be saved. Keep this page open before retrying.");
+          return;
+        }
       }
       if (selectedSessionId && selectedSessionId !== "new") sessionId = selectedSessionId;
       if (!selectedSessionId) sessionId = null;
+      if (createdSessionId && !persistRetryDraft(createdSessionId)) {
+        setUploadError("Recovery details could not be saved. Keep this page open before retrying.");
+        return;
+      }
       const createdAsset = await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
       setPageState((state) =>
         state.status === "ready" ? { assets: [createdAsset, ...state.assets], status: "ready" } : state,
       );
-      cancelUpload();
+      if (sessionId && selectedSessionId === "new" && !removeRetryDraft(retryDraftStorageKey(campaign.id))) {
+        setFile(null);
+        setRecoveryStatus("upload-succeeded-cleanup-failed");
+        setRecoveryCampaignId(campaign.id);
+        setUploadError(
+          "The asset uploaded successfully, but saved recovery cleanup failed. Refresh could show stale recovery data.",
+        );
+      } else {
+        cancelUpload();
+      }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Unable to upload the asset.");
     } finally {
@@ -184,6 +365,25 @@ export function CampaignAssetsTab() {
         )
       : [];
   const sessionNameById = new Map(sessions.map((session) => [session.id, formatLinkedSessionName(session)]));
+  const hasActiveRetry = recoveryCampaignId === campaign.id && recoveryStatus !== "ordinary";
+  if (recoveryStatus === "upload-succeeded-cleanup-failed" && recoveryCampaignId === campaign.id) {
+    return (
+      <div className="page-stack">
+        <SectionPanel>
+          <section className="asset-upload-configuration">
+            <h3>Asset uploaded successfully</h3>
+            <p>{uploadError}</p>
+            <button type="button" onClick={discardRetry}>
+              Retry cleanup
+            </button>
+            <button type="button" onClick={dismissCleanupWarning}>
+              Dismiss warning
+            </button>
+          </section>
+        </SectionPanel>
+      </div>
+    );
+  }
   return (
     <div className="page-stack">
       <header className="workspace-section-header">
@@ -196,7 +396,7 @@ export function CampaignAssetsTab() {
       </header>
       <SectionPanel>
         <form className="asset-upload-form" onSubmit={(event) => void submitUpload(event)}>
-          {!file ? (
+          {!file && !hasActiveRetry ? (
             <div
               className="asset-drop-zone"
               onDragOver={(event: DragEvent) => {
@@ -223,12 +423,21 @@ export function CampaignAssetsTab() {
               <div className="asset-upload-configuration-heading">
                 <div>
                   <h3>Configure Asset Metadata</h3>
-                  <p>
-                    File ready: <strong>{file.name}</strong> ({formatBytes(file.size)})
-                  </p>
+                  {file ? (
+                    <p>
+                      File ready: <strong>{file.name}</strong> ({formatBytes(file.size)})
+                    </p>
+                  ) : (
+                    <p>Choose a replacement file to complete this recovered upload.</p>
+                  )}
+                  {!file ? (
+                    <button className="asset-choose-file" type="button" onClick={() => fileInputRef.current?.click()}>
+                      Choose replacement file
+                    </button>
+                  ) : null}
                 </div>
-                <button className="asset-upload-cancel" type="button" onClick={cancelUpload}>
-                  Cancel
+                <button className="asset-upload-cancel" type="button" onClick={hasActiveRetry ? discardRetry : cancelUpload}>
+                  {hasActiveRetry ? "Discard retry" : "Cancel"}
                 </button>
               </div>
               <div className="asset-upload-fields">
@@ -237,7 +446,13 @@ export function CampaignAssetsTab() {
                   <input
                     value={title}
                     onChange={(event) => {
-                      setTitle(event.target.value);
+                      updateRetryField(setTitle, event.target.value, {
+                        newSessionLabel,
+                        newSessionNumber,
+                        newSessionPlayedOn,
+                        title: event.target.value,
+                        truthStatus,
+                      });
                     }}
                   />
                 </label>
@@ -246,7 +461,20 @@ export function CampaignAssetsTab() {
                   <select
                     value={truthStatus}
                     onChange={(event) => {
-                      setTruthStatus(event.target.value as SourceAssetTruthStatus);
+                      const nextTruthStatus = event.target.value as SourceAssetTruthStatus;
+                      setTruthStatus(nextTruthStatus);
+                      if (
+                        createdSessionId &&
+                        !persistRetryDraft(createdSessionId, {
+                          newSessionLabel,
+                          newSessionNumber,
+                          newSessionPlayedOn,
+                          title,
+                          truthStatus: nextTruthStatus,
+                        })
+                      ) {
+                        setUploadError("Recovery details could not be saved. Keep this page open before retrying.");
+                      }
                     }}
                   >
                     <option value="canonical">Canon (Verified Truth)</option>
@@ -259,6 +487,10 @@ export function CampaignAssetsTab() {
                   <select
                     value={selectedSessionId}
                     onChange={(event) => {
+                      if (hasActiveRetry && event.target.value !== "new") {
+                        discardRetry();
+                        return;
+                      }
                       setSelectedSessionId(event.target.value);
                     }}
                   >
@@ -282,7 +514,13 @@ export function CampaignAssetsTab() {
                         inputMode="numeric"
                         value={newSessionNumber}
                         onChange={(event) => {
-                          setNewSessionNumber(event.target.value);
+                          updateRetryField(setNewSessionNumber, event.target.value, {
+                            newSessionLabel,
+                            newSessionNumber: event.target.value,
+                            newSessionPlayedOn,
+                            title,
+                            truthStatus,
+                          });
                         }}
                       />
                     </label>
@@ -293,7 +531,13 @@ export function CampaignAssetsTab() {
                         type="date"
                         value={newSessionPlayedOn}
                         onChange={(event) => {
-                          setNewSessionPlayedOn(event.target.value);
+                          updateRetryField(setNewSessionPlayedOn, event.target.value, {
+                            newSessionLabel,
+                            newSessionNumber,
+                            newSessionPlayedOn: event.target.value,
+                            title,
+                            truthStatus,
+                          });
                         }}
                       />
                     </label>
@@ -304,7 +548,13 @@ export function CampaignAssetsTab() {
                         placeholder="e.g. Blackreef Vault Infiltration"
                         value={newSessionLabel}
                         onChange={(event) => {
-                          setNewSessionLabel(event.target.value);
+                          updateRetryField(setNewSessionLabel, event.target.value, {
+                            newSessionLabel: event.target.value,
+                            newSessionNumber,
+                            newSessionPlayedOn,
+                            title,
+                            truthStatus,
+                          });
                         }}
                       />
                     </label>
