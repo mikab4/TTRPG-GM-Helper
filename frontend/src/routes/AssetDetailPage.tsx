@@ -5,6 +5,7 @@ import { deleteAsset, getAsset } from "../api/assets";
 import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { listSessions } from "../api/sessions";
 import { RequestStateBlock } from "../components/RequestStateBlock";
+import { getAssetStatusPresentation } from "../assets/presentation";
 import type { SourceAsset } from "../types/assets";
 import type { CampaignSession } from "../types/sessions";
 import { formatLinkedSessionName } from "./CampaignSessionsTab";
@@ -37,6 +38,8 @@ export function AssetDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletionRecoveryMessage, setDeletionRecoveryMessage] = useState<string | null>(null);
+  const [deletionStatusUncertain, setDeletionStatusUncertain] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deletionInFlightRef = useRef(false);
   useEffect(() => {
@@ -68,7 +71,23 @@ export function AssetDetailPage() {
       await deleteAsset(campaign.id, asset.id);
       void navigate(`/campaigns/${campaign.id}/assets`);
     } catch (reason) {
-      setDeleteError(reason instanceof Error ? reason.message : "Unable to delete asset.");
+      const originalDeleteError = reason instanceof Error ? reason.message : "Unable to delete asset.";
+      setDeleteError(originalDeleteError);
+      try {
+        const refreshedAsset = await getAsset(campaign.id, asset.id);
+        setAsset(refreshedAsset);
+        setDeletionStatusUncertain(false);
+        setDeletionRecoveryMessage(originalDeleteError);
+      } catch (refreshError) {
+        if (refreshError instanceof Error && "status" in refreshError && refreshError.status === 404) {
+          void navigate(`/campaigns/${campaign.id}/assets`);
+          return;
+        }
+        setDeletionStatusUncertain(true);
+        setDeletionRecoveryMessage(`${originalDeleteError} Current asset status could not be refreshed.`);
+      } finally {
+        setDeletePending(false);
+      }
     } finally {
       deletionInFlightRef.current = false;
       setDeleting(false);
@@ -77,6 +96,9 @@ export function AssetDetailPage() {
 
   if (error) return <RequestStateBlock message={error} title="Asset unavailable" tone="error" />;
   if (!asset) return <RequestStateBlock message="Loading asset metadata." title="Loading asset" />;
+  const assetStatusPresentation = getAssetStatusPresentation(asset);
+  const isReadOnly = assetStatusPresentation.isReadOnly || deletionStatusUncertain;
+  const statusLabel = deletionStatusUncertain ? "Deletion status uncertain" : assetStatusPresentation.label;
   return (
     <div className="asset-detail-page">
       <Link className="asset-detail-back" to={`/campaigns/${campaign.id}/assets`}>
@@ -91,16 +113,23 @@ export function AssetDetailPage() {
             <span className="asset-meta-chip asset-truth-chip">
               {asset.truthStatus === "canonical" ? "Canonical" : asset.truthStatus === "subjective" ? "Rumor" : "Reference"}
             </span>
-            {asset.storageStatus === "missing" ? <span className="missing-chip">File missing</span> : null}
+            <span className={isReadOnly ? "deleting-chip" : "missing-chip"}>{statusLabel}</span>
           </div>
           <h2>{asset.title ?? asset.originalFilename}</h2>
         </div>
         <div className="asset-detail-actions">
-          <Link className="asset-detail-edit" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
-            ✎ Edit Metadata
-          </Link>
+          {isReadOnly ? (
+            <span aria-disabled="true" className="asset-detail-edit asset-action-disabled">
+              ✎ Edit Metadata
+            </span>
+          ) : (
+            <Link className="asset-detail-edit" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
+              ✎ Edit Metadata
+            </Link>
+          )}
           <button
             className="asset-delete-button"
+            disabled={isReadOnly}
             type="button"
             onClick={() => {
               setDeleteError(null);
@@ -129,9 +158,7 @@ export function AssetDetailPage() {
             </div>
             <div>
               <span>Status:</span>
-              <strong className={asset.storageStatus === "missing" ? "asset-status-missing" : "asset-status-verified"}>
-                {asset.storageStatus === "missing" ? "File Missing" : "Linked & Verified"}
-              </strong>
+              <strong className={isReadOnly ? "asset-status-deleting" : "asset-status-missing"}>{statusLabel}</strong>
             </div>
           </div>
         </article>
@@ -149,6 +176,32 @@ export function AssetDetailPage() {
           </article>
         </aside>
       </div>
+      {deletionRecoveryMessage ? (
+        <p className="field-error" role="alert">
+          {deletionRecoveryMessage}
+          {deletionStatusUncertain ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                void getAsset(campaign.id, asset.id)
+                  .then((refreshedAsset) => {
+                    setAsset(refreshedAsset);
+                    setDeletionStatusUncertain(false);
+                    setDeletionRecoveryMessage(null);
+                  })
+                  .catch((refreshError: unknown) => {
+                    setDeletionRecoveryMessage(
+                      `${refreshError instanceof Error ? refreshError.message : "Unable to refresh asset status."} Current asset status could not be refreshed.`,
+                    );
+                  });
+              }}
+            >
+              Refresh status
+            </button>
+          ) : null}
+        </p>
+      ) : null}
       {deletePending ? (
         <DeleteConfirmationDialog
           error={deleteError}

@@ -10,12 +10,13 @@ import {
   type SyntheticEvent,
 } from "react";
 
-import { createAsset, deleteAsset, listAssets } from "../api/assets";
+import { createAsset, deleteAsset, getAsset, listAssets } from "../api/assets";
 import { createSession, listSessions } from "../api/sessions";
 import { useUnsavedChanges } from "../app/UnsavedChangesContext";
 import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog";
 import { RequestStateBlock } from "../components/RequestStateBlock";
 import { SectionPanel } from "../components/SectionPanel";
+import { getAssetStatusPresentation } from "../assets/presentation";
 import type { SourceAsset, SourceAssetMediaFamily, SourceAssetTruthStatus } from "../types/assets";
 import type { CampaignSession } from "../types/sessions";
 import { formatLinkedSessionName } from "./CampaignSessionsTab";
@@ -193,6 +194,8 @@ export function CampaignAssetsTab() {
   const [uploading, setUploading] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<SourceAsset | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletionRecoveryMessage, setDeletionRecoveryMessage] = useState<string | null>(null);
+  const [uncertainAssetIds, setUncertainAssetIds] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
   activeAssetListScopeRef.current = { campaignId: campaign.id, mediaFamily };
   const requestAssetList = useCallback(async (requestedScope: AssetListScope): Promise<AssetListRequestOutcome> => {
@@ -422,7 +425,57 @@ export function CampaignAssetsTab() {
       );
       setPendingDeletion(null);
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Unable to delete asset.");
+      const originalDeleteError = error instanceof Error ? error.message : "Unable to delete asset.";
+      const requestedScope = activeAssetListScopeRef.current;
+      const requestGeneration = assetListRequestGenerationRef.current;
+      setDeleteError(originalDeleteError);
+      try {
+        const refreshedAsset = await getAsset(campaign.id, pendingDeletion.id);
+        if (
+          assetListRequestGenerationRef.current !== requestGeneration ||
+          !hasSameAssetListScope(activeAssetListScopeRef.current, requestedScope)
+        ) {
+          return;
+        }
+        setPageState((state) =>
+          state.status === "ready"
+            ? {
+                assets: state.assets.map((asset) => (asset.id === refreshedAsset.id ? refreshedAsset : asset)),
+                status: "ready",
+              }
+            : state,
+        );
+        setUncertainAssetIds((assetIds) => {
+          const nextAssetIds = new Set(assetIds);
+          nextAssetIds.delete(refreshedAsset.id);
+          return nextAssetIds;
+        });
+        setDeletionRecoveryMessage(originalDeleteError);
+      } catch (refreshError) {
+        if (
+          assetListRequestGenerationRef.current !== requestGeneration ||
+          !hasSameAssetListScope(activeAssetListScopeRef.current, requestedScope)
+        ) {
+          return;
+        }
+        if (refreshError instanceof Error && "status" in refreshError && refreshError.status === 404) {
+          setPageState((state) =>
+            state.status === "ready"
+              ? { assets: state.assets.filter((asset) => asset.id !== pendingDeletion.id), status: "ready" }
+              : state,
+          );
+          setUncertainAssetIds((assetIds) => {
+            const nextAssetIds = new Set(assetIds);
+            nextAssetIds.delete(pendingDeletion.id);
+            return nextAssetIds;
+          });
+        } else {
+          setUncertainAssetIds((assetIds) => new Set(assetIds).add(pendingDeletion.id));
+          setDeletionRecoveryMessage(`${originalDeleteError} Current asset status could not be refreshed.`);
+        }
+      } finally {
+        setPendingDeletion(null);
+      }
     } finally {
       setDeleting(false);
     }
@@ -658,6 +711,11 @@ export function CampaignAssetsTab() {
       {pageState.status === "error" ? (
         <RequestStateBlock message={pageState.message} title="Assets unavailable" tone="error" />
       ) : null}
+      {deletionRecoveryMessage ? (
+        <p className="field-error" role="alert">
+          {deletionRecoveryMessage}
+        </p>
+      ) : null}
       {pageState.status === "ready" ? (
         <section className="panel asset-library">
           <div className="workspace-retrieval-toolbar">
@@ -711,15 +769,32 @@ export function CampaignAssetsTab() {
                         <span>Not linked to a session</span>
                       )}
                       <span className="asset-meta-chip asset-truth-chip">{truthStatusLabel(asset.truthStatus)}</span>
-                      {asset.storageStatus === "missing" ? <span className="missing-chip">File missing</span> : null}
+                      <span
+                        className={
+                          uncertainAssetIds.has(asset.id) || asset.lifecycleStatus === "deleting"
+                            ? "deleting-chip"
+                            : "missing-chip"
+                        }
+                      >
+                        {uncertainAssetIds.has(asset.id)
+                          ? "Deletion status uncertain"
+                          : getAssetStatusPresentation(asset).label}
+                      </span>
                     </p>
                   </div>
                   <div className="row-actions">
-                    <Link className="asset-edit-button" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
-                      Edit
-                    </Link>
+                    {getAssetStatusPresentation(asset).isReadOnly || uncertainAssetIds.has(asset.id) ? (
+                      <span aria-disabled="true" className="asset-edit-button asset-action-disabled">
+                        Edit
+                      </span>
+                    ) : (
+                      <Link className="asset-edit-button" to={`/campaigns/${campaign.id}/assets/${asset.id}/edit`}>
+                        Edit
+                      </Link>
+                    )}
                     <button
                       className="asset-delete-button"
+                      disabled={getAssetStatusPresentation(asset).isReadOnly || uncertainAssetIds.has(asset.id)}
                       type="button"
                       onClick={() => {
                         setDeleteError(null);

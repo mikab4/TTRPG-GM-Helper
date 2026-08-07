@@ -34,12 +34,11 @@ export function AssetEditPage() {
   useEffect(() => {
     if (!assetId) return;
     const abortController = new AbortController();
-    void Promise.all([
-      getAsset(campaign.id, assetId, { signal: abortController.signal }),
-      listSessions(campaign.id, { signal: abortController.signal }),
-    ])
-      .then(([loadedAsset, listedSessions]) => {
+    void getAsset(campaign.id, assetId, { signal: abortController.signal })
+      .then(async (loadedAsset) => {
         setAsset(loadedAsset);
+        if (loadedAsset.lifecycleStatus === "deleting") return;
+        const listedSessions = await listSessions(campaign.id, { signal: abortController.signal });
         setSessions(listedSessions);
         setTitle(loadedAsset.title ?? "");
         setTruthStatus(loadedAsset.truthStatus);
@@ -77,6 +76,13 @@ export function AssetEditPage() {
   }
   if (loadError) return <RequestStateBlock message={loadError} title="Asset unavailable" tone="error" />;
   if (!asset) return <RequestStateBlock message="Loading asset metadata." title="Loading asset" />;
+  if (asset.lifecycleStatus === "deleting")
+    return (
+      <RequestStateBlock
+        message="Deletion in progress. Asset metadata can no longer be edited."
+        title="Deletion in progress"
+      />
+    );
   return (
     <div className="page-stack workspace-surface">
       <PageHeader

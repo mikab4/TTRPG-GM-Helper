@@ -1,17 +1,19 @@
 export type SourceAssetMediaFamily = "document" | "image" | "spreadsheet";
 export type SourceAssetTruthStatus = "canonical" | "subjective" | "uncertain";
+export type SourceAssetLifecycleStatus = "active" | "deleting";
+export type SourceAssetStorageStatus = "available" | "missing";
 
 export type SourceAsset = {
   campaignId: string;
   createdAt: string;
   fileSizeBytes: number;
   id: string;
-  lifecycleStatus: string;
+  lifecycleStatus: SourceAssetLifecycleStatus;
   mediaType: string;
   metadata: Record<string, object>;
   originalFilename: string;
   sessionId: string | null;
-  storageStatus: string;
+  storageStatus: SourceAssetStorageStatus;
   title: string | null;
   truthStatus: SourceAssetTruthStatus;
   updatedAt: string;

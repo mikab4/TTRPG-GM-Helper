@@ -26,9 +26,9 @@ function parseAsset(payload: unknown): SourceAsset {
     !("file_size_bytes" in payload) ||
     typeof payload.file_size_bytes !== "number" ||
     !("lifecycle_status" in payload) ||
-    typeof payload.lifecycle_status !== "string" ||
+    (payload.lifecycle_status !== "active" && payload.lifecycle_status !== "deleting") ||
     !("storage_status" in payload) ||
-    typeof payload.storage_status !== "string" ||
+    (payload.storage_status !== "available" && payload.storage_status !== "missing") ||
     !("metadata" in payload) ||
     typeof payload.metadata !== "object" ||
     payload.metadata === null ||

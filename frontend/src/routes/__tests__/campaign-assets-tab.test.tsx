@@ -14,6 +14,7 @@ const listSessions = vi.fn<() => Promise<CampaignSession[]>>(() => Promise.resol
 const getAsset = vi.fn<() => Promise<SourceAsset>>(() => Promise.resolve(uploadedAsset));
 const createAsset = vi.fn<() => Promise<SourceAsset>>(() => Promise.resolve(uploadedAsset));
 const createSession = vi.fn<() => Promise<CampaignSession>>(() => Promise.resolve(linkedSession));
+const deleteAsset = vi.fn<() => Promise<void>>(() => Promise.resolve());
 
 const uploadedAsset: SourceAsset = {
   campaignId: "campaign-1",
@@ -51,6 +52,11 @@ const uploadedImageAsset: SourceAsset = {
   title: "Coastal Cave Map",
 };
 
+const deletingAsset: SourceAsset = {
+  ...uploadedAsset,
+  lifecycleStatus: "deleting",
+};
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useOutletContext: () => mockUseOutletContext() };
@@ -58,7 +64,7 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("../../api/assets", () => ({
   createAsset,
-  deleteAsset: vi.fn(),
+  deleteAsset,
   getAsset,
   listAssets,
 }));
@@ -199,6 +205,7 @@ describe("CampaignAssetsTab", () => {
     listSessions.mockResolvedValue([]);
     createAsset.mockResolvedValue(uploadedAsset);
     createSession.mockResolvedValue(linkedSession);
+    deleteAsset.mockResolvedValue();
   });
 
   afterEach(() => {
@@ -454,6 +461,43 @@ describe("CampaignAssetsTab", () => {
     expect(screen.getByText("Linked Session")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Session 4 — The Sunken Archive/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Asset" })).toBeInTheDocument();
+  });
+
+  it.each(["available", "missing"] as const)(
+    "keeps a deleting %s asset visibly transitional and read-only in the list and detail",
+    async (storageStatus) => {
+      const deletingAssetWithStorage = { ...deletingAsset, storageStatus };
+      listAssets.mockResolvedValue([deletingAssetWithStorage]);
+      getAsset.mockResolvedValue(deletingAssetWithStorage);
+      listSessions.mockResolvedValue([linkedSession]);
+
+      await renderAssetsTab();
+
+      expect(await screen.findByText("Deletion in progress")).toBeInTheDocument();
+      expect(screen.queryByText("Linked & Verified")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+      expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+      expect(screen.getByText("Edit")).toHaveAttribute("aria-disabled", "true");
+
+      await renderAssetDetailPage();
+
+      expect(await screen.findByText("Deletion in progress")).toBeInTheDocument();
+      expect(screen.queryByText("Linked & Verified")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Asset" })).toBeDisabled();
+      expect(screen.queryByRole("link", { name: /Edit Metadata/ })).not.toBeInTheDocument();
+      expect(screen.getByText(/Edit Metadata/)).toHaveAttribute("aria-disabled", "true");
+    },
+  );
+
+  it("renders the direct-edit deleting state without loading sessions", async () => {
+    getAsset.mockResolvedValue(deletingAsset);
+    listSessions.mockRejectedValue(new Error("Sessions unavailable"));
+
+    await renderAssetEditPage();
+
+    expect(await screen.findByText("Deletion in progress")).toBeInTheDocument();
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    expect(listSessions).not.toHaveBeenCalled();
   });
 
   it("does not show an unavailable error when the initial asset-edit request is aborted during navigation cleanup", async () => {
