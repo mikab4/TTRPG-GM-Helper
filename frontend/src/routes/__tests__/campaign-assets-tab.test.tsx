@@ -785,6 +785,7 @@ describe("CampaignAssetsTab", () => {
     expect(await screen.findByText("File available", { selector: ".asset-detail-heading span" })).toHaveClass(
       "available-chip",
     );
+    expect(screen.getByText("File available", { selector: ".asset-metadata strong" })).toHaveClass("asset-status-available");
   });
 
   it.each(["available", "missing"] as const)(
@@ -807,6 +808,9 @@ describe("CampaignAssetsTab", () => {
       await renderAssetDetailPage();
 
       expect(screen.getAllByText("Deletion in progress")).toHaveLength(2);
+      expect(screen.getByText("Deletion in progress", { selector: ".asset-metadata strong" })).toHaveClass(
+        "asset-status-deleting",
+      );
       expect(screen.queryByText("Linked & Verified")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Delete Asset" })).toBeDisabled();
       expect(screen.queryByRole("link", { name: /Edit Metadata/ })).not.toBeInTheDocument();

@@ -2343,6 +2343,14 @@ h4 {
   color: #15803d !important;
 }
 
+.asset-status-available {
+  color: #15803d !important;
+}
+
+.asset-status-deleting {
+  color: #a16207 !important;
+}
+
 .asset-status-missing {
   color: #b91c1c !important;
 }

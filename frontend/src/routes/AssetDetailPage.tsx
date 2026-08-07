@@ -160,7 +160,13 @@ export function AssetDetailPage() {
             </div>
             <div>
               <span>Status:</span>
-              <strong className={isReadOnly ? "asset-status-deleting" : "asset-status-missing"}>{statusLabel}</strong>
+              <strong
+                className={
+                  deletionStatusUncertain ? "asset-status-deleting" : `asset-status-${assetStatusPresentation.tone}`
+                }
+              >
+                {statusLabel}
+              </strong>
             </div>
           </div>
         </article>
