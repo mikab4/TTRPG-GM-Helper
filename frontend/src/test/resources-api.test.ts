@@ -323,4 +323,214 @@ describe("frontend resource APIs", () => {
     expect(assetRequest?.body).toBeInstanceOf(FormData);
     expect(fetchSpy.mock.calls[2]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets?media_family=image");
   });
+
+  it("gets and creates sessions through campaign-scoped endpoints", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "session-1",
+            campaign_id: "campaign-1",
+            session_number: 4,
+            session_label: "The harbor",
+            played_on: "2026-04-08",
+            summary: "The party reached the docks.",
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-08T12:00:00Z",
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "session-2",
+            campaign_id: "campaign-1",
+            session_number: 5,
+            session_label: "The vault",
+            played_on: "2026-04-15",
+            summary: "The party opened the vault.",
+            created_at: "2026-04-15T12:00:00Z",
+            updated_at: "2026-04-15T12:00:00Z",
+          }),
+      });
+
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { createSession, getSession } = await import("../api/sessions");
+
+    await expect(getSession("campaign-1", "session-1")).resolves.toMatchObject({
+      campaignId: "campaign-1",
+      playedOn: "2026-04-08",
+      sessionLabel: "The harbor",
+      sessionNumber: 4,
+    });
+    await createSession("campaign-1", {
+      playedOn: "2026-04-15",
+      sessionLabel: "The vault",
+      sessionNumber: 5,
+      summary: "The party opened the vault.",
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/sessions/session-1");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/sessions");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({
+      body: JSON.stringify({
+        played_on: "2026-04-15",
+        session_label: "The vault",
+        session_number: 5,
+        summary: "The party opened the vault.",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+  });
+
+  it("updates only supplied session fields and deletes sessions", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "session-1",
+            campaign_id: "campaign-1",
+            session_number: 4,
+            session_label: "The harbor",
+            played_on: null,
+            summary: "Updated recap.",
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-09T12:00:00Z",
+          }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 204 });
+
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { deleteSession, updateSession } = await import("../api/sessions");
+
+    await updateSession("campaign-1", "session-1", { summary: "Updated recap." });
+    await expect(deleteSession("campaign-1", "session-1")).resolves.toBeUndefined();
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/sessions/session-1");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
+      body: JSON.stringify({ summary: "Updated recap." }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/sessions/session-1");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE" });
+  });
+
+  it("gets and updates assets through campaign-scoped endpoints", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "asset-1",
+            campaign_id: "campaign-1",
+            session_id: null,
+            title: "Old map",
+            truth_status: "subjective",
+            media_type: "image/png",
+            original_filename: "map.png",
+            file_size_bytes: 1200,
+            lifecycle_status: "active",
+            storage_status: "available",
+            metadata: { context: { region: "Harbor" } },
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-08T12:00:00Z",
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "asset-1",
+            campaign_id: "campaign-1",
+            session_id: "session-1",
+            title: "Annotated map",
+            truth_status: "canonical",
+            media_type: "image/png",
+            original_filename: "map.png",
+            file_size_bytes: 1200,
+            lifecycle_status: "active",
+            storage_status: "available",
+            metadata: { context: { region: "Harbor", scale: "large" } },
+            created_at: "2026-04-08T12:00:00Z",
+            updated_at: "2026-04-09T12:00:00Z",
+          }),
+      });
+
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { getAsset, updateAsset } = await import("../api/assets");
+
+    await expect(getAsset("campaign-1", "asset-1")).resolves.toMatchObject({
+      campaignId: "campaign-1",
+      fileSizeBytes: 1200,
+      sessionId: null,
+      truthStatus: "subjective",
+    });
+    await updateAsset("campaign-1", "asset-1", {
+      metadata: { context: { region: "Harbor", scale: "large" } },
+      sessionId: "session-1",
+      title: "Annotated map",
+      truthStatus: "canonical",
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets/asset-1");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets/asset-1");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({
+      body: JSON.stringify({
+        metadata: { context: { region: "Harbor", scale: "large" } },
+        session_id: "session-1",
+        title: "Annotated map",
+        truth_status: "canonical",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+  });
+
+  it("returns the backend conflict detail when deleting a referenced session", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        headers: new Headers({ "Content-Type": "application/json" }),
+        json: () => Promise.resolve({ detail: "Session cannot be deleted while assets reference it." }),
+      }),
+    );
+
+    const { deleteSession } = await import("../api/sessions");
+
+    await expect(deleteSession("campaign-1", "session-1")).rejects.toThrow(
+      "Session cannot be deleted while assets reference it.",
+    );
+  });
+
+  it("deletes assets with an empty successful response", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+
+    vi.stubEnv("VITE_API_BASE_URL", "http://example.test/api");
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { deleteAsset } = await import("../api/assets");
+
+    await expect(deleteAsset("campaign-1", "asset-1")).resolves.toBeUndefined();
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("http://example.test/api/campaigns/campaign-1/assets/asset-1");
+    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ method: "DELETE" });
+  });
 });
