@@ -70,11 +70,16 @@ export function SessionFormPage({ mode }: SessionFormPageProps) {
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsedNumber = sessionNumber.trim() ? Number(sessionNumber) : null;
+    const trimmedSessionNumber = sessionNumber.trim();
+    const parsedNumber = trimmedSessionNumber ? Number(trimmedSessionNumber) : null;
+    if (trimmedSessionNumber && !Number.isInteger(parsedNumber)) {
+      setSubmitError("Enter a whole-number session number.");
+      return;
+    }
     const values = {
       playedOn: playedOn || null,
       sessionLabel: sessionLabel.trim() || null,
-      sessionNumber: Number.isInteger(parsedNumber) ? parsedNumber : null,
+      sessionNumber: parsedNumber,
       summary: summary.trim() || null,
     };
     if (values.sessionNumber === null && values.sessionLabel === null) {

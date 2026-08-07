@@ -138,6 +138,48 @@ describe("campaign session and asset CRUD routes", () => {
     expect(router.state.location.pathname).toBe("/campaigns/campaign-1/sessions/session-4");
   });
 
+  it("rejects a malformed session number while creating a titled session", async () => {
+    mockUseOutletContext.mockReturnValue({ campaign: campaignContext() });
+    const router = renderRoute("/campaigns/campaign-1/sessions/new", [
+      { path: "campaigns/:campaignId/sessions/new", element: <SessionFormPage mode="create" /> },
+      { path: "campaigns/:campaignId/sessions/:sessionId", element: <p>Session saved</p> },
+    ]);
+
+    fireEvent.change(await screen.findByLabelText("Session number"), { target: { value: "five" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "The Sunken Archive" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Session" }));
+
+    expect(await screen.findByText("Enter a whole-number session number.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Session number")).toHaveValue("five");
+    expect(screen.getByLabelText("Session title")).toHaveValue("The Sunken Archive");
+    expect(createSession).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe("/campaigns/campaign-1/sessions/new");
+  });
+
+  it("creates a titled session with a whitespace-only session number as null", async () => {
+    mockUseOutletContext.mockReturnValue({ campaign: campaignContext() });
+    createSession.mockResolvedValue(campaignSession);
+    const router = renderRoute("/campaigns/campaign-1/sessions/new", [
+      { path: "campaigns/:campaignId/sessions/new", element: <SessionFormPage mode="create" /> },
+      { path: "campaigns/:campaignId/sessions/:sessionId", element: <p>Session saved</p> },
+    ]);
+
+    fireEvent.change(await screen.findByLabelText("Session number"), { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "The Sunken Archive" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Session" }));
+
+    await waitFor(() => {
+      expect(createSession).toHaveBeenCalledWith("campaign-1", {
+        playedOn: null,
+        sessionLabel: "The Sunken Archive",
+        sessionNumber: null,
+        summary: null,
+      });
+    });
+    expect(await screen.findByText("Session saved")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/campaigns/campaign-1/sessions/session-4");
+  });
+
   it("updates a campaign-scoped session and clears its unsaved-change guard before navigation", async () => {
     mockUseOutletContext.mockReturnValue({ campaign: campaignContext() });
     getSession.mockResolvedValue(campaignSession);
@@ -163,6 +205,25 @@ describe("campaign session and asset CRUD routes", () => {
     });
     expect(await screen.findByText("Session updated")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/campaigns/campaign-1/sessions/session-4");
+  });
+
+  it("rejects a malformed session number while editing a titled session", async () => {
+    mockUseOutletContext.mockReturnValue({ campaign: campaignContext() });
+    getSession.mockResolvedValue(campaignSession);
+    const router = renderRoute("/campaigns/campaign-1/sessions/session-4/edit", [
+      { path: "campaigns/:campaignId/sessions/:sessionId/edit", element: <SessionFormPage mode="edit" /> },
+      { path: "campaigns/:campaignId/sessions/:sessionId", element: <p>Session updated</p> },
+    ]);
+
+    fireEvent.change(await screen.findByLabelText("Session number"), { target: { value: "five" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "The Sunken Archive revised" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Session" }));
+
+    expect(await screen.findByText("Enter a whole-number session number.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Session number")).toHaveValue("five");
+    expect(screen.getByLabelText("Session title")).toHaveValue("The Sunken Archive revised");
+    expect(updateSession).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe("/campaigns/campaign-1/sessions/session-4/edit");
   });
 
   it("blocks navigation away from a dirty session form", async () => {
