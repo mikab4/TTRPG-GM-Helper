@@ -587,6 +587,39 @@ describe("CampaignAssetsTab", () => {
     removeItem.mockRestore();
   });
 
+  it("keeps a completed upload non-retryable after cleanup failure and refresh", async () => {
+    const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
+    const retryStorageKey = retryDraftStorageKey("campaign-1");
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
+      if (key === retryStorageKey) throw new Error("Storage cleanup unavailable");
+      originalRemoveItem(key);
+    });
+    const rendered = await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await screen.findByRole("heading", { name: "Asset uploaded successfully" });
+    expect(JSON.parse(window.localStorage.getItem(retryStorageKey) ?? "null")).toEqual({
+      state: "upload-completed",
+      version: 1,
+    });
+
+    rendered.unmount();
+    await renderAssetsTab();
+
+    expect(await screen.findByRole("heading", { name: "Asset uploaded successfully" })).toBeInTheDocument();
+    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose replacement file" })).not.toBeInTheDocument();
+    expect(createAsset).toHaveBeenCalledTimes(1);
+    removeItem.mockRestore();
+  });
+
   it("keeps retry state cleared when the library refresh after retry cleanup fails", async () => {
     const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
     const retryStorageKey = retryDraftStorageKey("campaign-1");

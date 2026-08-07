@@ -35,9 +35,16 @@ type AssetUploadRetryDraft = {
   newSessionPlayedOn: string;
 };
 
+type AssetUploadCompletedMarker = {
+  version: 1;
+  state: "upload-completed";
+};
+
 type UploadRecoveryStatus = "ordinary" | "durable-retry" | "non-durable-retry" | "upload-succeeded-cleanup-failed";
 
-type RetryDraftReadResult = { draft: AssetUploadRetryDraft | null; storageAvailable: boolean };
+type UploadRecoveryRecord = AssetUploadRetryDraft | AssetUploadCompletedMarker;
+
+type UploadRecoveryReadResult = { recoveryRecord: UploadRecoveryRecord | null; storageAvailable: boolean };
 
 type AssetListScope = { campaignId: string; mediaFamily: SourceAssetMediaFamily | "" };
 
@@ -81,6 +88,15 @@ function validateRetryDraft(value: unknown): AssetUploadRetryDraft | null {
   };
 }
 
+function validateUploadCompletedMarker(value: unknown): AssetUploadCompletedMarker | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+
+  const candidate = value as Record<string, unknown>;
+  if (candidate.version !== 1 || candidate.state !== "upload-completed") return null;
+
+  return { state: "upload-completed", version: 1 };
+}
+
 function removeRetryDraft(storageKey: string): boolean {
   try {
     window.localStorage.removeItem(storageKey);
@@ -90,25 +106,29 @@ function removeRetryDraft(storageKey: string): boolean {
   }
 }
 
-function readRetryDraft(campaignId: string): RetryDraftReadResult {
+function readUploadRecoveryRecord(campaignId: string): UploadRecoveryReadResult {
   const storageKey = retryDraftStorageKey(campaignId);
   let serializedDraft: string | null;
   try {
     serializedDraft = window.localStorage.getItem(storageKey);
   } catch {
-    return { draft: null, storageAvailable: false };
+    return { recoveryRecord: null, storageAvailable: false };
   }
-  if (serializedDraft === null) return { draft: null, storageAvailable: true };
+  if (serializedDraft === null) return { recoveryRecord: null, storageAvailable: true };
 
   try {
-    const draft = validateRetryDraft(JSON.parse(serializedDraft));
-    if (draft) return { draft, storageAvailable: true };
+    const parsedRecoveryRecord: unknown = JSON.parse(serializedDraft);
+    const retryDraft = validateRetryDraft(parsedRecoveryRecord);
+    if (retryDraft) return { recoveryRecord: retryDraft, storageAvailable: true };
+
+    const completedMarker = validateUploadCompletedMarker(parsedRecoveryRecord);
+    if (completedMarker) return { recoveryRecord: completedMarker, storageAvailable: true };
   } catch {
     // Invalid records are removed below, leaving this campaign in the ordinary state.
   }
 
   removeRetryDraft(storageKey);
-  return { draft: null, storageAvailable: true };
+  return { recoveryRecord: null, storageAvailable: true };
 }
 
 function writeRetryDraft(campaignId: string, draft: AssetUploadRetryDraft): boolean {
@@ -124,6 +144,18 @@ function writeRetryDraft(campaignId: string, draft: AssetUploadRetryDraft): bool
   };
   try {
     window.localStorage.setItem(retryDraftStorageKey(campaignId), JSON.stringify(whitelistedDraft));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeUploadCompletedMarker(campaignId: string): boolean {
+  try {
+    window.localStorage.setItem(
+      retryDraftStorageKey(campaignId),
+      JSON.stringify({ state: "upload-completed", version: 1 } satisfies AssetUploadCompletedMarker),
+    );
     return true;
   } catch {
     return false;
@@ -250,20 +282,28 @@ export function CampaignAssetsTab() {
     return registration.unregister;
   }, [registerForm]);
   useLayoutEffect(() => {
-    const { draft, storageAvailable } = readRetryDraft(campaign.id);
+    const { recoveryRecord, storageAvailable } = readUploadRecoveryRecord(campaign.id);
+    const retryDraft = recoveryRecord && "createdSessionId" in recoveryRecord ? recoveryRecord : null;
+    const hasUploadCompletedMarker = recoveryRecord !== null && "state" in recoveryRecord;
 
     setFile(null);
-    setTitle(draft?.title ?? "");
-    setTruthStatus(draft?.truthStatus ?? "uncertain");
-    setSelectedSessionId(draft?.selectedSessionId ?? "");
-    setNewSessionLabel(draft?.newSessionLabel ?? "");
-    setNewSessionNumber(draft?.newSessionNumber ?? "");
-    setNewSessionPlayedOn(draft?.newSessionPlayedOn ?? "");
-    setCreatedSessionId(draft?.createdSessionId ?? null);
+    setTitle(retryDraft?.title ?? "");
+    setTruthStatus(retryDraft?.truthStatus ?? "uncertain");
+    setSelectedSessionId(retryDraft?.selectedSessionId ?? "");
+    setNewSessionLabel(retryDraft?.newSessionLabel ?? "");
+    setNewSessionNumber(retryDraft?.newSessionNumber ?? "");
+    setNewSessionPlayedOn(retryDraft?.newSessionPlayedOn ?? "");
+    setCreatedSessionId(retryDraft?.createdSessionId ?? null);
     setRetryStorageReadable(storageAvailable);
-    setRecoveryStatus(draft ? "durable-retry" : "ordinary");
-    setRecoveryCampaignId(draft ? campaign.id : null);
-    setUploadError(null);
+    setRecoveryStatus(
+      retryDraft ? "durable-retry" : hasUploadCompletedMarker ? "upload-succeeded-cleanup-failed" : "ordinary",
+    );
+    setRecoveryCampaignId(recoveryRecord ? campaign.id : null);
+    setUploadError(
+      hasUploadCompletedMarker
+        ? "The asset uploaded successfully, but saved recovery cleanup still needs to be retried."
+        : null,
+    );
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [campaign.id]);
   useLayoutEffect(() => {
@@ -429,13 +469,25 @@ export function CampaignAssetsTab() {
       }
       await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
       const completedDraftCapableUpload = selectedSessionId === "new" && sessionId !== null;
-      if (completedDraftCapableUpload && !removeRetryDraft(retryDraftStorageKey(campaign.id))) {
-        setFile(null);
-        setRecoveryStatus("upload-succeeded-cleanup-failed");
-        setRecoveryCampaignId(campaign.id);
-        setUploadError(
-          "The asset uploaded successfully, but saved recovery cleanup failed. Refresh could show stale recovery data.",
-        );
+      if (completedDraftCapableUpload) {
+        if (!writeUploadCompletedMarker(campaign.id)) {
+          setFile(null);
+          setRecoveryStatus("upload-succeeded-cleanup-failed");
+          setRecoveryCampaignId(campaign.id);
+          setUploadError(
+            "The asset uploaded successfully, but its non-retryable recovery marker could not be saved. Keep this tab open.",
+          );
+        } else if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
+          setFile(null);
+          setRecoveryStatus("upload-succeeded-cleanup-failed");
+          setRecoveryCampaignId(campaign.id);
+          setUploadError(
+            "The asset uploaded successfully, but saved recovery cleanup failed. Retry cleanup before leaving this page.",
+          );
+        } else {
+          cancelUpload();
+          await refreshAssetLibraryAfterSuccessfulUpload();
+        }
       } else {
         cancelUpload();
         await refreshAssetLibraryAfterSuccessfulUpload();
