@@ -374,6 +374,30 @@ describe("CampaignAssetsTab", () => {
     });
   });
 
+  it("removes a new-session retry draft before its post-upload library refresh settles", async () => {
+    const postUploadRefresh = deferredValue<SourceAsset[]>();
+    listAssets.mockResolvedValueOnce([]).mockImplementationOnce(() => postUploadRefresh.promise);
+    const rendered = await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenCalledTimes(2);
+    });
+    expect(window.localStorage.getItem(retryDraftStorageKey("campaign-1"))).toBeNull();
+
+    rendered.unmount();
+    await renderAssetsTab();
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
+  });
+
   it("clears completed upload state when the post-upload list refresh fails", async () => {
     listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
     await renderAssetsTab();
@@ -390,14 +414,15 @@ describe("CampaignAssetsTab", () => {
     expect(createAsset).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps cleanup recovery visible when refresh and retry-draft cleanup both fail", async () => {
+  it("blocks library refresh until successful retry cleanup refreshes the active library", async () => {
     const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
     const retryStorageKey = retryDraftStorageKey("campaign-1");
+    let cleanupFails = true;
     const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
-      if (key === retryStorageKey) throw new Error("Storage cleanup unavailable");
+      if (key === retryStorageKey && cleanupFails) throw new Error("Storage cleanup unavailable");
       originalRemoveItem(key);
     });
-    listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
+    listAssets.mockResolvedValueOnce([]).mockResolvedValueOnce([uploadedAsset]);
     await renderAssetsTab();
     await screen.findByText("No assets match this view.");
 
@@ -410,7 +435,49 @@ describe("CampaignAssetsTab", () => {
 
     expect(await screen.findByRole("heading", { name: "Asset uploaded successfully" })).toBeInTheDocument();
     expect(screen.getByText(/saved recovery cleanup failed/i)).toBeInTheDocument();
-    expect(listAssets).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Retry cleanup" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dismiss warning" })).not.toBeInTheDocument();
+    expect(listAssets).toHaveBeenCalledTimes(1);
+
+    cleanupFails = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
+
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(await screen.findByText("Session 04 — The Sunken Archive")).toBeInTheDocument();
+    expect(listAssets).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ mediaFamily: undefined }));
+    removeItem.mockRestore();
+  });
+
+  it("keeps retry state cleared when the library refresh after retry cleanup fails", async () => {
+    const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
+    const retryStorageKey = retryDraftStorageKey("campaign-1");
+    let cleanupFails = true;
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
+      if (key === retryStorageKey && cleanupFails) throw new Error("Storage cleanup unavailable");
+      originalRemoveItem(key);
+    });
+    listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
+    const rendered = await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await screen.findByRole("heading", { name: "Asset uploaded successfully" });
+    cleanupFails = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
+
+    expect(await screen.findByText(/uploaded successfully, but the library could not be refreshed/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem(retryDraftStorageKey("campaign-1"))).toBeNull();
+
+    rendered.unmount();
+    await renderAssetsTab();
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
     removeItem.mockRestore();
   });
 

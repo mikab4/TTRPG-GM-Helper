@@ -353,11 +353,22 @@ export function CampaignAssetsTab() {
     }
     cancelUpload();
   }
-  function dismissCleanupWarning() {
-    setFile(null);
-    setRecoveryStatus("ordinary");
-    setRecoveryCampaignId(null);
-    setUploadError(null);
+  async function refreshAssetLibraryAfterSuccessfulUpload() {
+    const assetListRequestOutcome = await requestAssetList(activeAssetListScopeRef.current);
+    if (assetListRequestOutcome.status === "error") {
+      setPageState({
+        message: `The asset uploaded successfully, but the library could not be refreshed: ${assetListRequestOutcome.message}`,
+        status: "error",
+      });
+    }
+  }
+  async function retrySucceededUploadCleanup() {
+    if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
+      setUploadError("The saved recovery could not be cleared. Retry cleanup before changing this upload.");
+      return;
+    }
+    cancelUpload();
+    await refreshAssetLibraryAfterSuccessfulUpload();
   }
   function updateRetryField(setValue: (value: string) => void, value: string, nextValues: Parameters<typeof draftFor>[1]) {
     setValue(value);
@@ -408,8 +419,8 @@ export function CampaignAssetsTab() {
         return;
       }
       await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
-      const assetListRequestOutcome = await requestAssetList(activeAssetListScopeRef.current);
-      if (sessionId && selectedSessionId === "new" && !removeRetryDraft(retryDraftStorageKey(campaign.id))) {
+      const completedDraftCapableUpload = selectedSessionId === "new" && sessionId !== null;
+      if (completedDraftCapableUpload && !removeRetryDraft(retryDraftStorageKey(campaign.id))) {
         setFile(null);
         setRecoveryStatus("upload-succeeded-cleanup-failed");
         setRecoveryCampaignId(campaign.id);
@@ -418,12 +429,7 @@ export function CampaignAssetsTab() {
         );
       } else {
         cancelUpload();
-        if (assetListRequestOutcome.status === "error") {
-          setPageState({
-            message: `The asset uploaded successfully, but the library could not be refreshed: ${assetListRequestOutcome.message}`,
-            status: "error",
-          });
-        }
+        await refreshAssetLibraryAfterSuccessfulUpload();
       }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Unable to upload the asset.");
@@ -514,11 +520,8 @@ export function CampaignAssetsTab() {
           <section className="asset-upload-configuration">
             <h3>Asset uploaded successfully</h3>
             <p>{uploadError}</p>
-            <button type="button" onClick={discardRetry}>
+            <button type="button" onClick={() => void retrySucceededUploadCleanup()}>
               Retry cleanup
-            </button>
-            <button type="button" onClick={dismissCleanupWarning}>
-              Dismiss warning
             </button>
           </section>
         </SectionPanel>
