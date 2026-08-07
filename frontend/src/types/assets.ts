@@ -10,7 +10,7 @@ export type SourceAsset = {
   id: string;
   lifecycleStatus: SourceAssetLifecycleStatus;
   mediaType: string;
-  metadata: Record<string, object>;
+  metadata: Record<string, unknown>;
   originalFilename: string;
   sessionId: string | null;
   storageStatus: SourceAssetStorageStatus;
@@ -27,7 +27,7 @@ export type SourceAssetCreate = {
 };
 
 export type SourceAssetUpdate = {
-  metadata?: Record<string, object>;
+  metadata?: Record<string, unknown>;
   sessionId?: string | null;
   title?: string | null;
   truthStatus?: SourceAssetTruthStatus;

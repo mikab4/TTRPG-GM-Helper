@@ -47,7 +47,7 @@ function parseAsset(payload: unknown): SourceAsset {
     id: payload.id,
     lifecycleStatus: payload.lifecycle_status,
     mediaType: payload.media_type,
-    metadata: payload.metadata as Record<string, object>,
+    metadata: payload.metadata as Record<string, unknown>,
     originalFilename: payload.original_filename,
     sessionId: payload.session_id,
     storageStatus: payload.storage_status,
