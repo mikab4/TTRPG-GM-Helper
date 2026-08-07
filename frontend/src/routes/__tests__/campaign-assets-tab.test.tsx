@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,15 +90,60 @@ function retryDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function deferredValue<T>() {
+type DeferredValue<T> = {
+  promise: Promise<T>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: T) => void;
+};
+
+const pendingDeferredValues = new Set<Pick<DeferredValue<never>, "reject">>();
+
+function abortError() {
+  return new DOMException("The request was aborted.", "AbortError");
+}
+
+function deferredValue<T>(): DeferredValue<T> {
   let reject: ((reason?: unknown) => void) | undefined;
   let resolve: ((value: T) => void) | undefined;
+  let isSettled = false;
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
+    resolve = (value) => {
+      if (isSettled) return;
+      isSettled = true;
+      pendingDeferredValues.delete(deferred);
+      promiseResolve(value);
+    };
+    reject = (reason) => {
+      if (isSettled) return;
+      isSettled = true;
+      pendingDeferredValues.delete(deferred);
+      promiseReject(reason instanceof Error ? reason : new Error("Deferred request was rejected."));
+    };
   });
+  void promise.catch(() => {});
   if (!resolve || !reject) throw new Error("Deferred promise callbacks were not initialized.");
-  return { promise, reject, resolve };
+  const deferred: DeferredValue<T> = { promise, reject, resolve };
+  pendingDeferredValues.add(deferred);
+  return deferred;
+}
+
+async function resolveDeferred<T>(deferred: DeferredValue<T>, value: T) {
+  await act(async () => {
+    deferred.resolve(value);
+    await deferred.promise;
+  });
+}
+
+async function settleDeferredValues() {
+  await act(async () => {
+    for (const deferred of [...pendingDeferredValues]) deferred.reject(abortError());
+    await Promise.resolve();
+  });
+}
+
+function requireRendered(rendered: ReturnType<typeof render> | undefined) {
+  if (!rendered) throw new Error("The route did not render.");
+  return rendered;
 }
 
 function DirtyStateProbe() {
@@ -119,11 +164,13 @@ function campaignContext(campaignId = "campaign-1"): CampaignWorkspaceContext {
   };
 }
 
-function renderAssetsTab(campaignId = "campaign-1") {
+async function renderAssetsTab(campaignId = "campaign-1") {
   mockUseOutletContext.mockReturnValue(campaignContext(campaignId));
 
-  return import("../CampaignAssetsTab").then(({ CampaignAssetsTab }) => {
-    const rendered = render(
+  const { CampaignAssetsTab } = await import("../CampaignAssetsTab");
+  let rendered: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    rendered = render(
       <UnsavedChangesProvider>
         <MemoryRouter>
           <CampaignAssetsTab />
@@ -131,24 +178,26 @@ function renderAssetsTab(campaignId = "campaign-1") {
         </MemoryRouter>
       </UnsavedChangesProvider>,
     );
-    return {
-      ...rendered,
-      rerenderForCampaign(nextCampaignId: string) {
-        mockUseOutletContext.mockReturnValue(campaignContext(nextCampaignId));
-        rendered.rerender(
-          <UnsavedChangesProvider>
-            <MemoryRouter>
-              <CampaignAssetsTab />
-              <DirtyStateProbe />
-            </MemoryRouter>
-          </UnsavedChangesProvider>,
-        );
-      },
-    };
+    await Promise.resolve();
   });
+  const renderedAssetsTab = requireRendered(rendered);
+  return {
+    ...renderedAssetsTab,
+    rerenderForCampaign(nextCampaignId: string) {
+      mockUseOutletContext.mockReturnValue(campaignContext(nextCampaignId));
+      renderedAssetsTab.rerender(
+        <UnsavedChangesProvider>
+          <MemoryRouter>
+            <CampaignAssetsTab />
+            <DirtyStateProbe />
+          </MemoryRouter>
+        </UnsavedChangesProvider>,
+      );
+    },
+  };
 }
 
-function renderAssetDetailPage() {
+async function renderAssetDetailPage() {
   mockUseOutletContext.mockReturnValue({
     campaign: {
       createdAt: "2026-08-06T00:00:00Z",
@@ -160,18 +209,22 @@ function renderAssetDetailPage() {
     },
   });
 
-  return import("../AssetDetailPage").then(({ AssetDetailPage }) =>
-    render(
+  const { AssetDetailPage } = await import("../AssetDetailPage");
+  let rendered: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    rendered = render(
       <MemoryRouter initialEntries={["/campaigns/campaign-1/assets/asset-1"]}>
         <Routes>
           <Route path="/campaigns/:campaignId/assets/:assetId" element={<AssetDetailPage />} />
         </Routes>
       </MemoryRouter>,
-    ),
-  );
+    );
+    await Promise.resolve();
+  });
+  return requireRendered(rendered);
 }
 
-function renderAssetEditPage() {
+async function renderAssetEditPage() {
   mockUseOutletContext.mockReturnValue({
     campaign: {
       createdAt: "2026-08-06T00:00:00Z",
@@ -183,8 +236,10 @@ function renderAssetEditPage() {
     },
   });
 
-  return import("../AssetEditPage").then(({ AssetEditPage }) =>
-    render(
+  const { AssetEditPage } = await import("../AssetEditPage");
+  let rendered: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    rendered = render(
       <StrictMode>
         <UnsavedChangesProvider>
           <MemoryRouter initialEntries={["/campaigns/campaign-1/assets/asset-1/edit"]}>
@@ -194,8 +249,10 @@ function renderAssetEditPage() {
           </MemoryRouter>
         </UnsavedChangesProvider>
       </StrictMode>,
-    ),
-  );
+    );
+    await Promise.resolve();
+  });
+  return requireRendered(rendered);
 }
 
 describe("CampaignAssetsTab", () => {
@@ -208,7 +265,9 @@ describe("CampaignAssetsTab", () => {
     deleteAsset.mockResolvedValue();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await settleDeferredValues();
+    expect([...pendingDeferredValues]).toHaveLength(0);
     vi.restoreAllMocks();
     window.localStorage.clear();
     vi.clearAllMocks();
@@ -427,7 +486,7 @@ describe("CampaignAssetsTab", () => {
     fireEvent.change(screen.getByLabelText("Asset family"), { target: { value: "image" } });
     expect(await screen.findByText("Coastal Cave Map")).toBeInTheDocument();
 
-    postUploadDocumentResponse.resolve([]);
+    await resolveDeferred(postUploadDocumentResponse, []);
     await waitFor(() => {
       expect(screen.getByText("Coastal Cave Map")).toBeInTheDocument();
     });
@@ -472,7 +531,7 @@ describe("CampaignAssetsTab", () => {
     expect(screen.queryByText("Session 04 — The Sunken Archive")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Loading assets" })).toBeInTheDocument();
 
-    imageResponse.resolve([uploadedImageAsset]);
+    await resolveDeferred(imageResponse, [uploadedImageAsset]);
 
     expect(await screen.findByText("Coastal Cave Map")).toBeInTheDocument();
     expect(screen.queryByText("Session 04 — The Sunken Archive")).not.toBeInTheDocument();
@@ -686,7 +745,7 @@ describe("CampaignAssetsTab", () => {
       getAsset.mockResolvedValue(deletingAssetWithStorage);
       listSessions.mockResolvedValue([linkedSession]);
 
-      await renderAssetsTab();
+      const renderedAssetsTab = await renderAssetsTab();
 
       expect(await screen.findByText("Deletion in progress")).toBeInTheDocument();
       expect(screen.queryByText("Linked & Verified")).not.toBeInTheDocument();
@@ -694,9 +753,10 @@ describe("CampaignAssetsTab", () => {
       expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
       expect(screen.getByText("Edit")).toHaveAttribute("aria-disabled", "true");
 
+      renderedAssetsTab.unmount();
       await renderAssetDetailPage();
 
-      expect(await screen.findByText("Deletion in progress")).toBeInTheDocument();
+      expect(screen.getAllByText("Deletion in progress")).toHaveLength(2);
       expect(screen.queryByText("Linked & Verified")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Delete Asset" })).toBeDisabled();
       expect(screen.queryByRole("link", { name: /Edit Metadata/ })).not.toBeInTheDocument();
