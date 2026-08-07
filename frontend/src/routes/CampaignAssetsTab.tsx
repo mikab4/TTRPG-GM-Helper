@@ -40,7 +40,7 @@ type AssetUploadCompletedMarker = {
   state: "upload-completed";
 };
 
-type UploadRecoveryStatus = "ordinary" | "durable-retry" | "non-durable-retry" | "upload-succeeded-cleanup-failed";
+type UploadRecoveryStatus = "ordinary" | "durable-retry" | "non-durable-retry";
 
 type UploadRecoveryRecord = AssetUploadRetryDraft | AssetUploadCompletedMarker;
 
@@ -216,6 +216,7 @@ export function CampaignAssetsTab() {
   const { registerForm } = useUnsavedChanges();
   const registrationRef = useRef<ReturnType<typeof registerForm> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const completedMarkerCleanupAttemptRef = useRef<string | null>(null);
   const activeAssetListScopeRef = useRef<AssetListScope>({ campaignId: campaign.id, mediaFamily: "" });
   const assetListRequestRef = useRef<AssetListRequest | null>(null);
   const assetListRequestGenerationRef = useRef(0);
@@ -234,6 +235,8 @@ export function CampaignAssetsTab() {
   const [retryStorageReadable, setRetryStorageReadable] = useState(false);
   const [recoveryStatus, setRecoveryStatus] = useState<UploadRecoveryStatus>("ordinary");
   const [recoveryCampaignId, setRecoveryCampaignId] = useState<string | null>(null);
+  const [autoCleanupCampaignId, setAutoCleanupCampaignId] = useState<string | null>(null);
+  const [cleanupWarningCampaignId, setCleanupWarningCampaignId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<SourceAsset | null>(null);
@@ -285,6 +288,7 @@ export function CampaignAssetsTab() {
     const { recoveryRecord, storageAvailable } = readUploadRecoveryRecord(campaign.id);
     const retryDraft = recoveryRecord && "createdSessionId" in recoveryRecord ? recoveryRecord : null;
     const hasUploadCompletedMarker = recoveryRecord !== null && "state" in recoveryRecord;
+    completedMarkerCleanupAttemptRef.current = null;
 
     setFile(null);
     setTitle(retryDraft?.title ?? "");
@@ -295,29 +299,29 @@ export function CampaignAssetsTab() {
     setNewSessionPlayedOn(retryDraft?.newSessionPlayedOn ?? "");
     setCreatedSessionId(retryDraft?.createdSessionId ?? null);
     setRetryStorageReadable(storageAvailable);
-    setRecoveryStatus(
-      retryDraft ? "durable-retry" : hasUploadCompletedMarker ? "upload-succeeded-cleanup-failed" : "ordinary",
-    );
-    setRecoveryCampaignId(recoveryRecord ? campaign.id : null);
-    setUploadError(
-      hasUploadCompletedMarker
-        ? "The asset uploaded successfully, but saved recovery cleanup still needs to be retried."
-        : null,
-    );
+    setRecoveryStatus(retryDraft ? "durable-retry" : "ordinary");
+    setRecoveryCampaignId(retryDraft ? campaign.id : null);
+    setAutoCleanupCampaignId(hasUploadCompletedMarker ? campaign.id : null);
+    setCleanupWarningCampaignId(hasUploadCompletedMarker ? campaign.id : null);
+    setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [campaign.id]);
   useLayoutEffect(() => {
     setPageState({ status: "loading" });
   }, [campaign.id, mediaFamily]);
   useEffect(() => {
+    if (autoCleanupCampaignId !== campaign.id || completedMarkerCleanupAttemptRef.current === campaign.id) return;
+
+    completedMarkerCleanupAttemptRef.current = campaign.id;
+    setAutoCleanupCampaignId(null);
+    if (removeRetryDraft(retryDraftStorageKey(campaign.id))) setCleanupWarningCampaignId(null);
+  }, [autoCleanupCampaignId, campaign.id]);
+  useEffect(() => {
     const hasOrdinaryEdits = Boolean(
       title || selectedSessionId || newSessionLabel || newSessionNumber || newSessionPlayedOn || truthStatus !== "uncertain",
     );
     registrationRef.current?.setDirty(
-      Boolean(file) ||
-        recoveryStatus === "non-durable-retry" ||
-        recoveryStatus === "upload-succeeded-cleanup-failed" ||
-        (recoveryStatus === "ordinary" && hasOrdinaryEdits),
+      Boolean(file) || recoveryStatus === "non-durable-retry" || (recoveryStatus === "ordinary" && hasOrdinaryEdits),
     );
   }, [file, newSessionLabel, newSessionNumber, newSessionPlayedOn, recoveryStatus, selectedSessionId, title, truthStatus]);
   useEffect(() => {
@@ -406,11 +410,9 @@ export function CampaignAssetsTab() {
     }
   }
   async function retrySucceededUploadCleanup() {
-    if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
-      setUploadError("The saved recovery could not be cleared. Retry cleanup before changing this upload.");
-      return;
-    }
-    cancelUpload();
+    if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) return;
+
+    setCleanupWarningCampaignId(null);
     await refreshAssetLibraryAfterSuccessfulUpload();
   }
   function updateRetryField(setValue: (value: string) => void, value: string, nextValues: Parameters<typeof draftFor>[1]) {
@@ -470,16 +472,13 @@ export function CampaignAssetsTab() {
       await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
       const completedDraftCapableUpload = selectedSessionId === "new" && sessionId !== null;
       if (completedDraftCapableUpload) {
-        const completedMarkerWritten = writeUploadCompletedMarker(campaign.id);
+        writeUploadCompletedMarker(campaign.id);
         if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
           setFile(null);
-          setRecoveryStatus("upload-succeeded-cleanup-failed");
-          setRecoveryCampaignId(campaign.id);
-          setUploadError(
-            completedMarkerWritten
-              ? "The asset uploaded successfully, but saved recovery cleanup failed. Retry cleanup before leaving this page."
-              : "The asset uploaded successfully, but its non-retryable recovery marker could not be saved and saved recovery cleanup failed. Retry cleanup before leaving this page.",
-          );
+          setRecoveryStatus("ordinary");
+          setRecoveryCampaignId(null);
+          setAutoCleanupCampaignId(null);
+          setCleanupWarningCampaignId(campaign.id);
         } else {
           cancelUpload();
           await refreshAssetLibraryAfterSuccessfulUpload();
@@ -569,22 +568,8 @@ export function CampaignAssetsTab() {
         )
       : [];
   const sessionNameById = new Map(sessions.map((session) => [session.id, formatLinkedSessionName(session)]));
-  const hasActiveRetry = recoveryCampaignId === campaign.id && recoveryStatus !== "ordinary";
-  if (recoveryStatus === "upload-succeeded-cleanup-failed" && recoveryCampaignId === campaign.id) {
-    return (
-      <div className="page-stack">
-        <SectionPanel>
-          <section className="asset-upload-configuration">
-            <h3>Asset uploaded successfully</h3>
-            <p>{uploadError}</p>
-            <button type="button" onClick={() => void retrySucceededUploadCleanup()}>
-              Retry cleanup
-            </button>
-          </section>
-        </SectionPanel>
-      </div>
-    );
-  }
+  const hasActiveRetry =
+    recoveryCampaignId === campaign.id && (recoveryStatus === "durable-retry" || recoveryStatus === "non-durable-retry");
   return (
     <div className="page-stack">
       <header className="workspace-section-header">
@@ -595,6 +580,17 @@ export function CampaignAssetsTab() {
           </p>
         </div>
       </header>
+      {cleanupWarningCampaignId === campaign.id ? (
+        <SectionPanel>
+          <section className="asset-upload-configuration" role="alert">
+            <h3>Asset uploaded successfully</h3>
+            <p>The asset uploaded successfully, but saved recovery cleanup still needs to be retried.</p>
+            <button type="button" onClick={() => void retrySucceededUploadCleanup()}>
+              Retry cleanup
+            </button>
+          </section>
+        </SectionPanel>
+      ) : null}
       <SectionPanel>
         <form className="asset-upload-form" onSubmit={(event) => void submitUpload(event)}>
           {!file && !hasActiveRetry ? (
