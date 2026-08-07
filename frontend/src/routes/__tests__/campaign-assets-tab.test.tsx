@@ -636,6 +636,83 @@ describe("CampaignAssetsTab", () => {
     removeItem.mockRestore();
   });
 
+  it("resets a successful new-session upload and refreshes the active filter when cleanup fails", async () => {
+    const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
+    const retryStorageKey = retryDraftStorageKey("campaign-1");
+    let cleanupFails = true;
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
+      if (key === retryStorageKey && cleanupFails) throw new Error("Storage cleanup unavailable");
+      originalRemoveItem(key);
+    });
+    const secondCreatedSession: CampaignSession = {
+      ...linkedSession,
+      id: "session-5",
+      sessionLabel: "Return to Blackreef",
+      sessionNumber: 5,
+    };
+    createSession.mockResolvedValueOnce(linkedSession).mockResolvedValueOnce(secondCreatedSession);
+
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+    fireEvent.change(screen.getByLabelText("Asset family"), { target: { value: "image" } });
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Display title"), { target: { value: "First completed upload" } });
+    fireEvent.change(screen.getByLabelText("Truth status"), { target: { value: "subjective" } });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(screen.getByTestId("dirty-state")).toHaveTextContent("false");
+    expect(screen.getByText(/uploaded successfully, but saved recovery cleanup/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenCalledTimes(3);
+      expect(listAssets).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ mediaFamily: "image" }));
+    });
+    expect(JSON.parse(window.localStorage.getItem(retryStorageKey) ?? "null")).toEqual({
+      state: "upload-completed",
+      version: 1,
+    });
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "second-session-notes.txt", { type: "text/plain" })] },
+    });
+    expect(screen.getByLabelText("Display title")).toHaveValue("second-session-notes");
+    expect(screen.getByLabelText("Truth status")).toHaveValue("uncertain");
+    expect(screen.getByText(/uploaded successfully, but saved recovery cleanup/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    expect(screen.getByLabelText("Session number")).toHaveValue("");
+    expect(screen.getByLabelText("Date played")).toHaveValue("");
+    expect(screen.getByLabelText("Session title")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Return to Blackreef" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(createAsset).toHaveBeenCalledTimes(2);
+      expect(listAssets).toHaveBeenCalledTimes(4);
+    });
+    expect(createSession).toHaveBeenCalledTimes(2);
+    expect(createAsset).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ sessionId: "session-5" }));
+    expect(screen.getByText(/uploaded successfully, but saved recovery cleanup/i)).toBeInTheDocument();
+
+    cleanupFails = false;
+    const assetListCallCountBeforeCleanupRetry = listAssets.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/uploaded successfully, but saved recovery cleanup/i)).not.toBeInTheDocument();
+    });
+    expect(listAssets).toHaveBeenCalledTimes(assetListCallCountBeforeCleanupRetry);
+    expect(window.localStorage.getItem(retryStorageKey)).toBeNull();
+    removeItem.mockRestore();
+  });
+
   it("removes the retry draft when the completion marker cannot be written", async () => {
     const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
     const retryStorageKey = retryDraftStorageKey("campaign-1");
@@ -663,40 +740,6 @@ describe("CampaignAssetsTab", () => {
     expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
     expect(createAsset).toHaveBeenCalledTimes(1);
     setItem.mockRestore();
-  });
-
-  it("keeps retry state cleared when the library refresh after retry cleanup fails", async () => {
-    const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
-    const retryStorageKey = retryDraftStorageKey("campaign-1");
-    let cleanupFails = true;
-    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
-      if (key === retryStorageKey && cleanupFails) throw new Error("Storage cleanup unavailable");
-      originalRemoveItem(key);
-    });
-    listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
-    const rendered = await renderAssetsTab();
-    await screen.findByText("No assets match this view.");
-
-    fireEvent.change(screen.getByLabelText("Choose asset file"), {
-      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
-    });
-    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
-    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
-    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
-
-    await screen.findByRole("heading", { name: "Asset uploaded successfully" });
-    cleanupFails = false;
-    fireEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
-
-    expect(await screen.findByText(/uploaded successfully, but the library could not be refreshed/i)).toBeInTheDocument();
-    expect(window.localStorage.getItem(retryDraftStorageKey("campaign-1"))).toBeNull();
-    expect(screen.queryByText(/uploaded successfully, but saved recovery cleanup/i)).not.toBeInTheDocument();
-
-    rendered.unmount();
-    await renderAssetsTab();
-    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
-    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
-    removeItem.mockRestore();
   });
 
   it("persists a complete retry draft before an asset upload failure", async () => {

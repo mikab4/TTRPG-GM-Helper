@@ -409,11 +409,10 @@ export function CampaignAssetsTab() {
       });
     }
   }
-  async function retrySucceededUploadCleanup() {
+  function retrySucceededUploadCleanup() {
     if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) return;
 
     setCleanupWarningCampaignId(null);
-    await refreshAssetLibraryAfterSuccessfulUpload();
   }
   function updateRetryField(setValue: (value: string) => void, value: string, nextValues: Parameters<typeof draftFor>[1]) {
     setValue(value);
@@ -471,22 +470,13 @@ export function CampaignAssetsTab() {
       }
       await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
       const completedDraftCapableUpload = selectedSessionId === "new" && sessionId !== null;
+      if (completedDraftCapableUpload) writeUploadCompletedMarker(campaign.id);
+      cancelUpload();
       if (completedDraftCapableUpload) {
-        writeUploadCompletedMarker(campaign.id);
-        if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
-          setFile(null);
-          setRecoveryStatus("ordinary");
-          setRecoveryCampaignId(null);
-          setAutoCleanupCampaignId(null);
-          setCleanupWarningCampaignId(campaign.id);
-        } else {
-          cancelUpload();
-          await refreshAssetLibraryAfterSuccessfulUpload();
-        }
-      } else {
-        cancelUpload();
-        await refreshAssetLibraryAfterSuccessfulUpload();
+        const cleanupSucceeded = removeRetryDraft(retryDraftStorageKey(campaign.id));
+        setCleanupWarningCampaignId(cleanupSucceeded ? null : campaign.id);
       }
+      await refreshAssetLibraryAfterSuccessfulUpload();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Unable to upload the asset.");
     } finally {
@@ -585,7 +575,7 @@ export function CampaignAssetsTab() {
           <section className="asset-upload-configuration" role="alert">
             <h3>Asset uploaded successfully</h3>
             <p>The asset uploaded successfully, but saved recovery cleanup still needs to be retried.</p>
-            <button type="button" onClick={() => void retrySucceededUploadCleanup()}>
+            <button type="button" onClick={retrySucceededUploadCleanup}>
               Retry cleanup
             </button>
           </section>
