@@ -470,19 +470,15 @@ export function CampaignAssetsTab() {
       await createAsset(campaign.id, { file, sessionId, title: title.trim() || null, truthStatus });
       const completedDraftCapableUpload = selectedSessionId === "new" && sessionId !== null;
       if (completedDraftCapableUpload) {
-        if (!writeUploadCompletedMarker(campaign.id)) {
+        const completedMarkerWritten = writeUploadCompletedMarker(campaign.id);
+        if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
           setFile(null);
           setRecoveryStatus("upload-succeeded-cleanup-failed");
           setRecoveryCampaignId(campaign.id);
           setUploadError(
-            "The asset uploaded successfully, but its non-retryable recovery marker could not be saved. Keep this tab open.",
-          );
-        } else if (!removeRetryDraft(retryDraftStorageKey(campaign.id))) {
-          setFile(null);
-          setRecoveryStatus("upload-succeeded-cleanup-failed");
-          setRecoveryCampaignId(campaign.id);
-          setUploadError(
-            "The asset uploaded successfully, but saved recovery cleanup failed. Retry cleanup before leaving this page.",
+            completedMarkerWritten
+              ? "The asset uploaded successfully, but saved recovery cleanup failed. Retry cleanup before leaving this page."
+              : "The asset uploaded successfully, but its non-retryable recovery marker could not be saved and saved recovery cleanup failed. Retry cleanup before leaving this page.",
           );
         } else {
           cancelUpload();

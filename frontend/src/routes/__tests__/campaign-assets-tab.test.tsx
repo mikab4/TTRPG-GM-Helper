@@ -620,6 +620,35 @@ describe("CampaignAssetsTab", () => {
     removeItem.mockRestore();
   });
 
+  it("removes the retry draft when the completion marker cannot be written", async () => {
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+    const retryStorageKey = retryDraftStorageKey("campaign-1");
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation((key, value) => {
+      if (key === retryStorageKey && value.includes('"upload-completed"')) throw new Error("Storage marker unavailable");
+      originalSetItem(key, value);
+    });
+    const rendered = await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(window.localStorage.getItem(retryStorageKey)).toBeNull();
+
+    rendered.unmount();
+    await renderAssetsTab();
+
+    expect(await screen.findByRole("heading", { name: "Add Assets to The Shattered Coast" })).toBeInTheDocument();
+    expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
+    expect(createAsset).toHaveBeenCalledTimes(1);
+    setItem.mockRestore();
+  });
+
   it("keeps retry state cleared when the library refresh after retry cleanup fails", async () => {
     const originalRemoveItem = window.localStorage.removeItem.bind(window.localStorage);
     const retryStorageKey = retryDraftStorageKey("campaign-1");

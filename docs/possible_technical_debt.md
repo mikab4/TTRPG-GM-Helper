@@ -4,7 +4,7 @@
 
 The approved frontend flow creates a session and then uploads its asset in two separate API calls, so it cannot be atomic. Before creating a new session, the upload UI blocks when it could not initially read retry storage or cannot complete a temporary storage write/remove probe. After session creation, it retains the existing retry-draft persistence guard.
 
-Storage can still fail after a successful preflight and session creation. That residual risk is accepted for the single-user, local-first v1 because the approved API boundary explicitly excludes a combined command. Reconsider server-side idempotency, resumable orchestration, or a combined command if these failures occur in practice or stronger guarantees become necessary.
+Storage can still fail after a successful preflight and session creation. After a successful asset upload, the UI first writes a non-retryable completion marker and always attempts to remove the retry draft, including when the marker write fails. The remaining narrow risk is that both operations fail: the old retry draft can survive a refresh and offer a duplicate upload. Browser storage cannot make that completed-upload state durable in this case. That residual risk is accepted for the single-user, local-first v1 because the approved API boundary explicitly excludes a combined command. Reconsider server-side idempotency, resumable orchestration, or a combined command if these failures occur in practice or stronger guarantees become necessary.
 
 ## DOCX and ODT source-asset support
 
