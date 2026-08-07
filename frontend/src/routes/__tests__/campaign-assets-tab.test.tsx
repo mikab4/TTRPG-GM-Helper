@@ -209,6 +209,7 @@ describe("CampaignAssetsTab", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -270,6 +271,73 @@ describe("CampaignAssetsTab", () => {
         summary: null,
       });
     });
+  });
+
+  it("blocks a new-session upload before either API call when retry storage cannot be written", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Display title"), { target: { value: "Session five recap" } });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByText(/unable to verify upload recovery storage/i)).toBeInTheDocument();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(createAsset).not.toHaveBeenCalled();
+    expect(screen.getByText("session-five.txt")).toBeInTheDocument();
+    expect(screen.getByLabelText("Display title")).toHaveValue("Session five recap");
+    expect(screen.getByLabelText("Session title")).toHaveValue("Blackreef Vault Infiltration");
+    setItem.mockRestore();
+  });
+
+  it("blocks a new-session upload when retry storage was unreadable initially", async () => {
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByText(/unable to verify upload recovery storage/i)).toBeInTheDocument();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(createAsset).not.toHaveBeenCalled();
+    expect(screen.getByText("session-five.txt")).toBeInTheDocument();
+    expect(screen.getByLabelText("Session title")).toHaveValue("Blackreef Vault Infiltration");
+    getItem.mockRestore();
+  });
+
+  it("allows an existing-session upload when retry storage is unavailable", async () => {
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    listSessions.mockResolvedValue([linkedSession]);
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: linkedSession.id } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(createAsset).toHaveBeenCalledWith("campaign-1", expect.objectContaining({ sessionId: linkedSession.id }));
+    });
+    expect(createSession).not.toHaveBeenCalled();
+    getItem.mockRestore();
   });
 
   it("keeps the newer media-family view when an older post-upload refresh settles", async () => {

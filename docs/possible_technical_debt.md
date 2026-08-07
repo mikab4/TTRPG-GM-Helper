@@ -1,5 +1,11 @@
 # Possible Technical Debt
 
+## New-session asset-upload recovery race
+
+The approved frontend flow creates a session and then uploads its asset in two separate API calls, so it cannot be atomic. Before creating a new session, the upload UI blocks when it could not initially read retry storage or cannot complete a temporary storage write/remove probe. After session creation, it retains the existing retry-draft persistence guard.
+
+Storage can still fail after a successful preflight and session creation. That residual risk is accepted for the single-user, local-first v1 because the approved API boundary explicitly excludes a combined command. Reconsider server-side idempotency, resumable orchestration, or a combined command if these failures occur in practice or stronger guarantees become necessary.
+
 ## DOCX and ODT source-asset support
 
 DOCX and ODT uploads are deliberately outside the current upload allowlist. Accepting either format safely needs more than trusting the multipart MIME type or checking a couple of ZIP member names.

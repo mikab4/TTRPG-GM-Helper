@@ -130,6 +130,17 @@ function writeRetryDraft(campaignId: string, draft: AssetUploadRetryDraft): bool
   }
 }
 
+function canWriteRetryDraft(campaignId: string): boolean {
+  const probeStorageKey = `${retryDraftStorageKey(campaignId)}:probe`;
+  try {
+    window.localStorage.setItem(probeStorageKey, "1");
+    window.localStorage.removeItem(probeStorageKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function formatBytes(bytes: number) {
   return bytes < 1024 * 1024
     ? `${String(Math.max(1, Math.round(bytes / 1024)))} KB`
@@ -188,6 +199,7 @@ export function CampaignAssetsTab() {
   const [newSessionNumber, setNewSessionNumber] = useState("");
   const [newSessionPlayedOn, setNewSessionPlayedOn] = useState("");
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
+  const [retryStorageReadable, setRetryStorageReadable] = useState(false);
   const [recoveryStatus, setRecoveryStatus] = useState<UploadRecoveryStatus>("ordinary");
   const [recoveryCampaignId, setRecoveryCampaignId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -238,7 +250,7 @@ export function CampaignAssetsTab() {
     return registration.unregister;
   }, [registerForm]);
   useLayoutEffect(() => {
-    const { draft } = readRetryDraft(campaign.id);
+    const { draft, storageAvailable } = readRetryDraft(campaign.id);
 
     setFile(null);
     setTitle(draft?.title ?? "");
@@ -248,6 +260,7 @@ export function CampaignAssetsTab() {
     setNewSessionNumber(draft?.newSessionNumber ?? "");
     setNewSessionPlayedOn(draft?.newSessionPlayedOn ?? "");
     setCreatedSessionId(draft?.createdSessionId ?? null);
+    setRetryStorageReadable(storageAvailable);
     setRecoveryStatus(draft ? "durable-retry" : "ordinary");
     setRecoveryCampaignId(draft ? campaign.id : null);
     setUploadError(null);
@@ -365,6 +378,12 @@ export function CampaignAssetsTab() {
       if (selectedSessionId === "new" && !sessionId) {
         if (!newSessionLabel.trim()) {
           setUploadError("Enter a title for the new session.");
+          return;
+        }
+        if (!retryStorageReadable || !canWriteRetryDraft(campaign.id)) {
+          setUploadError(
+            "Unable to verify upload recovery storage. Create the session separately or choose an existing session.",
+          );
           return;
         }
         const parsedSessionNumber = newSessionNumber.trim() ? Number(newSessionNumber) : null;
