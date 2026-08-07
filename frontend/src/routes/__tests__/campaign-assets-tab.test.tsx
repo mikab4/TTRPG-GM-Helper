@@ -273,6 +273,65 @@ describe("CampaignAssetsTab", () => {
     });
   });
 
+  it("creates and links a number-only session before uploading its asset", async () => {
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session number"), { target: { value: "5" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    await waitFor(() => {
+      expect(createSession).toHaveBeenCalledWith("campaign-1", {
+        playedOn: null,
+        sessionLabel: null,
+        sessionNumber: 5,
+        summary: null,
+      });
+      expect(createAsset).toHaveBeenCalledWith("campaign-1", expect.objectContaining({ sessionId: "session-4" }));
+    });
+  });
+
+  it("rejects a new session without a number or title before either API call", async () => {
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByText("Enter a session number or a session title.")).toBeInTheDocument();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(createAsset).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed session number even when a title is available", async () => {
+    await renderAssetsTab();
+    await screen.findByText("No assets match this view.");
+    fireEvent.change(screen.getByLabelText("Choose asset file"), {
+      target: { files: [new File(["notes"], "session-five.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("Display title"), { target: { value: "Session five recap" } });
+    fireEvent.change(screen.getByLabelText("Link to session"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Session number"), { target: { value: "five" } });
+    fireEvent.change(screen.getByLabelText("Session title"), { target: { value: "Blackreef Vault Infiltration" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Save & Link Asset" }));
+
+    expect(await screen.findByText("Enter a whole-number session number.")).toBeInTheDocument();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(createAsset).not.toHaveBeenCalled();
+    expect(screen.getByText("session-five.txt")).toBeInTheDocument();
+    expect(screen.getByLabelText("Display title")).toHaveValue("Session five recap");
+    expect(screen.getByLabelText("Session number")).toHaveValue("five");
+    expect(screen.getByLabelText("Session title")).toHaveValue("Blackreef Vault Infiltration");
+  });
+
   it("blocks a new-session upload before either API call when retry storage cannot be written", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("Storage unavailable");

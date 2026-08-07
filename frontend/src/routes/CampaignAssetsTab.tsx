@@ -390,8 +390,15 @@ export function CampaignAssetsTab() {
     try {
       let sessionId = createdSessionId;
       if (selectedSessionId === "new" && !sessionId) {
-        if (!newSessionLabel.trim()) {
-          setUploadError("Enter a title for the new session.");
+        const normalizedSessionLabel = newSessionLabel.trim() || null;
+        const trimmedSessionNumber = newSessionNumber.trim();
+        const parsedSessionNumber = trimmedSessionNumber ? Number(trimmedSessionNumber) : null;
+        if (trimmedSessionNumber && !Number.isInteger(parsedSessionNumber)) {
+          setUploadError("Enter a whole-number session number.");
+          return;
+        }
+        if (parsedSessionNumber === null && normalizedSessionLabel === null) {
+          setUploadError("Enter a session number or a session title.");
           return;
         }
         if (!retryStorageReadable || !canWriteRetryDraft(campaign.id)) {
@@ -400,11 +407,10 @@ export function CampaignAssetsTab() {
           );
           return;
         }
-        const parsedSessionNumber = newSessionNumber.trim() ? Number(newSessionNumber) : null;
         const createdSession = await createSession(campaign.id, {
           playedOn: newSessionPlayedOn || null,
-          sessionLabel: newSessionLabel.trim(),
-          sessionNumber: Number.isInteger(parsedSessionNumber) ? parsedSessionNumber : null,
+          sessionLabel: normalizedSessionLabel,
+          sessionNumber: parsedSessionNumber,
           summary: null,
         });
         sessionId = createdSession.id;
