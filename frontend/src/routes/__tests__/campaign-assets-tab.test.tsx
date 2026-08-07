@@ -398,6 +398,27 @@ describe("CampaignAssetsTab", () => {
     expect(screen.queryByText("Session created. Retrying will upload to this same session.")).not.toBeInTheDocument();
   });
 
+  it("hides prior-scope rows while a newly selected media family loads", async () => {
+    const imageResponse = deferredValue<SourceAsset[]>();
+    listAssets.mockResolvedValueOnce([uploadedAsset]).mockImplementationOnce(() => imageResponse.promise);
+
+    await renderAssetsTab();
+    expect(await screen.findByText("Session 04 — The Sunken Archive")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Asset family"), { target: { value: "image" } });
+
+    await waitFor(() => {
+      expect(listAssets).toHaveBeenLastCalledWith("campaign-1", expect.objectContaining({ mediaFamily: "image" }));
+    });
+    expect(screen.queryByText("Session 04 — The Sunken Archive")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Loading assets" })).toBeInTheDocument();
+
+    imageResponse.resolve([uploadedImageAsset]);
+
+    expect(await screen.findByText("Coastal Cave Map")).toBeInTheDocument();
+    expect(screen.queryByText("Session 04 — The Sunken Archive")).not.toBeInTheDocument();
+  });
+
   it("clears completed upload state when the post-upload list refresh fails", async () => {
     listAssets.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("Library unavailable"));
     await renderAssetsTab();

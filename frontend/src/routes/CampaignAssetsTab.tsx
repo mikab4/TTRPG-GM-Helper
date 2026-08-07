@@ -266,6 +266,9 @@ export function CampaignAssetsTab() {
     setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [campaign.id]);
+  useLayoutEffect(() => {
+    setPageState({ status: "loading" });
+  }, [campaign.id, mediaFamily]);
   useEffect(() => {
     const hasOrdinaryEdits = Boolean(
       title || selectedSessionId || newSessionLabel || newSessionNumber || newSessionPlayedOn || truthStatus !== "uncertain",
