@@ -3,6 +3,7 @@ import type { SourceAssetLifecycleStatus, SourceAssetStorageStatus } from "../ty
 type AssetStatusPresentation = {
   isReadOnly: boolean;
   label: "Deletion in progress" | "File available" | "File missing";
+  tone: "available" | "deleting" | "missing";
 };
 
 export function getAssetStatusPresentation({
@@ -12,8 +13,8 @@ export function getAssetStatusPresentation({
   lifecycleStatus: SourceAssetLifecycleStatus;
   storageStatus: SourceAssetStorageStatus;
 }): AssetStatusPresentation {
-  if (lifecycleStatus === "deleting") return { isReadOnly: true, label: "Deletion in progress" };
+  if (lifecycleStatus === "deleting") return { isReadOnly: true, label: "Deletion in progress", tone: "deleting" };
   return storageStatus === "missing"
-    ? { isReadOnly: false, label: "File missing" }
-    : { isReadOnly: false, label: "File available" };
+    ? { isReadOnly: false, label: "File missing", tone: "missing" }
+    : { isReadOnly: false, label: "File available", tone: "available" };
 }

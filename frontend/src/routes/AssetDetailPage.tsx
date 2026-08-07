@@ -113,7 +113,9 @@ export function AssetDetailPage() {
             <span className="asset-meta-chip asset-truth-chip">
               {asset.truthStatus === "canonical" ? "Canonical" : asset.truthStatus === "subjective" ? "Rumor" : "Reference"}
             </span>
-            <span className={isReadOnly ? "deleting-chip" : "missing-chip"}>{statusLabel}</span>
+            <span className={deletionStatusUncertain ? "deleting-chip" : `${assetStatusPresentation.tone}-chip`}>
+              {statusLabel}
+            </span>
           </div>
           <h2>{asset.title ?? asset.originalFilename}</h2>
         </div>

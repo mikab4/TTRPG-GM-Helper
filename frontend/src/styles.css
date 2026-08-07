@@ -2140,6 +2140,7 @@ h4 {
 }
 
 .asset-meta-chip,
+.available-chip,
 .missing-chip {
   display: inline-block;
   margin: 0;
@@ -2165,6 +2166,12 @@ h4 {
   border: 1px solid #fecaca;
   color: #b91c1c;
   background: #fee2e2;
+}
+
+.available-chip {
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  background: #dcfce7;
 }
 
 .deleting-chip {

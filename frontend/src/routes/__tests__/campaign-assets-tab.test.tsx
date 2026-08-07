@@ -737,6 +737,23 @@ describe("CampaignAssetsTab", () => {
     expect(screen.getByRole("button", { name: "Delete Asset" })).toBeInTheDocument();
   });
 
+  it("uses the available status treatment for healthy assets in the list and detail", async () => {
+    listAssets.mockResolvedValue([uploadedAsset]);
+    getAsset.mockResolvedValue(uploadedAsset);
+    listSessions.mockResolvedValue([linkedSession]);
+
+    const renderedAssetsTab = await renderAssetsTab();
+
+    expect(await screen.findByText("File available")).toHaveClass("available-chip");
+
+    renderedAssetsTab.unmount();
+    await renderAssetDetailPage();
+
+    expect(await screen.findByText("File available", { selector: ".asset-detail-heading span" })).toHaveClass(
+      "available-chip",
+    );
+  });
+
   it.each(["available", "missing"] as const)(
     "keeps a deleting %s asset visibly transitional and read-only in the list and detail",
     async (storageStatus) => {

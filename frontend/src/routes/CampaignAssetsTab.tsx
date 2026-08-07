@@ -804,7 +804,7 @@ export function CampaignAssetsTab() {
                         className={
                           uncertainAssetIds.has(asset.id) || asset.lifecycleStatus === "deleting"
                             ? "deleting-chip"
-                            : "missing-chip"
+                            : `${getAssetStatusPresentation(asset).tone}-chip`
                         }
                       >
                         {uncertainAssetIds.has(asset.id)
