@@ -2,11 +2,11 @@
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build a single-user, local-first RPG GM helper that stores campaign data, ingests source assets, extracts candidate entities for review, and supports keyword search.
+**Goal:** Build a single-user, locally runnable RPG GM helper that stores campaign data, ingests source assets, processes them asynchronously, extracts candidate entities for review, and supports keyword search.
 
-**Architecture:** Use a modular monolith with a Python FastAPI backend, PostgreSQL as the source of truth, and a separate TypeScript React frontend in the same repository. Keep the frontend thin and isolated behind a plain typed API boundary so business rules stay in FastAPI services and the UI remains cheap to replace if early framework choices change. Keep extraction and external sync behind clear interfaces so semantic search, model-assisted extraction, and future auth can be added without rewriting core workflows.
+**Architecture:** Use a modular monolith with a Python FastAPI backend, PostgreSQL as the source of truth, and a separate TypeScript React frontend in the same repository. Add one independently runnable `asset-processor` worker for slow, failure-prone asset processing; it uses Redis Streams for transport, MinIO through an S3-compatible storage boundary for files, and MongoDB only for rebuildable versioned parse projections. Keep the frontend thin and keep all canonical workflow, candidate review, and business rules in FastAPI/PostgreSQL.
 
-**Tech Stack:** FastAPI, PostgreSQL, SQLAlchemy or SQLModel, Alembic, pytest, React, TypeScript, Vite
+**Tech Stack:** FastAPI, PostgreSQL, Redis Streams, MongoDB, MinIO/S3 API, SQLAlchemy or SQLModel, Alembic, pytest, React, TypeScript, Vite, Docker Compose
 
 ---
 
@@ -26,10 +26,11 @@ Deliver a demoable first milestone with these user-visible capabilities:
 - The backend remains in Python so development stays fast.
 - The frontend is TypeScript React so the project includes one deliberate new learning area.
 - The frontend stays a separate app with routing, forms, tables, API calls, and presentation only; domain rules remain in backend services.
-- PostgreSQL is the only datastore in v1.
+- PostgreSQL is the canonical datastore in v1. Redis is transient work transport and MongoDB is a rebuildable parsed-document projection; neither owns canonical campaign truth.
+- Original assets use an S3-compatible storage boundary, backed by MinIO in local Docker Compose. No API or worker code may rely on a shared local filesystem path.
 - Search uses PostgreSQL full-text search only, but search-specific schema and indexing work are deferred until the search task.
-- Extraction is rules-first, with an interface that can later support an LLM-backed implementation.
-- Auth, semantic search, vector search, model training, and microservices are deferred.
+- Extraction starts rules-first, but its contract records parser, extractor, model/provider, and prompt/template versions so a future model-backed implementation can use the same review workflow.
+- Public auth, tenant enforcement, semantic/vector search, model training, and additional service splits are deferred. The one worker boundary is intentional and must not expand into independent CRUD domain services.
 
 ## Public Interfaces
 
@@ -39,6 +40,7 @@ Implement these API groups:
 - `/relationships`
 - `/sessions`
 - `/assets`
+- `/processing-jobs`
 - `/extraction-jobs`
 - `/search`
 
@@ -59,6 +61,8 @@ Define these initial records:
 - `Session`
 - `SourceAsset`
 - `AssetParseResult`
+- `ProcessingJob`
+- `OutboxEvent`
 - `ExtractionJob`
 - `ExtractionCandidate`
 
@@ -69,7 +73,8 @@ Schema defaults:
 - Deleting an entity also deletes its incoming and outgoing relationships. The ORM relationship configuration and database foreign keys must agree on that cascade behavior.
 - `Session` represents an actual play session and is distinct from uploaded source artifacts.
 - `SourceAsset` stores uploaded evidence or artifacts and may optionally link back to a session.
-- `AssetParseResult` stores backend-owned parse-cache groundwork so later branches can add reusable parsed text and structure without another schema reshape.
+- `AssetParseResult` remains compatibility/provenance groundwork while MongoDB holds rebuildable versioned parse projections. Parsed documents use a format-neutral section contract from the first `.txt` slice so new formats do not reshape job, storage, callback, or provenance contracts.
+- `ProcessingJob` and `OutboxEvent` provide canonical lifecycle and reliable dispatch records; Redis is never the only record of work.
 - `Owner` exists as a placeholder for future auth and tenancy even though v1 is single-user.
 
 ## Implementation Tasks
@@ -215,63 +220,23 @@ Sequence the work as vertical slices after the shared foundation. The point is t
 - Which parsed asset details should be exposed in asset detail views without surfacing parser internals too early?
 - How should the campaign switcher preserve the current workspace section while protecting unsaved form changes?
 
-### Task 9: Parsing implementation and parse-cache behavior
+### Task 9: Real `.txt` asset-processing vertical slice
 
-**Files:**
-- Create: `backend/app/services/asset_parsing.py`
-- Create: `backend/tests/test_asset_parsing.py`
-- Modify: `backend/app/config.py`
+Implement the first learning slice end to end: a real `.txt` upload is stored in MinIO, creates a canonical PostgreSQL processing job, travels through Redis Streams to the independently runnable worker, becomes a versioned MongoDB parsed-document projection, and reports its result through an internal FastAPI callback. Keep it intentionally narrow: no other formats, candidate extraction, retries, or outbox yet. Completion must already be idempotent.
 
-**Steps:**
-1. Implement backend-owned parse-dependent reads for supported text documents and spreadsheets.
-2. Reuse cached parse results by `(asset_id, parser_kind, parser_version, source_checksum)` before reparsing.
-3. Add configurable inline-versus-storage thresholds for parsed outputs.
-4. Implement parse failure, retry, and stale-cache handling needed for extraction, preview, and search.
-5. Add tests covering parse cache hits, misses, retries, threshold behavior, and stale-cache invalidation.
+### Task 10: Durable dispatch, recovery, and deletion coordination
 
-### Task 10: Extraction pipeline contract and rules-based implementation
+Replace Task 9's direct queue publish with a PostgreSQL transactional outbox and relay process. Add consumer-group recovery, retry classification, terminal failures, dead-letter transport records, cancellation, asset-delete coordination, and structured correlation logging. PostgreSQL remains the authoritative job lifecycle throughout.
 
-**Files:**
-- Create: `backend/app/services/extraction/base.py`
-- Create: `backend/app/services/extraction/rules.py`
-- Create: `backend/app/api/extraction_jobs.py`
-- Create: `backend/tests/test_extraction_rules.py`
-- Create: `backend/tests/test_extraction_api.py`
+### Task 11: Multilingual parsing, extraction, and review
 
-**Steps:**
-1. Define an extraction service interface that accepts parsed asset content and campaign context and returns candidate entities and relationships.
-2. Implement a rules-based extractor that targets obvious named entities and simple relationships from curated sample notes and spreadsheet-derived structure.
-3. Add extraction job and extraction candidate persistence.
-4. Expose API endpoints to start an extraction job and fetch its candidates.
-5. Add tests against fixed sample assets so the behavior is stable and demoable.
+Formalize a Unicode-preserving, format-neutral `ParsedDocument`/`ParsedSection` contract; `.txt` is its first implementation. Treat language as a per-section hint and never assume a mixed Hebrew/English asset has one definitive language. Add the rules extractor, versioned candidate provenance, campaign-scoped candidate review, and human approval before canonical writes. Define—but do not yet call—a model-extractor adapter that records provider/model/prompt versions.
 
-### Task 11: Candidate review and approval workflow backend
+### Task 12: Add formats incrementally and safely
 
-**Files:**
-- Create: `backend/app/api/extraction_review.py`
-- Create: `backend/app/services/review_service.py`
-- Create: `backend/tests/test_candidate_review.py`
+Add CSV/XLSX and PDF parsers to the same section contract, then add DOCX/ODT only with bounded ZIP/package inspection and format-specific security tests. Images remain storable but unparsed until OCR is a separately approved feature. New formats must be additive parser implementations, not changes to storage, job, callback, or provenance contracts.
 
-**Steps:**
-1. Implement endpoints to approve, reject, or edit extraction candidates.
-2. Persist approved candidates as canonical entities and relationships.
-3. Preserve provenance from the source asset and extraction job.
-4. Add tests for approve, reject, edit, and duplicate-name review paths.
-
-### Task 12: Extraction review frontend
-
-**Files:**
-- Create: `frontend/src/pages/ExtractionReviewPage.tsx`
-
-**Steps:**
-1. Add a view to trigger extraction jobs from stored source assets.
-2. Show candidate entities and relationships with their source context.
-3. Add approve, reject, and edit actions wired to the review endpoints.
-4. Verify the extraction-to-review flow works visually from raw text through approved records.
-
-**Design decisions to revisit in this task:**
-- Should extraction review expose quick-look side panels so users can compare a candidate against existing records without leaving the review queue?
-- Which candidate fields should be editable inline versus requiring a dedicated edit surface?
+**Detailed execution plan:** `docs/plans/2026-08-08-cloud-ready-asset-intelligence-pipeline.md` is the task-by-task implementation breakdown for Tasks 9–12. It is subordinate to this source-of-truth plan and must remain consistent with it.
 
 ### Task 13: Search backend
 
@@ -342,10 +307,10 @@ Manual acceptance flow:
 6. Inspect saved provenance data.
 ## Assumptions
 
-- v1 is a single-user local-first app.
+- v1 remains single-user and locally runnable through Docker Compose, but asset storage and processing interfaces are cloud-compatible.
 - Auth is deferred but schema and APIs leave room for it later.
 - Extraction quality can be modest if the review loop is solid.
 - Search schema and indexing are intentionally deferred from Task 3 until search work starts.
-- Backend parsing is canonical.
-- Original uploaded assets live outside Postgres in backend-managed storage.
-- Large parsed outputs may live outside Postgres while small outputs stay inline in the parse cache.
+- PostgreSQL job and provenance records are canonical; MongoDB parsed documents are derived and rebuildable.
+- Original uploaded assets live outside Postgres in MinIO/S3-compatible backend-managed storage.
+- Parsing runs in one independently runnable worker and reports outcomes through FastAPI; the worker does not write canonical PostgreSQL tables directly.

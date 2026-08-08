@@ -3,215 +3,2343 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GM Workspace — Workspace v1</title>
+    <title>GM Command Center — Master Edition</title>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700;800&display=swap");
 
-      :root { --shell: #0c0c0e; --paper: #fdfcfb; --ink: #1c1917; --muted: #78716c; --purple: #a855f7; --deep: #7e22ce; --line: #e7e5e4; --danger: #b91c1c; }
+      :root {
+        --shell: #0c0c0e;
+        --shell-raised: #17111f;
+        --shell-text: #f3f1f8;
+        --purple: #a855f7;
+        --purple-deep: #7e22ce;
+        --purple-hover: #6b21a8;
+        --gold: #fceabb;
+        --ink: #1c1917;
+        --muted: #78716c;
+        --paper: #fdfcfb;
+        --line: #e7e5e4;
+        --danger: #dc2626;
+        --danger-bg: #fef2f2;
+        --secret-bg: #fefce8;
+        --secret-border: #fef08a;
+        --secret-text: #854d0e;
+      }
+
       * { box-sizing: border-box; }
-      body { margin: 0; background: #f5f5f4; color: var(--ink); font: 14px/1.5 Inter, system-ui, sans-serif; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f5f5f4;
+      }
+
       button, input, select, textarea { font: inherit; }
       button { cursor: pointer; }
-      h1, h2, h3, p { margin: 0; }
-      .header { position: sticky; top: 0; z-index: 20; padding: 12px 16px; color: #f3f1f8; background: linear-gradient(120deg, #15101d, var(--shell)); box-shadow: 0 7px 18px #0004; }
-      .head, .work { width: min(1120px, 100%); margin: auto; }
-      .head { display: grid; grid-template-columns: 250px 1fr; gap: 24px; align-items: center; }
-      .brand { color: #b7afc2; font: 900 11px Cinzel, serif; letter-spacing: .15em; text-transform: uppercase; }
-      .brand::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--purple); }
-      .switch { display: flex; justify-content: space-between; align-items: center; width: min(460px, 100%); padding: 9px 14px; border: 1px solid #3d3349; border-radius: 12px; background: #1a1423; }
-      .campaign, .campaign.active-campaign { color: #fde68a; font: 900 16px Cinzel, serif; }
-      .campaign::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 10px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399; }
-      .kind { padding: 3px 8px; border: 1px solid #422959; border-radius: 7px; color: #d8b4fe; font-size: 11px; font-weight: 800; background: #100d16; }
-      .work { display: grid; grid-template-columns: 250px 1fr; gap: 24px; align-items: start; padding: 24px 16px; }
-      .card { border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: 0 4px 12px #0000000a; }
-      .side { position: sticky; top: 78px; padding: 16px; }
-      .label { margin: 0 8px 12px; color: #9a9690; font-size: 10px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
-      .nav { display: flex; flex-direction: column; gap: 3px; }
-      .nav button { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; color: #5f5a56; text-align: left; font-size: 13px; font-weight: 700; background: transparent; }
-      .nav button.active { border-color: #e9d5ff; color: var(--deep); background: white; box-shadow: 0 2px 8px #7e22ce1a; }
-      .count, .tag { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 800; }
-      .count, .session { color: #713eb0; border: 1px solid #e9d5ff; background: #f3e8ff; }
-      .canon { color: #15803d; border: 1px solid #bbf7d0; background: #dcfce7; }
-      .missing { color: var(--danger); border: 1px solid #fecaca; background: #fee2e2; }
+      h1, h2, h3, h4, p { margin: 0; }
+
+      .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(168, 85, 247, 0.25);
+        color: var(--shell-text);
+        background: linear-gradient(120deg, #15101d, #0c0c0e);
+        box-shadow: 0 7px 18px rgba(0, 0, 0, 0.24);
+      }
+
+      .header-grid, .workspace {
+        width: min(1200px, 100%);
+        margin: auto;
+      }
+
+      .header-grid {
+        display: grid;
+        grid-template-columns: 250px 1fr;
+        gap: 24px;
+        align-items: center;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(226, 221, 240, 0.66);
+        font-family: Cinzel, Georgia, serif;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      .brand-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--purple);
+      }
+
+      .switcher-wrap { position: relative; }
+
+      .campaign-switcher {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        width: min(460px, 100%);
+        padding: 9px 14px;
+        border: 1px solid #3d3349;
+        border-radius: 12px;
+        color: var(--shell-text);
+        text-align: left;
+        background: #1a1423;
+        transition: all 0.2s ease;
+      }
+
+      .campaign-switcher:hover {
+        border-color: var(--purple);
+        background: #231a30;
+      }
+
+      .campaign-name {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 10px;
+        font-family: Cinzel, Georgia, serif;
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .campaign-name .active-campaign { color: #fde68a; }
+
+      .campaign-dot {
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 10px #34d399;
+      }
+
+      .switcher-kind {
+        padding: 3px 8px;
+        border: 1px solid #422959;
+        border-radius: 7px;
+        color: #d8b4fe;
+        font-size: 11px;
+        font-weight: 800;
+        background: #100d16;
+      }
+
+      .campaign-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        width: min(380px, 100%);
+        overflow: hidden;
+        border: 1px solid #37303f;
+        border-radius: 14px;
+        color: var(--shell-text);
+        background: #15111b;
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45);
+        z-index: 50;
+      }
+
+      .campaign-menu.open { display: block; }
+
+      .campaign-menu p {
+        padding: 10px 14px;
+        color: #a7a1b1;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        background: #0f0d13;
+      }
+
+      .campaign-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 12px 14px;
+        border: 0;
+        border-top: 1px solid #29242f;
+        color: #d8d3df;
+        text-align: left;
+        background: transparent;
+        font-weight: 600;
+      }
+
+      .campaign-option:hover {
+        color: #f3e8ff;
+        background: #251532;
+      }
+
+      .active-label {
+        padding: 2px 6px;
+        border-radius: 5px;
+        color: #e9d5ff;
+        font-size: 9px;
+        font-weight: 900;
+        background: #55218d;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 20px;
+        padding: 20px 16px;
+        align-items: start;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--paper);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+      }
+
+      .sidebar {
+        align-self: start;
+        position: sticky;
+        top: 78px;
+        padding: 14px;
+      }
+
+      .side-label {
+        margin: 0 8px 10px;
+        color: #9a9690;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .nav-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin: 3px 0;
+        padding: 9px 12px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: #5f5a56;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 700;
+        background: transparent;
+        transition: all 0.15s ease;
+      }
+
+      .nav-button:hover { background: #f2efec; }
+
+      .nav-button.active {
+        border-color: #e9d5ff;
+        color: var(--purple-deep);
+        background: white;
+        box-shadow: 0 2px 8px rgba(126, 34, 206, 0.1);
+        font-weight: 800;
+      }
+
+      .nav-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pill {
+        padding: 2px 8px;
+        border-radius: 99px;
+        color: #713eb0;
+        font-size: 10px;
+        font-weight: 900;
+        background: #f3e8ff;
+      }
+
       .view { display: none; }
       .view.active { display: block; }
-      .back { display: inline-flex; margin: 0 0 12px; border: 0; color: var(--deep); font-size: 12px; font-weight: 800; background: transparent; }
-      .viewhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #dedbd6; }
-      .viewhead h2 { font: 700 26px Cinzel, serif; }
-      .viewhead p { margin-top: 4px; color: var(--muted); font-size: 12px; }
-      .active-campaign { color: var(--deep); font-weight: 800; }
-      .add, .secondary { padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 800; white-space: nowrap; }
-      .add { padding: 9px 16px; border: 0; border-radius: 12px; color: white; background: linear-gradient(135deg, var(--deep), #6b21a8); box-shadow: 0 4px 12px #7e22ce40; }
-      .secondary { border: 1px solid #d6d3d1; color: #44403c; background: white; }
-      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-      .tile { padding: 16px; }
-      .tile h3 { font-size: 14px; }
-      .tile p, .summary { margin-top: 4px; color: var(--muted); font-size: 12px; }
-      .session-list { display: flex; flex-direction: column; gap: 12px; }
-      .session-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
-      .session-row:hover { transform: translateY(-1px); box-shadow: 0 6px 16px #00000014; }
-      .row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #eeeae6; }
+
+      .view-header {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #dedbd6;
+      }
+
+      .view-header h2 {
+        font-family: Cinzel, Georgia, serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .view-header p {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .active-campaign {
+        color: var(--purple-deep);
+        font-weight: 800;
+      }
+
+      .view-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .add-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        border: 0;
+        border-radius: 10px;
+        color: white;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+        background: linear-gradient(135deg, var(--purple-deep), #6b21a8);
+        box-shadow: 0 4px 12px rgba(126, 34, 206, 0.25);
+        transition: all 0.2s ease;
+      }
+
+      .add-button:hover {
+        background: linear-gradient(135deg, #6b21a8, #581c87);
+        transform: translateY(-1px);
+      }
+
+      .btn-secondary {
+        padding: 6px 12px;
+        border: 1px solid #d6d3d1;
+        border-radius: 8px;
+        color: #44403c;
+        font-size: 11px;
+        font-weight: 700;
+        background: white;
+        transition: all 0.15s ease;
+      }
+
+      .btn-secondary:hover {
+        background: #f5f5f4;
+        border-color: #a8a29e;
+      }
+
+      .row-action-danger {
+        color: var(--danger) !important;
+        border-color: #fca5a5 !important;
+        background: var(--danger-bg) !important;
+      }
+
+      .row-action-danger:hover {
+        background: #fee2e2 !important;
+      }
+
+      .entities-split-container {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .entity-list-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .entity-category-filters {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+
+      .filter-chip {
+        padding: 3px 9px;
+        border: 1px solid #e7e5e4;
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--muted);
+        background: white;
+        transition: all 0.15s ease;
+      }
+
+      .filter-chip:hover {
+        background: #f5f5f4;
+        color: var(--ink);
+      }
+
+      .filter-chip.active {
+        background: var(--purple-deep);
+        color: white;
+        border-color: var(--purple-deep);
+      }
+
+      .entity-list-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .entity-list-item:hover {
+        border-color: #d8b4fe;
+        background: #faf8ff;
+      }
+
+      .entity-list-item.selected {
+        border-color: var(--purple);
+        background: #f5edff;
+        box-shadow: 0 2px 8px rgba(168, 85, 247, 0.15);
+      }
+
+      .entity-list-item .item-icon {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #f3e8ff;
+        color: var(--purple-deep);
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+
+      .entity-kind {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        color: #5d6170;
+        font-size: 9px;
+        font-weight: 900;
+        background: #efeff1;
+        text-transform: uppercase;
+      }
+
+      .entity-detail-pane {
+        position: sticky;
+        top: 78px;
+      }
+
+      .dropzone-container {
+        border: 2px dashed #c084fc;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #ffffff, #fcf5ff);
+        transition: all 0.2s ease;
+        margin-bottom: 20px;
+        overflow: hidden;
+      }
+
+      .dropzone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 32px 20px;
+        text-align: center;
+      }
+
+      .asset-upload-panel {
+        padding: 24px;
+        background: rgba(255, 255, 255, 0.95);
+      }
+
+      .file-preview-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 10px;
+        background: #f3e8ff;
+        border: 1px solid #e9d5ff;
+        color: var(--purple-deep);
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      .upload-icon {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 10px;
+        border: 1px solid #eadbff;
+        border-radius: 50%;
+        color: var(--purple-deep);
+        font-size: 20px;
+        background: white;
+        box-shadow: 0 4px 10px rgba(126, 34, 206, 0.08);
+      }
+
+      .choose-file {
+        margin-top: 14px;
+        padding: 9px 18px;
+        border: 0;
+        border-radius: 10px;
+        color: white;
+        font-size: 12px;
+        font-weight: 800;
+        background: var(--ink);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        transition: all 0.2s ease;
+      }
+
+      .choose-file:hover {
+        background: var(--purple-deep);
+        transform: translateY(-1px);
+      }
+
+      .library {
+        margin-top: 20px;
+        overflow: hidden;
+      }
+
+      .library-tools {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        background: #faf9f7;
+      }
+
+      .search {
+        position: relative;
+        flex: 1;
+      }
+
+      .search input {
+        width: 100%;
+        padding: 9px 12px 9px 34px;
+        border: 1px solid #dedbd6;
+        border-radius: 10px;
+        color: var(--ink);
+        font-size: 12px;
+        outline: none;
+        background: white;
+        transition: all 0.15s ease;
+      }
+
+      .search input:focus {
+        border-color: var(--purple);
+        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+      }
+
+      .search span {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        color: #9a9690;
+      }
+
+      .asset-type-select {
+        padding: 9px 12px;
+        border: 1px solid #dedbd6;
+        border-radius: 10px;
+        color: #5f5a56;
+        font-size: 12px;
+        font-weight: 700;
+        background: white;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #eeeae6;
+        transition: background 0.15s ease;
+      }
+
       .row:hover { background: #faf9f7; }
-      .rowmain { flex: 1; min-width: 0; }
-      .rowname { font-size: 13px; font-weight: 800; }
-      .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; color: #89847e; font-size: 11px; }
-      .file { display: grid; place-items: center; width: 38px; height: 42px; border: 1px solid; border-radius: 8px; font-size: 10px; font-weight: 900; }
-      .pdf { color: #9a6510; border-color: #f0d9aa; background: #fff5df; }
-      .xls { color: #246798; border-color: #bdd8ef; background: #eaf5fd; }
-      .jpg { color: #626773; border-color: #d5d7db; background: #eff0f2; }
-      .drop { display: flex; flex-direction: column; align-items: center; padding: 28px 20px; border: 2px dashed #c084fc; border-radius: 16px; text-align: center; background: linear-gradient(135deg, white, #fcf8ff); }
-      .upload { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 10px; border: 1px solid #eadbff; border-radius: 50%; color: var(--deep); background: white; }
-      .drop h3 { font-size: 14px; }
-      .drop p { margin-top: 4px; color: var(--muted); font-size: 11px; }
-      .dropzone { display: flex; flex-direction: column; align-items: center; padding: 28px 20px; border: 2px dashed #c084fc; border-radius: 16px; text-align: center; background: linear-gradient(135deg, #ffffff, #fcf8ff); transition: border-color .2s ease; }
-      .dropzone:hover { border-color: var(--deep); }
-      .upload-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 10px; border: 1px solid #eadbff; border-radius: 50%; color: var(--deep); font-size: 20px; background: white; box-shadow: 0 4px 10px #7e22ce14; }
-      .dropzone h3 { font-size: 14px; }
-      .dropzone p { margin-top: 4px; color: var(--muted); font-size: 11px; }
-      .choose-file { margin-top: 14px; padding: 9px 18px; border: 0; border-radius: 10px; color: white; font-size: 12px; font-weight: 800; background: var(--ink); box-shadow: 0 2px 8px #0000001f; transition: all .2s ease; }
-      .choose-file:hover { background: var(--deep); transform: translateY(-1px); }
-      .library { margin-top: 20px; overflow: hidden; }
-      .library-tools { display: flex; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #faf9f7; }
-      input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #d6d3d1; border-radius: 10px; color: var(--ink); background: white; outline: none; }
-      input:focus, select:focus, textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px #a855f726; }
-      .search { flex: 1; }
-      .search input { padding-left: 34px; }
-      .search-wrap { position: relative; flex: 1; }
-      .search-wrap::before { content: "⌕"; position: absolute; z-index: 1; top: 8px; left: 12px; color: #9a9690; }
-      .detail-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 20px; }
-      .detail-card, .panel { padding: 20px; }
-      .detail-card h3, .panel h3 { margin-bottom: 10px; color: #57534e; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
-      .detail-card p { line-height: 1.65; }
-      .secret { border-color: #fef08a; background: #fefce8; }
-      .secret h3 { color: #854d0e; }
-      .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-      .kv span { display: block; color: var(--muted); font-size: 11px; }
-      .kv strong { display: block; margin-top: 2px; font-size: 12px; }
-      .panel { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 14px; background: white; }
-      .panel-item { padding: 9px; border: 1px solid var(--line); border-radius: 8px; color: #44403c; font-size: 12px; background: #faf9f7; }
-      .asset-detail-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-      .asset-detail-actions { display: flex; gap: 8px; }
-      .asset-detail-card { margin-bottom: 16px; }
-      .asset-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; font-size: 12px; }
-      .asset-metadata span { color: var(--muted); }
-      .asset-metadata strong { display: block; color: var(--ink); }
-      .asset-link { cursor: pointer; }
-      .form { max-width: 800px; padding: 20px; }
-      .form-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
-      .field { margin-bottom: 16px; }
-      .field label { display: block; margin-bottom: 6px; color: #44403c; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-      textarea { min-height: 110px; resize: vertical; }
-      @media (max-width: 720px) { .head, .work { grid-template-columns: 1fr; } .brand { display: none; } .side { position: static; } .nav { flex-direction: row; overflow: auto; } .nav button { white-space: nowrap; } .grid, .detail-grid, .form-grid { grid-template-columns: 1fr; } .library-tools { flex-direction: column; } .session-row, .row { align-items: flex-start; } }
+
+      .file-type {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 42px;
+        flex: 0 0 auto;
+        border: 1px solid;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 900;
+      }
+
+      .pdf { border-color: #f0d9aa; color: #9a6510; background: #fff5df; }
+      .xls { border-color: #bdd8ef; color: #246798; background: #eaf5fd; }
+      .jpg { border-color: #d5d7db; color: #626773; background: #eff0f2; }
+
+      .row-main { flex: 1; min-width: 0; }
+      .row-name { color: #292522; font-size: 13px; font-weight: 800; }
+      .row-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4px;
+        color: #89847e;
+        font-size: 11px;
+      }
+
+      .tag {
+        padding: 2px 7px;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 10px;
+      }
+
+      .session-tag { color: #713eb0; background: #f3e8ff; border: 1px solid #e9d5ff; }
+      .canon { color: #15803d; background: #dcfce7; border: 1px solid #bbf7d0; }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 20px;
+      }
+
+      .form-group { margin-bottom: 16px; }
+      .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        color: #44403c;
+        text-transform: uppercase;
+      }
+
+      .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d6d3d1;
+        border-radius: 10px;
+        font-size: 13px;
+        color: var(--ink);
+        background: white;
+        outline: none;
+      }
+
+      .form-control:focus {
+        border-color: var(--purple);
+        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+      }
+
+      textarea.form-control { resize: vertical; min-height: 90px; }
+
+      .section-box {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: white;
+        margin-bottom: 16px;
+      }
+
+      .section-box-title {
+        font-size: 12px;
+        font-weight: 800;
+        color: #57534e;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .secret-note-box {
+        border-color: #fef08a;
+        background: #fefce8;
+      }
+
+      .secret-note-box label { color: #854d0e; }
+
+      .rel-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #faf9f7;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .rel-family-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-right: 6px;
+      }
+
+      .rel-family-conflict { background: #fee2e2; color: #991b1b; }
+      .rel-family-political { background: #e0e7ff; color: #3730a3; }
+      .rel-family-personal { background: #fef3c7; color: #92400e; }
+      .rel-family-operations { background: #dcfce7; color: #166534; }
+
+      .sentence-preview-box {
+        padding: 14px;
+        border-radius: 10px;
+        background: #f5edff;
+        border: 1px solid #e9d5ff;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+
+      .sentence-preview-box strong {
+        color: var(--purple-deep);
+      }
+
+      .direction-toggle-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .direction-btn {
+        padding: 8px 10px;
+        border: 1px solid #d6d3d1;
+        border-radius: 8px;
+        background: white;
+        font-size: 11px;
+        font-weight: 700;
+        color: #44403c;
+        text-align: center;
+        transition: all 0.15s ease;
+      }
+
+      .direction-btn.active {
+        border-color: var(--purple);
+        background: #f3e8ff;
+        color: var(--purple-deep);
+        box-shadow: 0 2px 6px rgba(168, 85, 247, 0.15);
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        background: #f3f4f6;
+        color: #4b5563;
+        border: 1px solid #e5e7eb;
+      }
+
+      .status-secret { background: #fefce8; color: #854d0e; border-color: #fef08a; }
+      .status-active { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+        border: 0;
+        background: transparent;
+        color: var(--purple-deep);
+        font-size: 12px;
+        font-weight: 800;
+        padding: 0;
+      }
+
+      .back-link:hover { text-decoration: underline; }
+
+      @media (max-width: 900px) {
+        .entities-split-container { grid-template-columns: 1fr; }
+        .entity-detail-pane { position: static; }
+      }
+
+      @media (max-width: 768px) {
+        .workspace { grid-template-columns: 1fr; }
+        .sidebar { position: static; }
+        .header-grid { grid-template-columns: 1fr; gap: 12px; }
+        .brand { display: none; }
+      }
     </style>
   </head>
   <body>
-    <header class="header"><div class="head"><div class="brand">Campaign workspace</div><div class="switch"><span class="campaign active-campaign">The Shattered Coast</span><span class="kind">Campaign ▾</span></div></div></header>
-    <div class="work">
-      <aside class="side card"><p class="label">Workspace navigation</p><nav class="nav"><button data-view="overview">◫ Overview</button><button data-view="entities">♙ Entities <span class="count">24</span></button><button data-view="relationships">⌘ Relationships <span class="count">18</span></button><button class="active" data-view="sessions">▤ Sessions <span class="count">4</span></button><button data-view="assets">▣ Assets <span class="count">3</span></button></nav></aside>
-      <main>
-        <section class="view" id="overview"><header class="viewhead"><div><h2>Overview</h2><p>High-level status for <span class="active-campaign">The Shattered Coast</span>.</p></div></header><div class="grid"><article class="tile card"><h3>Next session</h3><p>Session 05</p></article><article class="tile card"><h3>Entities tracked</h3><p>24</p></article><article class="tile card"><h3>Assets linked</h3><p>3</p></article></div></section>
-        <section class="view" id="entities"><header class="viewhead"><div><h2>Entities</h2><p>People, places, factions, and things in <span class="active-campaign">The Shattered Coast</span>.</p></div><button class="add">+ Add entity</button></header><article class="card panel"><h3>Entity workspace</h3><p class="summary">The established entity list and quick-look treatment remain the reference for this screen.</p></article></section>
-        <section class="view" id="relationships"><header class="viewhead"><div><h2>Relationships</h2><p>Connections that give <span class="active-campaign">The Shattered Coast</span> its shape.</p></div><button class="add">+ Add relationship</button></header><article class="card panel"><h3>Relationship workspace</h3><p class="summary">The established relationship list and filters remain the reference for this screen.</p></article></section>
+    <header class="app-header">
+      <div class="header-grid">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <span>GM Command Center</span>
+        </div>
+        <div class="switcher-wrap">
+          <button class="campaign-switcher" type="button" onclick="toggleCampaignMenu()">
+            <span class="campaign-name">
+              <span class="campaign-dot"></span>
+              <span class="active-campaign">The Shattered Coast</span>
+            </span>
+            <span class="switcher-kind">Campaign ▾</span>
+          </button>
+          <div class="campaign-menu" id="campaign-menu">
+            <p>Select active campaign</p>
+            <button class="campaign-option" type="button" onclick="switchCampaign('The Shattered Coast')">
+              <span>The Shattered Coast</span>
+              <span class="active-label">ACTIVE</span>
+            </button>
+            <button class="campaign-option" type="button" onclick="switchCampaign('Frozen North: Frostmaiden')">Frozen North: Frostmaiden</button>
+            <button class="campaign-option" type="button" onclick="switchCampaign('The City of Brass')">The City of Brass</button>
+          </div>
+        </div>
+      </div>
+    </header>
 
-        <section class="view active" id="sessions">
-          <header class="viewhead"><div><h2>Sessions</h2><p>Recaps and log records for <span class="active-campaign">The Shattered Coast</span>.</p></div><button class="add" data-view="session-edit">+ Log session</button></header>
-          <div class="session-list"><article class="session-row card" data-view="session-detail"><div class="rowmain"><div><span style="font-weight:800;color:var(--deep);font-size:13px">Session 04</span> <span style="color:#a8a29e">•</span> <span class="summary">Played Oct 12, 2026</span></div><div class="rowname" style="margin-top:4px;font-size:15px">The Sunken Archive Investigation</div><p class="summary">Recovered 2 lore fragments and uncovered Voss’s secret debt ledger.</p></div><button class="secondary">View Session →</button></article><article class="session-row card" data-view="session-detail"><div class="rowmain"><div><span style="font-weight:800;color:var(--deep);font-size:13px">Session 02</span> <span style="color:#a8a29e">•</span> <span class="summary">Played Sep 28, 2026</span></div><div class="rowname" style="margin-top:4px;font-size:15px">Arrival at Dockside Quays</div><p class="summary">Bribed Captain Elian Voss and secured passage to the Gilded Eel tavern.</p></div><button class="secondary">View Session →</button></article></div>
+    <div class="workspace">
+      <aside class="sidebar card">
+        <p class="side-label">Navigation</p>
+        <nav>
+          <button class="nav-button" type="button" data-view="live-session" id="nav-live-btn">
+            <span class="nav-left"><span class="icon">⚡</span>Live Session</span>
+            <span class="pill" style="background: #fef3c7; color: #92400e; font-weight: 800;">ACTIVE</span>
+          </button>
+          <button class="nav-button active" type="button" data-view="entities" id="nav-entities-btn">
+            <span class="nav-left"><span class="icon">♙</span>Entities</span>
+            <span class="pill" id="entity-pill-count">3</span>
+          </button>
+          <button class="nav-button" type="button" data-view="sessions" id="nav-sessions-btn">
+            <span class="nav-left"><span class="icon">▤</span>Sessions</span>
+            <span class="pill" id="session-pill-count">2</span>
+          </button>
+          <button class="nav-button" type="button" data-view="assets" id="nav-assets-btn">
+            <span class="nav-left"><span class="icon">▣</span>Assets</span>
+            <span class="pill" id="asset-pill-count">3</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main>
+        <section class="view" id="live-session">
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span class="status-badge status-active">● Live Table Active</span>
+                  <span style="font-size: 11px; color: var(--muted);">Running: Session 05 Prep/Play</span>
+                </div>
+                <h2>Live Session Workspace</h2>
+                <p>Table-side scratchpad, initiative tracker, and quick session handouts for <span class="active-campaign">The Shattered Coast</span>.</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary" type="button" onclick="clearLiveScratchpad()">Clear Scratchpad</button>
+                <button class="add-button" type="button" onclick="logScratchpadToSession()">+ Convert Scratchpad to Session Log</button>
+              </div>
+            </div>
+          </header>
+
+          <div class="form-grid">
+            <div>
+              <div class="card" style="padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <h3 style="font-size: 12px; font-weight: 800; color: #44403c; text-transform: uppercase; letter-spacing: 0.05em;">📝 Live GM Scratchpad & Notes</h3>
+                  <div style="display: flex; gap: 4px;">
+                    <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="insertScratchpadTag('loot')">+ Loot</button>
+                    <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="insertScratchpadTag('npc')">+ NPC</button>
+                    <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="insertScratchpadTag('location')">+ Location</button>
+                  </div>
+                </div>
+                <textarea class="form-control" id="live-scratchpad-input" rows="8" placeholder="Jot down quick combat notes, unexpected player decisions, loot awarded, or mid-game twists..." style="font-family: monospace; font-size: 12px; line-height: 1.6;">- Party bribed the guard at Dockside Gate with 15gp.
+- Elian Voss revealed the trapdoor location under Cask #4 in the Gilded Eel cellar.
+- Loot found: Silver ring with Salt Knives insignia (value 35gp), Sealed letter to Waterdeep creditor.</textarea>
+              </div>
+
+              <div class="section-box card" style="padding: 16px;">
+                <div class="section-box-title" style="margin-bottom: 10px;">
+                  <span style="font-weight: 800; text-transform: uppercase; font-size: 11px;">⚔️ Live Combat & Initiative Tracker</span>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px;" type="button" onclick="sortInitiative()">⇅ Sort Order</button>
+                    <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px;" type="button" onclick="addInitiativeRow()">+ Add Combatant</button>
+                  </div>
+                </div>
+
+                <div id="initiative-tracker-list" style="display: flex; flex-direction: column; gap: 6px;">
+                  <div class="init-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #faf8ff; border: 1px solid #e9d5ff; border-radius: 8px;">
+                    <input type="number" class="init-val" value="19" style="width: 44px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-weight: 800; text-align: center;" />
+                    <span style="flex: 1; font-weight: 700; font-size: 12px;">Valeros (Fighter)</span>
+                    <input type="text" value="HP 38/42" style="width: 90px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-size: 11px;" />
+                    <button class="btn-secondary row-action-danger" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="this.closest('.init-row').remove()">🗑</button>
+                  </div>
+
+                  <div class="init-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #faf8ff; border: 1px solid #e9d5ff; border-radius: 8px;">
+                    <input type="number" class="init-val" value="14" style="width: 44px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-weight: 800; text-align: center;" />
+                    <span style="flex: 1; font-weight: 700; font-size: 12px; color: var(--danger);">Salt Knife Enforcer (NPC)</span>
+                    <input type="text" value="HP 18/22" style="width: 90px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-size: 11px;" />
+                    <button class="btn-secondary row-action-danger" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="this.closest('.init-row').remove()">🗑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-box">
+                <div class="section-box-title">
+                  <span>📜 Quick Handouts & Session Assets</span>
+                  <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px;" type="button" onclick="switchTab('assets')">View All →</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <div style="padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: white; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="min-width: 0; flex: 1; padding-right: 8px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="tag session-tag">PDF</span>
+                        <strong style="font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Session 04 — Sunken Archive.pdf</strong>
+                      </div>
+                      <div style="font-size: 10px; color: var(--muted); margin-top: 2px;">Voss Debt Ledger & Coastal Pact</div>
+                    </div>
+                    <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px; flex-shrink: 0;" type="button" onclick="openAssetDetail('asset-session-04')">🔍 Preview</button>
+                  </div>
+
+                  <div style="padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: white; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="min-width: 0; flex: 1; padding-right: 8px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="tag canon">JPG</span>
+                        <strong style="font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Old Coast Map.jpg</strong>
+                      </div>
+                      <div style="font-size: 10px; color: var(--muted); margin-top: 2px;">Map handout for players</div>
+                    </div>
+                    <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px; flex-shrink: 0;" type="button" onclick="openAssetDetail('asset-map')">🔍 Preview</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view active" id="entities">
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <h2>Entities</h2>
+                <p>People, places, factions, and key items in <span class="active-campaign">The Shattered Coast</span>.</p>
+              </div>
+              <button class="add-button" type="button" onclick="handleNewEntity()">+ Add Entity</button>
+            </div>
+          </header>
+
+          <div class="entities-split-container">
+            <div class="entity-list-pane">
+              <div class="search">
+                <span>⌕</span>
+                <input id="entity-search" type="search" placeholder="Search entity names or keywords…" oninput="filterEntities()" />
+              </div>
+
+              <div class="entity-category-filters">
+                <button class="filter-chip active" type="button" onclick="setEntityCategoryFilter(this, 'all')">All</button>
+                <button class="filter-chip" type="button" onclick="setEntityCategoryFilter(this, 'person')">Person</button>
+                <button class="filter-chip" type="button" onclick="setEntityCategoryFilter(this, 'location')">Location</button>
+                <button class="filter-chip" type="button" onclick="setEntityCategoryFilter(this, 'organization')">Organization</button>
+                <button class="filter-chip" type="button" onclick="setEntityCategoryFilter(this, 'item')">Item</button>
+                <button class="filter-chip" type="button" onclick="setEntityCategoryFilter(this, 'event')">Event</button>
+              </div>
+
+              <div id="entity-master-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                <div class="entity-list-item selected" data-id="elian-voss" data-cat="person" data-search="captain elian voss person harbormaster" onclick="selectEntity('elian-voss')">
+                  <div class="item-icon">♙</div>
+                  <div style="min-width: 0; flex: 1;">
+                    <div style="font-size: 13px; font-weight: 800; color: var(--ink);">Captain Elian Voss</div>
+                    <div style="font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Harbormaster with a private debt to the Crown.</div>
+                  </div>
+                  <span class="entity-kind">PERSON</span>
+                </div>
+
+                <div class="entity-list-item" data-id="gilded-eel" data-cat="location" data-search="the gilded eel location tavern" onclick="selectEntity('gilded-eel')">
+                  <div class="item-icon">⌂</div>
+                  <div style="min-width: 0; flex: 1;">
+                    <div style="font-size: 13px; font-weight: 800; color: var(--ink);">The Gilded Eel</div>
+                    <div style="font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Dockside tavern and meeting place.</div>
+                  </div>
+                  <span class="entity-kind">LOCATION</span>
+                </div>
+
+                <div class="entity-list-item" data-id="salt-knives" data-cat="organization" data-search="salt knives organization faction smuggling" onclick="selectEntity('salt-knives')">
+                  <div class="item-icon">⚑</div>
+                  <div style="min-width: 0; flex: 1;">
+                    <div style="font-size: 13px; font-weight: 800; color: var(--ink);">Salt Knives</div>
+                    <div style="font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Smuggling organization controlling eastern quay.</div>
+                  </div>
+                  <span class="entity-kind">ORGANIZATION</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="entity-detail-pane card" style="padding: 20px;">
+              <div id="entity-reader-view">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line);">
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                      <span class="entity-kind" id="reader-kind-badge">PERSON</span>
+                      <span style="font-size: 11px; color: var(--muted);" id="reader-summary">Harbormaster with a private debt to the Crown.</span>
+                    </div>
+                    <h3 style="font-family: Cinzel, serif; font-size: 20px; font-weight: 700; color: var(--ink);" id="reader-title">Captain Elian Voss</h3>
+                  </div>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn-secondary" type="button" onclick="toggleEntityEditMode(true)">✎ Edit Profile</button>
+                    <button class="btn-secondary row-action-danger" type="button" onclick="deleteActiveEntity()">🗑 Delete</button>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <h4 style="font-size: 11px; font-weight: 800; color: #57534e; text-transform: uppercase; margin-bottom: 4px;">Description</h4>
+                  <p style="font-size: 13px; color: #292522; line-height: 1.6;" id="reader-desc">Stern, weather-beaten sailor in his early fifties. Wears a royal naval coat with frayed golden epaulets.</p>
+                </div>
+
+                <div class="secret-note-box section-box" style="margin-bottom: 16px;">
+                  <h4 style="font-size: 11px; font-weight: 800; color: #854d0e; text-transform: uppercase; margin-bottom: 4px;">🔒 Secret GM Notes</h4>
+                  <p style="font-size: 12px; color: #713f12; line-height: 1.5;" id="reader-secrets">Voss secretly accepts bribes from the Salt Knives because they hold his daughter's debt markers in Waterdeep.</p>
+                </div>
+
+                <div class="section-box">
+                  <div class="section-box-title">
+                    <span>Connected Entities & Relationships</span>
+                    <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px;" type="button" onclick="openRelationshipModal()">+ Add Connection</button>
+                  </div>
+                  <div id="entity-relationship-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Dynamically populated -->
+                  </div>
+                </div>
+              </div>
+
+              <div id="entity-editor-view" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--line);">
+                  <h3 style="font-family: Cinzel, serif; font-size: 18px;" id="form-heading">Edit Profile</h3>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn-secondary" type="button" onclick="toggleEntityEditMode(false)">Cancel</button>
+                    <button class="add-button" type="button" onclick="saveActiveEntity()">Save Profile</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="entity-name-input">Entity Name</label>
+                  <input class="form-control" id="entity-name-input" type="text" value="Captain Elian Voss" />
+                </div>
+
+                <div class="form-group">
+                  <label for="entity-kind-select">Entity Category (V1 Types)</label>
+                  <select class="form-control" id="entity-kind-select">
+                    <option value="person" selected>Person / NPC</option>
+                    <option value="location">Location / Landmark</option>
+                    <option value="organization">Organization / Faction</option>
+                    <option value="item">Key Item / Artifact</option>
+                    <option value="event">World Event</option>
+                    <option value="deity">Deity / Pantheon</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="entity-summary-input">Short Summary / Role</label>
+                  <input class="form-control" id="entity-summary-input" type="text" value="Harbormaster with a private debt to the Crown." />
+                </div>
+
+                <div class="form-group">
+                  <label for="entity-desc-textarea">Public Player Description</label>
+                  <textarea class="form-control" id="entity-desc-textarea" rows="4">Stern, weather-beaten sailor in his early fifties. Wears a royal naval coat with frayed golden epaulets.</textarea>
+                </div>
+
+                <div class="form-group secret-note-box section-box">
+                  <label for="entity-secrets-textarea">🔒 Secret GM Notes (Private)</label>
+                  <textarea class="form-control" id="entity-secrets-textarea" rows="3">Voss secretly accepts bribes from the Salt Knives because they hold his daughter's debt markers in Waterdeep.</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="sessions">
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <h2>Sessions</h2>
+                <p>Recaps and log records for <span class="active-campaign">The Shattered Coast</span>.</p>
+              </div>
+              <button class="add-button" type="button" onclick="openSessionEdit('new')">+ Log Session</button>
+            </div>
+          </header>
+
+          <div class="library-tools" style="border-radius: 10px; margin-bottom: 16px;">
+            <label class="search">
+              <span>⌕</span>
+              <input id="session-search" type="search" placeholder="Search session recaps, dates, or titles…" oninput="refreshSessions()" />
+            </label>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px;" id="session-list-container">
+            <article class="card session-card-item" data-search="session 04 sunken archive oct 12 2026 lore debt ledger" style="padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="openSessionDetail('session-04')">
+              <div style="min-width: 0; flex: 1; padding-right: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-weight: 800; color: var(--purple-deep); font-size: 13px;">Session 04</span>
+                  <span style="color: #a8a29e;">•</span>
+                  <span style="font-size: 12px; color: var(--muted);">Played Oct 12, 2026</span>
+                </div>
+                <h3 style="font-size: 15px; font-weight: 800; margin-top: 4px; color: var(--ink);">The Sunken Archive Investigation</h3>
+                <p style="font-size: 12px; color: var(--muted); margin-top: 2px;">Recovered 2 lore fragments and uncovered Voss's secret debt ledger.</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation()">
+                <button class="btn-secondary" type="button" onclick="openSessionEdit('session-04')">✎ Edit</button>
+                <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+              </div>
+            </article>
+
+            <article class="card session-card-item" data-search="session 02 arrival dockside quays sep 28 2026 elian voss gilded eel" style="padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="openSessionDetail('session-02')">
+              <div style="min-width: 0; flex: 1; padding-right: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-weight: 800; color: var(--purple-deep); font-size: 13px;">Session 02</span>
+                  <span style="color: #a8a29e;">•</span>
+                  <span style="font-size: 12px; color: var(--muted);">Played Sep 28, 2026</span>
+                </div>
+                <h3 style="font-size: 15px; font-weight: 800; margin-top: 4px; color: var(--ink);">Arrival at Dockside Quays</h3>
+                <p style="font-size: 12px; color: var(--muted); margin-top: 2px;">Bribed Captain Elian Voss and secured passage to the Gilded Eel tavern.</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation()">
+                <button class="btn-secondary" type="button" onclick="openSessionEdit('session-02')">✎ Edit</button>
+                <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="view" id="session-detail">
-          <button class="back" data-view="sessions">← Back to Sessions</button>
-          <header class="viewhead"><div><div><span class="tag session">Session 04</span> <span class="summary">Played Oct 12, 2026</span></div><h2>The Sunken Archive Investigation</h2></div><button class="add" data-view="session-edit">✎ Edit session</button></header>
-          <div class="detail-grid"><div><article class="card detail-card"><h3>Public session recap</h3><p>The party descended into flooded vaults beneath the eastern cliffs, recovered two lore fragments, and found Captain Elian Voss’s private debt ledger.</p></article><article class="card detail-card secret" style="margin-top:16px"><h3>🔒 Secret GM notes & stat references</h3><p>Voss will bargain for silence if confronted with the ledger. This is an exploratory mockup control, not part of the current session contract.</p></article></div><aside><article class="panel"><h3>Linked assets (1)</h3><div class="panel-item" data-view="asset-detail">📄 Session 04 — Sunken Archive.pdf<br /><span class="summary">1.2 MB · Canon · View →</span></div></article><article class="panel"><h3>Appeared entities</h3><div class="panel-item">♙ Captain Elian Voss</div><div class="panel-item" style="margin-top:6px">⚑ Salt Knives</div></article></aside></div>
+          <button class="back-link" type="button" onclick="closeSessionView()">← Back to Sessions</button>
+          
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span class="tag session-tag">Session 04</span>
+                  <span style="font-size: 12px; color: var(--muted);">Played Oct 12, 2026</span>
+                </div>
+                <h2 id="session-detail-title">The Sunken Archive Investigation</h2>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="add-button" type="button" onclick="openSessionEdit('session-04')">✎ Edit Session</button>
+                <button class="btn-secondary row-action-danger" type="button" onclick="deleteCurrentSession()">🗑 Delete</button>
+              </div>
+            </div>
+          </header>
+
+          <div class="form-grid">
+            <div>
+              <div class="card" style="padding: 20px; margin-bottom: 16px;">
+                <h3 style="font-size: 13px; font-weight: 800; color: #57534e; text-transform: uppercase; margin-bottom: 8px;">Public Session Recap</h3>
+                <p style="font-size: 13px; color: #292522; line-height: 1.6;">
+                  The party descended into the flooded submerged vaults beneath the eastern cliffs. After dispatching the drowned guardians, they recovered two lore fragments detailing the ancient coastal pact. They discovered a locked iron safe containing Captain Elian Voss's private debt ledger.
+                </p>
+              </div>
+
+              <div class="card secret-note-box" style="padding: 20px;">
+                <h3 style="font-size: 12px; font-weight: 800; color: #854d0e; text-transform: uppercase; margin-bottom: 8px;">🔒 Secret GM Notes & Stat References</h3>
+                <p style="font-size: 12px; color: #713f12; line-height: 1.5;">
+                  Voss's daughter holds 500gp in debt markers with the Salt Knives. If the party confronts Voss with the ledger found here, he will break down and offer his harbor seals in exchange for silence.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-box">
+                <div class="section-box-title">
+                  <span>Linked Assets (1)</span>
+                  <button class="btn-secondary" style="padding: 3px 8px; font-size: 10px;" type="button" onclick="switchTab('assets')">+ Link Asset</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <div style="padding: 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="openAssetDetail('asset-session-04')">
+                    <div>
+                      <div style="font-size: 12px; font-weight: 800;">📄 Session 04 — The Sunken Archive.pdf</div>
+                      <div style="font-size: 10px; color: var(--muted); margin-top: 2px;">1.2 MB • Canon</div>
+                    </div>
+                    <span style="font-size: 10px; color: var(--purple-deep); font-weight: 800;">View →</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-box">
+                <div class="section-box-title">
+                  <span>Appeared Entities</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <button class="btn-secondary" style="font-size: 11px;" type="button" onclick="selectEntity('elian-voss'); switchTab('entities');">♙ Captain Elian Voss</button>
+                  <button class="btn-secondary" style="font-size: 11px;" type="button" onclick="selectEntity('salt-knives'); switchTab('entities');">⚑ Salt Knives</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="view" id="session-edit">
-          <button class="back" data-view="sessions">← Cancel & back</button>
-          <header class="viewhead"><div><h2>Edit session log</h2><p>Update recap details, secret notes, and asset links for <span class="active-campaign">The Shattered Coast</span>.</p></div><button class="add">Save session log</button></header>
-          <form class="card form"><div class="form-grid"><div class="field"><label>Session number</label><input value="4" /></div><div class="field"><label>Date played</label><input type="date" value="2026-10-12" /></div></div><div class="field"><label>Session title</label><input value="The Sunken Archive Investigation" /></div><div class="field"><label>Public player summary / recap</label><textarea>The party descended into the flooded submerged vaults beneath the eastern cliffs.</textarea></div><div class="field secret"><label>🔒 Private GM notes & key clues</label><textarea>Voss will bargain if confronted with the ledger.</textarea></div></form>
+          <button class="back-link" type="button" onclick="closeSessionView()">← Cancel & Back</button>
+          
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <h2 id="session-form-heading">Edit Session Log</h2>
+                <p>Update recap details, secret notes, and asset links for <span class="active-campaign">The Shattered Coast</span>.</p>
+              </div>
+              <button class="add-button" type="button" onclick="closeSessionView()">Save Session Log</button>
+            </div>
+          </header>
+
+          <div class="card" style="padding: 20px; max-width: 800px;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px;">
+              <div class="form-group">
+                <label for="session-num-input">Session Number</label>
+                <input class="form-control" id="session-num-input" type="text" value="Session 04" />
+              </div>
+              <div class="form-group">
+                <label for="session-date-input">Date Played</label>
+                <input class="form-control" id="session-date-input" type="date" value="2026-10-12" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="session-title-input">Session Title</label>
+              <input class="form-control" id="session-title-input" type="text" value="The Sunken Archive Investigation" />
+            </div>
+
+            <div class="form-group">
+              <label for="session-summary-input">Public Player Summary / Recap</label>
+              <textarea class="form-control" id="session-summary-input" rows="4">The party descended into the flooded submerged vaults beneath the eastern cliffs. After dispatching the drowned guardians, they recovered two lore fragments detailing the ancient coastal pact.</textarea>
+            </div>
+
+            <div class="form-group secret-note-box section-box">
+              <label for="session-secrets-input">🔒 Private GM Notes & Key Clues</label>
+              <textarea class="form-control" id="session-secrets-input" rows="3">Voss's daughter holds 500gp in debt markers with the Salt Knives. Voss will bargain if confronted with the ledger.</textarea>
+            </div>
+          </div>
         </section>
 
         <section class="view" id="assets">
-          <header class="viewhead"><div><h2>Assets</h2><p>Evidence, maps, and reference files linked to <span class="active-campaign">The Shattered Coast</span>.</p></div></header>
-          <div id="dropzone-container">
+          <header class="view-header">
+            <h2>Assets</h2>
+            <p>Evidence, maps, and reference files linked to <span class="active-campaign">The Shattered Coast</span>.</p>
+          </header>
+
+          <div class="dropzone-container" id="dropzone-container">
             <section class="dropzone" id="dropzone-prompt">
               <div class="upload-icon">⇧</div>
               <h3>Add Assets to <span class="active-campaign">The Shattered Coast</span></h3>
               <p>Drag files here to link them to this campaign, or browse local storage.</p>
               <button class="choose-file" type="button" onclick="triggerFileSelect()">+ Choose File or Source</button>
-              <input type="file" id="asset-file-input" style="display:none" onchange="handleFileChosen(event)" />
+              <input type="file" id="asset-file-input" style="display: none;" onchange="handleFileChosen(event)" />
             </section>
-            <section class="card" id="asset-upload-config" style="display:none;padding:20px;border:2px solid var(--purple);background:#fcf8ff;margin-bottom:20px">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-                <div><h3 style="font-size:14px;font-weight:800;color:var(--deep)">Configure Asset Metadata</h3><p style="font-size:11px;color:var(--muted);margin-top:2px" id="upload-file-info">File ready: <strong>Coastal_Cave_Map.pdf</strong> (1.4 MB)</p></div>
-                <button class="secondary" style="padding:4px 10px;font-size:11px" type="button" onclick="cancelAssetUpload()">Cancel</button>
+
+            <section class="asset-upload-panel" id="asset-upload-config" style="display: none;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line);">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                  <h3 style="font-size: 14px; font-weight: 800; color: var(--ink); font-family: Inter, sans-serif;">Configure Asset Metadata</h3>
+                  <div class="file-preview-badge" id="upload-file-info">
+                    <span>📄</span> <strong>Coastal_Cave_Map.pdf</strong> (1.4 MB)
+                  </div>
+                </div>
+                <button class="btn-secondary" style="padding: 5px 12px; font-size: 11px;" type="button" onclick="cancelAssetUpload()">Cancel</button>
               </div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
-                <div class="field" style="margin-bottom:0"><label for="new-asset-title">Display Title</label><input id="new-asset-title" type="text" placeholder="e.g. Coastal Cave Map" /></div>
-                <div class="field" style="margin-bottom:0"><label for="new-asset-truth">Truth Status</label><select id="new-asset-truth"><option value="canon" selected>Canon (Verified Truth)</option><option value="reference">Reference Material</option><option value="rumor">In-Game Rumor / Handout</option></select></div>
-                <div class="field" style="margin-bottom:0"><label for="new-asset-session">Link to Session</label><select id="new-asset-session" onchange="toggleQuickSessionInput(this.value)"><option value="Session 04">Session 04 — The Sunken Archive</option><option value="Session 02">Session 02 — Arrival at Dockside</option><option value="Unlinked" selected>Unlinked / General Reference</option><option value="new_session">+ Create New Session...</option></select></div>
+
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="new-asset-title">Display Title</label>
+                  <input class="form-control" id="new-asset-title" type="text" placeholder="e.g. Coastal Cave Map" />
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="new-asset-truth">Truth Status</label>
+                  <select class="form-control" id="new-asset-truth">
+                    <option value="canon" selected>Canon (Verified Truth)</option>
+                    <option value="reference">Reference Material</option>
+                    <option value="rumor">In-Game Rumor / Handout</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="new-asset-session">Link to Session</label>
+                  <select class="form-control" id="new-asset-session" onchange="toggleQuickSessionInput(this.value)">
+                    <option value="Session 04">Session 04 — The Sunken Archive</option>
+                    <option value="Session 02">Session 02 — Arrival at Dockside</option>
+                    <option value="Unlinked" selected>Unlinked / General Reference</option>
+                    <option value="new_session">+ Create New Session...</option>
+                  </select>
+                </div>
               </div>
-              <div class="field" id="new-session-quick-wrap" style="display:none;margin-top:14px;margin-bottom:0;padding:12px;background:white;border:1px dashed var(--purple);border-radius:10px"><label for="new-session-title-input" style="color:var(--deep)">✨ Name for New Session</label><input id="new-session-title-input" type="text" placeholder="e.g. Session 05 — Blackreef Vault Infiltration" /></div>
-              <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px"><button class="add" type="button" onclick="saveNewAsset()">+ Save &amp; Link Asset</button></div>
+
+              <div class="form-group" id="new-session-quick-wrap" style="display: none; margin-top: 16px; margin-bottom: 0; padding: 14px; background: #faf5ff; border: 1px dashed var(--purple); border-radius: 12px;">
+                <label style="color: var(--purple-deep); font-weight: 800; display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+                  <span>✨</span> Create New Session Log
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                  <div>
+                    <label for="new-session-num-input" style="font-size: 10px; color: var(--purple-deep); font-weight: 800;">Session Number</label>
+                    <input class="form-control" id="new-session-num-input" type="text" placeholder="e.g. Session 05" style="margin-top: 4px;" />
+                  </div>
+                  <div>
+                    <label for="new-session-date-input" style="font-size: 10px; color: var(--purple-deep); font-weight: 800;">Date Played</label>
+                    <input class="form-control" id="new-session-date-input" type="date" style="margin-top: 4px;" />
+                  </div>
+                </div>
+                <div>
+                  <label for="new-session-title-input" style="font-size: 10px; color: var(--purple-deep); font-weight: 800;">Session Title / Label</label>
+                  <input class="form-control" id="new-session-title-input" type="text" placeholder="e.g. Infiltration of Blackreef Vault" style="margin-top: 4px;" />
+                </div>
+              </div>
+
+              <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; align-items: center; padding-top: 14px; border-top: 1px solid var(--line);">
+                <button class="btn-secondary" type="button" onclick="cancelAssetUpload()">Cancel</button>
+                <button class="add-button" type="button" onclick="saveNewAsset()">+ Save & Link Asset</button>
+              </div>
             </section>
           </div>
-          <section class="library card"><div class="library-tools"><label class="search-wrap"><input id="asset-search" type="search" placeholder="Search assets or keywords…" /></label><select id="asset-type-filter" aria-label="Filter assets by type"><option value="all">All types (3)</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="image">Images</option></select></div><div id="asset-list"><article class="row" data-type="document" data-search="session 04 sunken archive pdf" data-view="asset-detail"><div class="file pdf">PDF</div><div class="rowmain"><div class="rowname">Session 04 — The Sunken Archive</div><div class="meta"><span>1.2 MB</span><span class="tag session">Session 04</span><span class="tag canon">Canon</span></div></div><button class="secondary">View</button></article><article class="row" data-type="spreadsheet" data-search="dockside factions spreadsheet xls" data-view="asset-detail"><div class="file xls">XLS</div><div class="rowmain"><div class="rowname">Dockside Factions.xlsx</div><div class="meta"><span>45 KB</span><span class="tag">Reference</span><span>Not linked to a session</span></div></div><button class="secondary">View</button></article><article class="row" data-type="image" data-search="old coast map jpg session 02" data-view="asset-detail"><div class="file jpg">JPG</div><div class="rowmain"><div class="rowname">Old Coast Map.jpg</div><div class="meta"><span class="tag session">Session 02</span><span class="tag canon">Map</span></div></div><button class="secondary">View</button></article></div></section>
+
+          <section class="library card">
+            <div class="library-tools">
+              <label class="search">
+                <span>⌕</span>
+                <input id="asset-search" type="search" placeholder="Search assets or keywords…" oninput="refreshAssets()" />
+              </label>
+              <select class="asset-type-select" id="asset-type-filter" aria-label="Filter assets by type" onchange="refreshAssets()">
+                <option value="all">All types (3)</option>
+                <option value="document">Documents</option>
+                <option value="spreadsheet">Spreadsheets</option>
+                <option value="image">Images</option>
+              </select>
+            </div>
+
+            <div id="asset-list">
+              <article class="row" data-type="document" data-search="session 04 sunken archive pdf" style="cursor: pointer;" onclick="openAssetDetail('asset-session-04')">
+                <div class="file-type pdf">PDF</div>
+                <div class="row-main">
+                  <div class="row-name">Session 04 — The Sunken Archive</div>
+                  <div class="row-meta">
+                    <span>1.2 MB</span>
+                    <span class="tag session-tag">Session 04</span>
+                    <span class="tag canon">Canon</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;" onclick="event.stopPropagation()">
+                  <button class="btn-secondary" type="button" onclick="openAssetEdit('asset-session-04')">✎ Edit</button>
+                  <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+                </div>
+              </article>
+
+              <article class="row" data-type="spreadsheet" data-search="dockside factions spreadsheet xls" style="cursor: pointer;" onclick="openAssetDetail('asset-factions')">
+                <div class="file-type xls">XLS</div>
+                <div class="row-main">
+                  <div class="row-name">Dockside Factions.xlsx</div>
+                  <div class="row-meta">
+                    <span>45 KB</span>
+                    <span class="tag">Reference</span>
+                    <span>Not linked to a session</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;" onclick="event.stopPropagation()">
+                  <button class="btn-secondary" type="button" onclick="openAssetEdit('asset-factions')">✎ Edit</button>
+                  <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+                </div>
+              </article>
+
+              <article class="row" data-type="image" data-search="old coast map jpg session 02" style="cursor: pointer;" onclick="openAssetDetail('asset-map')">
+                <div class="file-type jpg">JPG</div>
+                <div class="row-main">
+                  <div class="row-name">Old Coast Map.jpg</div>
+                  <div class="row-meta">
+                    <span class="tag session-tag">Session 02</span>
+                    <span class="tag canon">Map</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;" onclick="event.stopPropagation()">
+                  <button class="btn-secondary" type="button" onclick="openAssetEdit('asset-map')">✎ Edit</button>
+                  <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+                </div>
+              </article>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="asset-detail">
-          <button class="back" data-view="assets">← Back to Assets</button>
-          <header class="viewhead"><div><div class="asset-detail-heading"><span class="tag session">Session 04</span><span class="tag canon">Canonical</span></div><h2>Session 04 — The Sunken Archive.pdf</h2></div><div class="asset-detail-actions"><button class="secondary" data-view="asset-edit">✎ Edit Metadata</button><button class="add">⬇ Download / View File</button></div></header>
-          <div class="detail-grid"><div><article class="card detail-card asset-detail-card"><h3>Asset Overview & Metadata</h3><div class="asset-metadata"><div><span>File Format:</span><strong>PDF Document</strong></div><div><span>File Size:</span><strong>1.2 MB</strong></div><div><span>Upload Date:</span><strong>Oct 13, 2026</strong></div><div><span>Status:</span><strong style="color:#15803d">Linked & Verified</strong></div></div></article></div><aside><article class="panel"><h3>Linked Session</h3><div class="panel-item asset-link" data-view="session-detail"><strong style="color:var(--deep)">Session 04 — The Sunken Archive</strong><br /><span class="summary">Played Oct 12, 2026 →</span></div></article><article class="panel"><h3>Linked Entities</h3><div class="panel-item">♙ Captain Elian Voss</div></article></aside></div>
+          <button class="back-link" type="button" onclick="closeAssetView()">← Back to Assets</button>
+          
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span class="tag session-tag" id="asset-detail-tag">Session 04</span>
+                  <span class="tag canon" id="asset-detail-truth">Canon Truth</span>
+                </div>
+                <h2 id="asset-detail-name">Session 04 — The Sunken Archive.pdf</h2>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary" type="button" onclick="openAssetEdit('edit-current')">✎ Edit Metadata</button>
+                <button class="add-button" type="button">⬇ Download File</button>
+                <button class="btn-secondary row-action-danger" type="button" onclick="deleteCurrentAsset()">🗑 Delete Asset</button>
+              </div>
+            </div>
+          </header>
+
+          <div class="form-grid">
+            <div>
+              <div class="card" style="padding: 20px; margin-bottom: 16px;">
+                <h3 style="font-size: 13px; font-weight: 800; color: #57534e; text-transform: uppercase; margin-bottom: 12px;">Asset Overview & Metadata</h3>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; font-size: 12px;">
+                  <div>
+                    <span style="color: var(--muted);">File Format:</span>
+                    <strong style="display: block; color: var(--ink);" id="asset-detail-format">PDF Document</strong>
+                  </div>
+                  <div>
+                    <span style="color: var(--muted);">File Size:</span>
+                    <strong style="display: block; color: var(--ink);" id="asset-detail-size">1.2 MB</strong>
+                  </div>
+                  <div>
+                    <span style="color: var(--muted);">Upload Date:</span>
+                    <strong style="display: block; color: var(--ink);">Oct 13, 2026</strong>
+                  </div>
+                  <div>
+                    <span style="color: var(--muted);">Status:</span>
+                    <strong style="display: block; color: #15803d;">Linked & Verified</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-box">
+                <div class="section-box-title">
+                  <span>Linked Session</span>
+                </div>
+                <div style="padding: 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: #faf9f7;" onclick="openSessionDetail('session-04')">
+                  <div style="font-size: 12px; font-weight: 800; color: var(--purple-deep);">Session 04 — The Sunken Archive</div>
+                  <div style="font-size: 10px; color: var(--muted); margin-top: 2px;">Played Oct 12, 2026 →</div>
+                </div>
+              </div>
+
+              <div class="section-box">
+                <div class="section-box-title">
+                  <span>Linked Entities</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <button class="btn-secondary" style="font-size: 11px; text-align: left;" type="button" onclick="selectEntity('elian-voss'); switchTab('entities');">♙ Captain Elian Voss</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="view" id="asset-edit">
-          <button class="back" data-view="asset-detail">← Cancel & back</button>
-          <header class="viewhead"><div><h2>Edit asset metadata</h2><p>Modify status, truth canon, or session binding for <span class="active-campaign">The Shattered Coast</span>.</p></div><button class="add">Save asset changes</button></header>
-          <form class="card form" style="max-width:700px"><div class="field"><label>Asset title / file display name</label><input value="Session 04 — The Sunken Archive.pdf" /></div><div class="field"><label>Truth / canon status</label><select><option value="canonical">Canonical</option><option value="uncertain">Uncertain</option><option value="subjective">Subjective</option></select></div><div class="field"><label>Bind to campaign session</label><select><option>Session 04 — The Sunken Archive</option><option>Session 02 — Arrival at Dockside Quays</option><option>Unlinked / reference only</option></select></div></form>
+          <button class="back-link" type="button" onclick="closeAssetView()">← Cancel & Back</button>
+          
+          <header class="view-header">
+            <div class="view-title-row">
+              <div>
+                <h2 id="asset-form-title">Edit Asset Metadata</h2>
+                <p>Modify status, truth canon, or session binding for <span class="active-campaign">The Shattered Coast</span>.</p>
+              </div>
+              <button class="add-button" type="button" onclick="closeAssetView()">Save Asset Changes</button>
+            </div>
+          </header>
+
+          <div class="card" style="padding: 20px; max-width: 700px;">
+            <div class="form-group">
+              <label for="asset-title-input">Asset Title / File Display Name</label>
+              <input class="form-control" id="asset-title-input" type="text" value="Session 04 — The Sunken Archive.pdf" />
+            </div>
+
+            <div class="form-group">
+              <label for="asset-truth-select">Truth / Canon Status</label>
+              <select class="form-control" id="asset-truth-select">
+                <option value="canon" selected>Canon (Verified Truth)</option>
+                <option value="reference">Reference Material</option>
+                <option value="rumor">In-Game Rumor / Unverified Handout</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="asset-session-select">Bind to Campaign Session</label>
+              <select class="form-control" id="asset-session-select">
+                <option value="session-04" selected>Session 04 — The Sunken Archive</option>
+                <option value="session-02">Session 02 — Arrival at Dockside Quays</option>
+                <option value="unlinked">Unlinked / Reference Only</option>
+              </select>
+            </div>
+          </div>
         </section>
       </main>
     </div>
+
+    <div id="relationship-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 210; align-items: center; justify-content: center;">
+      <div class="card" style="width: min(620px, 94%); padding: 22px; background: white; max-height: 90vh; overflow-y: auto;">
+        <h3 id="rel-modal-title" style="font-family: Cinzel, serif; font-size: 18px; margin-bottom: 14px;">+ Add Connection</h3>
+        
+        <div class="sentence-preview-box" id="sentence-preview-card">
+          <span style="font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 2px;">Relationship Preview</span>
+          <span id="preview-text">"Captain Elian Voss" is Coerced By "Salt Knives"</span>
+        </div>
+
+        <div class="form-group" style="padding: 12px; background: #faf8ff; border: 1px solid #e9d5ff; border-radius: 10px; margin-bottom: 16px;">
+          <label for="rel-target-select" style="color: var(--purple-deep); font-weight: 800;">1. Partner Entity</label>
+          <select class="form-control" id="rel-target-select" onchange="updateRelationshipPreview()" style="margin-top: 4px; font-weight: 700;">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label for="rel-type-select" style="margin: 0;">2. Relationship Type / Semantics</label>
+            <span style="font-size: 10px; color: var(--muted);">Filter by family or search catalog</span>
+          </div>
+
+          <div class="entity-category-filters" id="modal-family-filters" style="margin-bottom: 8px;">
+            <button class="filter-chip active" type="button" data-fam="all" onclick="setModalFamilyFilter(this, 'all')">All Families</button>
+            <button class="filter-chip" type="button" data-fam="conflict" onclick="setModalFamilyFilter(this, 'conflict')">Conflict</button>
+            <button class="filter-chip" type="button" data-fam="political" onclick="setModalFamilyFilter(this, 'political')">Political</button>
+            <button class="filter-chip" type="button" data-fam="personal" onclick="setModalFamilyFilter(this, 'personal')">Personal</button>
+            <button class="filter-chip" type="button" data-fam="operations" onclick="setModalFamilyFilter(this, 'operations')">Operations</button>
+          </div>
+          
+          <div style="position: relative; margin-bottom: 8px;">
+            <input class="form-control" id="rel-type-search-input" type="search" placeholder="Type to filter catalog (e.g. debt, blackmail, patron)..." oninput="populateTypeCatalogSelect()" style="padding-left: 30px; font-size: 12px;" />
+            <span style="position: absolute; left: 10px; top: 8px; color: #9a9690; font-size: 12px;">⌕</span>
+          </div>
+
+          <select class="form-control" id="rel-type-select" onchange="handleTypeSelectionChange(this.value)" style="font-size: 12px;">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+
+        <div class="form-group" id="direction-selection-wrap" style="margin-bottom: 16px;">
+          <label style="margin-bottom: 2px;">3. Directional Perspective</label>
+          <div class="direction-toggle-group">
+            <button class="direction-btn active" id="dir-forward-btn" type="button" onclick="setDirectionRole('forward')">
+              Forward Label (<span id="btn-forward-text">Coerces</span>)
+            </button>
+            <button class="direction-btn" id="dir-reverse-btn" type="button" onclick="setDirectionRole('reverse')">
+              Reverse Label (<span id="btn-reverse-text">Coerced By</span>)
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group" id="custom-type-creation-panel" style="display: none; padding: 14px; background: #fdf8ff; border: 1px dashed var(--purple); border-radius: 10px; margin-bottom: 16px;">
+          <label style="color: var(--purple-deep); font-weight: 800; margin-bottom: 8px;">✨ Define New Custom Relationship Type</label>
+          
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label for="custom-family-select" style="font-size: 10px;">Assign to Family Category</label>
+            <select class="form-control" id="custom-family-select" style="font-size: 11px;">
+              <option value="conflict">Conflict & Hostility (Red Badge)</option>
+              <option value="political">Political & Power (Indigo Badge)</option>
+              <option value="personal">Personal & Social (Amber Badge)</option>
+              <option value="operations">Operations & Territory (Green Badge)</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+            <div>
+              <label for="custom-forward-input" style="font-size: 10px; text-transform: none;">Forward Label (Subject → Object)</label>
+              <input class="form-control" id="custom-forward-input" type="text" placeholder="e.g. Secret Patron" oninput="updateRelationshipPreview()" style="font-size: 11px;" />
+            </div>
+            <div>
+              <label for="custom-reverse-input" style="font-size: 10px; text-transform: none;">Reverse Label (Object → Subject)</label>
+              <input class="form-control" id="custom-reverse-input" type="text" placeholder="e.g. Client Of" oninput="updateRelationshipPreview()" style="font-size: 11px;" />
+            </div>
+          </div>
+
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink); text-transform: none; font-weight: 700;">
+            <input type="checkbox" id="custom-symmetric-check" onchange="updateRelationshipPreview()" /> Is Symmetric Relationship (Equal directional context)
+          </label>
+        </div>
+
+        <div style="padding: 12px; background: #faf9f7; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px;">
+          <h4 style="font-size: 11px; font-weight: 800; color: #57534e; text-transform: uppercase; margin-bottom: 8px;">4. Status & Visibility</h4>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div>
+              <label for="rel-lifecycle-select" style="font-size: 10px;">Lifecycle</label>
+              <select class="form-control" id="rel-lifecycle-select" style="font-size: 11px; padding: 6px;">
+                <option value="active" selected>Active</option>
+                <option value="ended">Ended / Historical</option>
+              </select>
+            </div>
+            <div>
+              <label for="rel-visibility-select" style="font-size: 10px;">Visibility</label>
+              <select class="form-control" id="rel-visibility-select" style="font-size: 11px; padding: 6px;">
+                <option value="public">Public Knowledge</option>
+                <option value="secret" selected>Secret (GM Only)</option>
+                <option value="rumor">Rumored / Alleged</option>
+              </select>
+            </div>
+            <div>
+              <label for="rel-certainty-select" style="font-size: 10px;">Certainty</label>
+              <select class="form-control" id="rel-certainty-select" style="font-size: 11px; padding: 6px;">
+                <option value="confirmed" selected>Confirmed Truth</option>
+                <option value="suspected">Suspected / Unverified</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="rel-notes-input">Context Notes & Details</label>
+          <input class="form-control" id="rel-notes-input" type="text" placeholder="e.g. Holds 500gp debt markers in Waterdeep" />
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+          <button class="btn-secondary" type="button" onclick="closeRelationshipModal()">Cancel</button>
+          <button class="add-button" type="button" onclick="saveRelationship()">Save Connection</button>
+        </div>
+      </div>
+    </div>
+
     <script>
+      const relationshipCatalog = {
+        conflict: { 
+          label: 'Conflict & Hostility', 
+          presetTypes: [
+            { key: 'coerces', forward: 'Coerces', reverse: 'Coerced By', symmetric: false },
+            { key: 'blackmailing', forward: 'Blackmailing', reverse: 'Blackmailed by', symmetric: false },
+            { key: 'investigating', forward: 'Investigating', reverse: 'Investigated by', symmetric: false },
+            { key: 'at_war', forward: 'At War With', reverse: 'At War With', symmetric: true },
+            { key: 'extorting', forward: 'Extorting', reverse: 'Extorted by', symmetric: false }
+          ] 
+        },
+        political: { 
+          label: 'Political & Power', 
+          presetTypes: [
+            { key: 'governs', forward: 'Governs', reverse: 'Governed by', symmetric: false },
+            { key: 'leader_of', forward: 'Leader Of', reverse: 'Led by', symmetric: false },
+            { key: 'allied_with', forward: 'Allied With', reverse: 'Allied With', symmetric: true },
+            { key: 'vassal_to', forward: 'Vassal To', reverse: 'Liege Of', symmetric: false },
+            { key: 'patron_of', forward: 'Patron Of', reverse: 'Client Of', symmetric: false }
+          ] 
+        },
+        personal: { 
+          label: 'Personal & Social', 
+          presetTypes: [
+            { key: 'spouse_of', forward: 'Spouse Of', reverse: 'Spouse Of', symmetric: true },
+            { key: 'lives_in', forward: 'Lives In', reverse: 'Home To', symmetric: false },
+            { key: 'debtor_to', forward: 'Debtor To', reverse: 'Creditor To', symmetric: false },
+            { key: 'mentor_to', forward: 'Mentor To', reverse: 'Protégé Of', symmetric: false }
+          ] 
+        },
+        operations: { 
+          label: 'Operations & Territory', 
+          presetTypes: [
+            { key: 'located_in', forward: 'Located In', reverse: 'Contains', symmetric: false },
+            { key: 'based_in', forward: 'Based In', reverse: 'Base For', symmetric: false },
+            { key: 'patrols', forward: 'Patrols Area', reverse: 'Patrolled By', symmetric: false },
+            { key: 'supplies', forward: 'Supplies Goods To', reverse: 'Supplied By', symmetric: false }
+          ] 
+        }
+      };
+
+      const customTypesCatalog = [];
+
+      const relationshipStore = [
+        {
+          id: 'rel-101',
+          sourceId: 'salt-knives',
+          targetId: 'elian-voss',
+          family: 'conflict',
+          typeKey: 'coerces',
+          notes: "Daughter's debt markers in Waterdeep",
+          lifecycle: 'active',
+          visibility: 'secret',
+          certainty: 'confirmed'
+        },
+        {
+          id: 'rel-102',
+          sourceId: 'salt-knives',
+          targetId: 'gilded-eel',
+          family: 'operations',
+          typeKey: 'based_in',
+          notes: 'Cellar meeting point beneath tavern',
+          lifecycle: 'active',
+          visibility: 'public',
+          certainty: 'confirmed'
+        }
+      ];
+
+      const entityDatabase = {
+        'elian-voss': {
+          id: 'elian-voss',
+          name: 'Captain Elian Voss',
+          kind: 'PERSON',
+          summary: 'Harbormaster with a private debt to the Crown.',
+          desc: 'Stern, weather-beaten sailor in his early fifties. Wears a royal naval coat with frayed golden epaulets.',
+          secrets: "Voss secretly accepts bribes from the Salt Knives because they hold his daughter's debt markers in Waterdeep."
+        },
+        'gilded-eel': {
+          id: 'gilded-eel',
+          name: 'The Gilded Eel',
+          kind: 'LOCATION',
+          summary: 'Dockside tavern and meeting place for the Salt Knives.',
+          desc: 'A rustic, three-story timber tavern smelling of roasted fish and saltwater ale.',
+          secrets: 'Underneath the cellar brew casks lies a trapdoor leading to the sunken sea vaults.'
+        },
+        'salt-knives': {
+          id: 'salt-knives',
+          name: 'Salt Knives',
+          kind: 'ORGANIZATION',
+          summary: 'Smuggling organization controlling the eastern quay.',
+          desc: 'A well-organized guild of harborside rogues, smugglers, and fences.',
+          secrets: 'They possess an ancient seal that key-locks the lower chamber of Blackreef Vault.'
+        }
+      };
+
+      let activeEntityId = 'elian-voss';
+      let currentCategoryFilter = 'all';
+      let editingRelId = null;
+      let selectedDirection = 'forward';
+      let currentModalFamilyFilter = 'all';
+
+      function getAllRelationshipTypes() {
+        const allTypes = [];
+        Object.keys(relationshipCatalog).forEach(famKey => {
+          const family = relationshipCatalog[famKey];
+          family.presetTypes.forEach(p => {
+            allTypes.push({
+              family: famKey,
+              familyLabel: family.label,
+              key: p.key,
+              forward: p.forward,
+              reverse: p.reverse,
+              symmetric: p.symmetric,
+              isCustom: false
+            });
+          });
+        });
+
+        customTypesCatalog.forEach(c => {
+          allTypes.push({
+            family: c.family,
+            familyLabel: relationshipCatalog[c.family] ? relationshipCatalog[c.family].label : 'Custom',
+            key: c.key,
+            forward: c.forward,
+            reverse: c.reverse,
+            symmetric: c.symmetric,
+            isCustom: true
+          });
+        });
+
+        return allTypes;
+      }
+
+      function selectEntity(id) {
+        if (!entityDatabase[id]) return;
+        activeEntityId = id;
+        
+        document.querySelectorAll('.entity-list-item').forEach(item => {
+          item.classList.toggle('selected', item.dataset.id === id);
+        });
+
+        const data = entityDatabase[id];
+        
+        const titleEl = document.querySelector('#reader-title');
+        const kindBadgeEl = document.querySelector('#reader-kind-badge');
+        const summaryEl = document.querySelector('#reader-summary');
+        const descEl = document.querySelector('#reader-desc');
+        const secretsEl = document.querySelector('#reader-secrets');
+
+        if (titleEl) titleEl.textContent = data.name;
+        if (kindBadgeEl) kindBadgeEl.textContent = data.kind;
+        if (summaryEl) summaryEl.textContent = data.summary;
+        if (descEl) descEl.textContent = data.desc;
+        if (secretsEl) secretsEl.textContent = data.secrets;
+
+        const relContainer = document.querySelector('#entity-relationship-list');
+        if (relContainer) {
+          relContainer.innerHTML = '';
+
+          const allTypes = getAllRelationshipTypes();
+          const connectedRels = relationshipStore.filter(r => r.sourceId === id || r.targetId === id);
+
+          if (connectedRels.length > 0) {
+            connectedRels.forEach(rel => {
+              const isSource = (rel.sourceId === id);
+              const partnerId = isSource ? rel.targetId : rel.sourceId;
+              const partnerEntity = entityDatabase[partnerId];
+              const partnerName = partnerEntity ? partnerEntity.name : partnerId;
+              
+              const typeMeta = allTypes.find(t => t.key === rel.typeKey) || {
+                family: rel.family || 'conflict',
+                forward: rel.typeKey,
+                reverse: rel.typeKey,
+                symmetric: false
+              };
+
+              const displayLabel = typeMeta.symmetric ? typeMeta.forward : (isSource ? typeMeta.forward : typeMeta.reverse);
+
+              const chip = document.createElement('div');
+              chip.className = 'rel-chip';
+              chip.innerHTML = `
+                <div style="flex: 1; min-width: 0; padding-right: 8px;">
+                  <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                    <span class="rel-family-badge rel-family-${rel.family}">${rel.family}</span>
+                    <span class="status-badge ${rel.visibility === 'secret' ? 'status-secret' : ''}">${rel.visibility || 'public'}</span>
+                    <span class="status-badge ${rel.lifecycle === 'active' ? 'status-active' : ''}">${rel.lifecycle || 'active'}</span>
+                  </div>
+                  <strong>${displayLabel}</strong> ➔ <span style="color: var(--purple-deep); font-weight: 800; cursor: pointer;" onclick="selectEntity('${partnerId}')">${partnerName}</span>
+                  ${rel.notes ? `<div style="font-size: 10px; color: var(--muted); margin-top: 2px;">${rel.notes}</div>` : ''}
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                  <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="openRelationshipModal('${rel.id}')" title="Edit Connection">✎</button>
+                  <button class="btn-secondary row-action-danger" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="deleteRelationship('${rel.id}')" title="Delete Connection">🗑</button>
+                </div>
+              `;
+              relContainer.appendChild(chip);
+            });
+          } else {
+            relContainer.innerHTML = '<p style="font-size: 11px; color: var(--muted);">No relationships asserted for this entity.</p>';
+          }
+        }
+
+        toggleEntityEditMode(false);
+      }
+
+      function populateTargetEntitySelect() {
+        const targetSelect = document.querySelector('#rel-target-select');
+        targetSelect.innerHTML = '';
+        
+        Object.keys(entityDatabase).forEach(key => {
+          if (key !== activeEntityId) {
+            const ent = entityDatabase[key];
+            const opt = document.createElement('option');
+            opt.value = ent.id;
+            opt.textContent = `${ent.name} (${ent.kind})`;
+            targetSelect.appendChild(opt);
+          }
+        });
+      }
+
+      function setModalFamilyFilter(btn, famKey) {
+        document.querySelectorAll('#modal-family-filters .filter-chip').forEach(chip => chip.classList.remove('active'));
+        btn.classList.add('active');
+        currentModalFamilyFilter = famKey;
+        populateTypeCatalogSelect();
+      }
+
+      function populateTypeCatalogSelect() {
+        const typeSelect = document.querySelector('#rel-type-select');
+        if (!typeSelect) return;
+        typeSelect.innerHTML = '';
+        const filterTerm = (document.querySelector('#rel-type-search-input')?.value || '').toLowerCase().trim();
+        const allTypes = getAllRelationshipTypes();
+
+        const filtered = allTypes.filter(t => {
+          const matchesFamily = (currentModalFamilyFilter === 'all' || t.family === currentModalFamilyFilter);
+          const matchesTerm = !filterTerm || 
+            t.forward.toLowerCase().includes(filterTerm) || 
+            t.reverse.toLowerCase().includes(filterTerm) || 
+            t.familyLabel.toLowerCase().includes(filterTerm) ||
+            t.key.toLowerCase().includes(filterTerm);
+          return matchesFamily && matchesTerm;
+        });
+
+        if (filtered.length === 0) {
+          const noOpt = document.createElement('option');
+          noOpt.disabled = true;
+          noOpt.textContent = 'No matching relationship types found for this filter.';
+          typeSelect.appendChild(noOpt);
+        } else {
+          filtered.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.key;
+            opt.textContent = `[${t.familyLabel}] ${t.forward} (⇄ ${t.reverse})`;
+            opt.dataset.family = t.family;
+            opt.dataset.forward = t.forward;
+            opt.dataset.reverse = t.reverse;
+            opt.dataset.symmetric = t.symmetric;
+            typeSelect.appendChild(opt);
+          });
+        }
+
+        const customOpt = document.createElement('option');
+        customOpt.value = '__new_custom_type__';
+        customOpt.textContent = '✨ + Define New Custom Relationship Type...';
+        typeSelect.appendChild(customOpt);
+
+        if (filtered.length > 0) {
+          handleTypeSelectionChange(typeSelect.value);
+        } else {
+          handleTypeSelectionChange('__new_custom_type__');
+        }
+      }
+
+      function setDirectionRole(role) {
+        selectedDirection = role;
+        document.querySelector('#dir-forward-btn').classList.toggle('active', role === 'forward');
+        document.querySelector('#dir-reverse-btn').classList.toggle('active', role === 'reverse');
+        updateRelationshipPreview();
+      }
+
+      function handleTypeSelectionChange(selectedVal) {
+        const customPanel = document.querySelector('#custom-type-creation-panel');
+        const dirWrap = document.querySelector('#direction-selection-wrap');
+        
+        customPanel.style.display = (selectedVal === '__new_custom_type__') ? 'block' : 'none';
+
+        if (selectedVal !== '__new_custom_type__') {
+          const allTypes = getAllRelationshipTypes();
+          const t = allTypes.find(x => x.key === selectedVal);
+          if (t) {
+            document.querySelector('#btn-forward-text').textContent = t.forward;
+            document.querySelector('#btn-reverse-text').textContent = t.reverse;
+            dirWrap.style.display = t.symmetric ? 'none' : 'block';
+          }
+        } else {
+          dirWrap.style.display = 'block';
+          document.querySelector('#btn-forward-text').textContent = 'Forward';
+          document.querySelector('#btn-reverse-text').textContent = 'Reverse';
+        }
+
+        updateRelationshipPreview();
+      }
+
+      function updateRelationshipPreview() {
+        const activeName = entityDatabase[activeEntityId] ? entityDatabase[activeEntityId].name : 'Active Entity';
+        const targetSelect = document.querySelector('#rel-target-select');
+        const targetName = targetSelect.options.length > 0 ? targetSelect.options[targetSelect.selectedIndex].text.split('(')[0].trim() : 'Partner Entity';
+        const typeSelect = document.querySelector('#rel-type-select');
+        const selectedVal = typeSelect.value;
+
+        let verbText = 'Connected To';
+
+        if (selectedVal === '__new_custom_type__') {
+          const fwd = document.querySelector('#custom-forward-input').value.trim() || 'Forward Relation';
+          const rev = document.querySelector('#custom-reverse-input').value.trim() || 'Reverse Relation';
+          const isSym = document.querySelector('#custom-symmetric-check').checked;
+          verbText = isSym ? fwd : (selectedDirection === 'forward' ? fwd : rev);
+        } else {
+          const selectedOpt = typeSelect.options[typeSelect.selectedIndex];
+          if (selectedOpt && !selectedOpt.disabled) {
+            const isSym = selectedOpt.dataset.symmetric === 'true';
+            verbText = isSym ? selectedOpt.dataset.forward : (selectedDirection === 'forward' ? selectedOpt.dataset.forward : selectedOpt.dataset.reverse);
+          }
+        }
+
+        document.querySelector('#preview-text').innerHTML = `<strong>"${activeName}"</strong> is ${verbText} <strong>"${targetName}"</strong>`;
+      }
+
+      function openRelationshipModal(relId = null) {
+        editingRelId = relId;
+        const modalTitle = document.querySelector('#rel-modal-title');
+        populateTargetEntitySelect();
+
+        currentModalFamilyFilter = 'all';
+        document.querySelectorAll('#modal-family-filters .filter-chip').forEach(chip => {
+          chip.classList.toggle('active', chip.dataset.fam === 'all');
+        });
+        document.querySelector('#rel-type-search-input').value = '';
+
+        populateTypeCatalogSelect();
+        setDirectionRole('forward');
+
+        if (relId) {
+          const rel = relationshipStore.find(r => r.id === relId);
+          if (rel) {
+            if (modalTitle) modalTitle.textContent = 'Edit Connection';
+            
+            const isSource = (rel.sourceId === activeEntityId);
+            const partnerId = isSource ? rel.targetId : rel.sourceId;
+            document.querySelector('#rel-target-select').value = partnerId;
+
+            document.querySelector('#rel-type-select').value = rel.typeKey;
+            handleTypeSelectionChange(rel.typeKey);
+            setDirectionRole(isSource ? 'forward' : 'reverse');
+
+            document.querySelector('#rel-lifecycle-select').value = rel.lifecycle || 'active';
+            document.querySelector('#rel-visibility-select').value = rel.visibility || 'secret';
+            document.querySelector('#rel-certainty-select').value = rel.certainty || 'confirmed';
+            document.querySelector('#rel-notes-input').value = rel.notes || '';
+          }
+        } else {
+          editingRelId = null;
+          if (modalTitle) modalTitle.textContent = '+ Add Connection';
+          document.querySelector('#custom-forward-input').value = '';
+          document.querySelector('#custom-reverse-input').value = '';
+          document.querySelector('#custom-symmetric-check').checked = false;
+          document.querySelector('#rel-notes-input').value = '';
+        }
+
+        updateRelationshipPreview();
+        document.querySelector('#relationship-modal').style.display = 'flex';
+      }
+
+      function saveRelationship() {
+        const targetSelect = document.querySelector('#rel-target-select');
+        if (!targetSelect.value) return;
+
+        const partnerId = targetSelect.value;
+        const typeSelect = document.querySelector('#rel-type-select');
+        const selectedVal = typeSelect.value;
+
+        let family = 'conflict';
+        let typeKey = selectedVal;
+
+        if (selectedVal === '__new_custom_type__') {
+          family = document.querySelector('#custom-family-select').value;
+          const forwardLabel = document.querySelector('#custom-forward-input').value.trim() || 'Connected To';
+          const reverseLabel = document.querySelector('#custom-reverse-input').value.trim() || forwardLabel;
+          const isSymmetric = document.querySelector('#custom-symmetric-check').checked;
+
+          typeKey = `custom_${Date.now()}`;
+          customTypesCatalog.push({
+            key: typeKey,
+            family: family,
+            forward: forwardLabel,
+            reverse: reverseLabel,
+            symmetric: isSymmetric
+          });
+        } else {
+          const selectedOpt = typeSelect.options[typeSelect.selectedIndex];
+          family = selectedOpt.dataset.family;
+        }
+
+        const sourceId = (selectedDirection === 'forward') ? activeEntityId : partnerId;
+        const targetId = (selectedDirection === 'forward') ? partnerId : activeEntityId;
+
+        const recordData = {
+          id: editingRelId || `rel-${Date.now()}`,
+          sourceId: sourceId,
+          targetId: targetId,
+          family: family,
+          typeKey: typeKey,
+          notes: document.querySelector('#rel-notes-input').value.trim(),
+          lifecycle: document.querySelector('#rel-lifecycle-select').value,
+          visibility: document.querySelector('#rel-visibility-select').value,
+          certainty: document.querySelector('#rel-certainty-select').value
+        };
+
+        if (editingRelId) {
+          const idx = relationshipStore.findIndex(r => r.id === editingRelId);
+          if (idx !== -1) relationshipStore[idx] = recordData;
+        } else {
+          relationshipStore.push(recordData);
+        }
+
+        selectEntity(activeEntityId);
+        closeRelationshipModal();
+      }
+
+      function deleteRelationship(relId) {
+        const idx = relationshipStore.findIndex(r => r.id === relId);
+        if (idx !== -1) {
+          relationshipStore.splice(idx, 1);
+          selectEntity(activeEntityId);
+        }
+      }
+
+      function closeRelationshipModal() {
+        editingRelId = null;
+        document.querySelector('#relationship-modal').style.display = 'none';
+      }
+
+      function toggleEntityEditMode(isEditing) {
+        document.querySelector('#entity-reader-view').style.display = isEditing ? 'none' : 'block';
+        document.querySelector('#entity-editor-view').style.display = isEditing ? 'block' : 'none';
+
+        if (isEditing && entityDatabase[activeEntityId]) {
+          const data = entityDatabase[activeEntityId];
+          document.querySelector('#form-heading').textContent = `Edit Profile — ${data.name}`;
+          document.querySelector('#entity-name-input').value = data.name;
+          document.querySelector('#entity-kind-select').value = data.kind.toLowerCase();
+          document.querySelector('#entity-summary-input').value = data.summary;
+          document.querySelector('#entity-desc-textarea').value = data.desc;
+          document.querySelector('#entity-secrets-textarea').value = data.secrets;
+        }
+      }
+
+      function saveActiveEntity() {
+        const name = document.querySelector('#entity-name-input').value.trim() || 'Unnamed Entity';
+        const kind = document.querySelector('#entity-kind-select').value.toUpperCase();
+        const summary = document.querySelector('#entity-summary-input').value.trim();
+        const desc = document.querySelector('#entity-desc-textarea').value.trim();
+        const secrets = document.querySelector('#entity-secrets-textarea').value.trim();
+
+        if (entityDatabase[activeEntityId]) {
+          entityDatabase[activeEntityId].name = name;
+          entityDatabase[activeEntityId].kind = kind;
+          entityDatabase[activeEntityId].summary = summary;
+          entityDatabase[activeEntityId].desc = desc;
+          entityDatabase[activeEntityId].secrets = secrets;
+
+          const listItem = document.querySelector(`.entity-list-item[data-id="${activeEntityId}"]`);
+          if (listItem) {
+            listItem.querySelector('div > div:first-child').textContent = name;
+            listItem.querySelector('div > div:last-child').textContent = summary;
+            listItem.querySelector('.entity-kind').textContent = kind;
+            listItem.dataset.cat = kind.toLowerCase();
+          }
+        }
+
+        selectEntity(activeEntityId);
+      }
+
+      function handleNewEntity() {
+        const newId = `entity-${Date.now()}`;
+        entityDatabase[newId] = {
+          id: newId,
+          name: 'New Entity',
+          kind: 'PERSON',
+          summary: 'Short summary here...',
+          desc: '',
+          secrets: ''
+        };
+
+        const listContainer = document.querySelector('#entity-master-list');
+        const item = document.createElement('div');
+        item.className = 'entity-list-item';
+        item.dataset.id = newId;
+        item.dataset.cat = 'person';
+        item.dataset.search = 'new entity person';
+        item.onclick = () => selectEntity(newId);
+        item.innerHTML = `
+          <div class="item-icon">♙</div>
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-size: 13px; font-weight: 800; color: var(--ink);">New Entity</div>
+            <div style="font-size: 11px; color: var(--muted);">Short summary here...</div>
+          </div>
+          <span class="entity-kind">PERSON</span>
+        `;
+        listContainer.prepend(item);
+
+        selectEntity(newId);
+        toggleEntityEditMode(true);
+      }
+
+      function deleteActiveEntity() {
+        if (!activeEntityId) return;
+        const listItem = document.querySelector(`.entity-list-item[data-id="${activeEntityId}"]`);
+        if (listItem) listItem.remove();
+        delete entityDatabase[activeEntityId];
+
+        const remainingIds = Object.keys(entityDatabase);
+        if (remainingIds.length > 0) {
+          selectEntity(remainingIds[0]);
+        } else {
+          document.querySelector('#entity-reader-view').style.display = 'none';
+        }
+      }
+
+      function setEntityCategoryFilter(btn, category) {
+        document.querySelectorAll('.entity-category-filters .filter-chip').forEach(chip => chip.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategoryFilter = category;
+        filterEntities();
+      }
+
+      function filterEntities() {
+        const query = (document.querySelector('#entity-search').value || '').toLowerCase().trim();
+        document.querySelectorAll('#entity-master-list .entity-list-item').forEach(item => {
+          const catMatches = currentCategoryFilter === 'all' || item.dataset.cat === currentCategoryFilter;
+          const searchMatches = item.dataset.search.includes(query);
+          item.style.display = (catMatches && searchMatches) ? 'flex' : 'none';
+        });
+      }
+
+      const menu = document.querySelector('#campaign-menu');
+      const activeCampaigns = [...document.querySelectorAll('.active-campaign')];
+      const navButtons = [...document.querySelectorAll('.nav-button')];
       const views = [...document.querySelectorAll('.view')];
-      const navButtons = [...document.querySelectorAll('.nav button')];
-      function showView(viewId) { const activeWorkspaceSection = viewId.startsWith('session-') ? 'sessions' : viewId.startsWith('asset-') ? 'assets' : viewId; views.forEach((view) => view.classList.toggle('active', view.id === viewId)); navButtons.forEach((button) => button.classList.toggle('active', button.dataset.view === activeWorkspaceSection)); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-      document.querySelectorAll('[data-view]').forEach((control) => control.addEventListener('click', (event) => { event.preventDefault(); showView(control.dataset.view); }));
+
+      function deleteCardItem(btn, e) {
+        if (e) e.stopPropagation();
+        const card = btn.closest('article');
+        if (card) {
+          card.style.transition = 'all 0.2s ease';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.95)';
+          setTimeout(() => card.remove(), 200);
+        }
+      }
+
+      function deleteCurrentSession() { closeSessionView(); }
+      function deleteCurrentAsset() { closeAssetView(); }
+
+      function toggleCampaignMenu() { menu.classList.toggle('open'); }
+      function switchCampaign(name) {
+        activeCampaigns.forEach((label) => label.textContent = name);
+        menu.classList.remove('open');
+      }
+
+      function switchTab(viewId) {
+        navButtons.forEach((item) => item.classList.toggle('active', item.dataset.view === viewId));
+        views.forEach((view) => view.classList.toggle('active', view.id === viewId));
+      }
+
+      navButtons.forEach((button) => button.addEventListener('click', () => {
+        switchTab(button.dataset.view);
+      }));
 
       function triggerFileSelect() { document.querySelector('#asset-file-input').click(); }
-      function handleFileChosen(event) { const file = event.target.files[0]; if (file) showAssetUploadConfig(file.name, file.size); }
-      function showAssetUploadConfig(filename, fileSize) {
-        document.querySelector('#dropzone-prompt').style.display = 'none';
-        document.querySelector('#asset-upload-config').style.display = 'block';
-        document.querySelector('#upload-file-info').innerHTML = `File ready: <strong>${filename}</strong> (${fileSize ? `${(fileSize / 1024 / 1024).toFixed(1)} MB` : '1.4 MB'})`;
-        const titleInput = document.querySelector('#new-asset-title');
-        titleInput.value = filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
-        titleInput.focus();
+      function handleFileChosen(e) {
+        const file = e.target.files[0];
+        if (file) { showAssetUploadConfig(file.name); }
       }
-      function cancelAssetUpload() { document.querySelector('#asset-upload-config').style.display = 'none'; document.querySelector('#dropzone-prompt').style.display = 'flex'; document.querySelector('#asset-file-input').value = ''; document.querySelector('#new-session-quick-wrap').style.display = 'none'; document.querySelector('#new-asset-session').value = 'Unlinked'; }
-      function toggleQuickSessionInput(value) { const quickWrap = document.querySelector('#new-session-quick-wrap'); quickWrap.style.display = value === 'new_session' ? 'block' : 'none'; if (value === 'new_session') document.querySelector('#new-session-title-input').focus(); }
+
+      function showAssetUploadConfig(filename) {
+        document.querySelector('#dropzone-prompt').style.display = 'none';
+        const configPanel = document.querySelector('#asset-upload-config');
+        configPanel.style.display = 'block';
+        document.querySelector('#upload-file-info').innerHTML = `<span>📄</span> <strong>${filename}</strong> (1.4 MB)`;
+        document.querySelector('#new-asset-title').value = filename.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+      }
+
+      function cancelAssetUpload() {
+        document.querySelector('#asset-upload-config').style.display = 'none';
+        document.querySelector('#dropzone-prompt').style.display = 'flex';
+        document.querySelector('#new-session-quick-wrap').style.display = 'none';
+      }
+
+      function toggleQuickSessionInput(val) {
+        const quickWrap = document.querySelector('#new-session-quick-wrap');
+        quickWrap.style.display = (val === 'new_session') ? 'block' : 'none';
+      }
+
       function saveNewAsset() {
         const title = document.querySelector('#new-asset-title').value || 'Untitled Asset';
         const truth = document.querySelector('#new-asset-truth').value;
-        let session = document.querySelector('#new-asset-session').value;
-        if (session === 'new_session') {
-          const newSessionFull = document.querySelector('#new-session-title-input').value.trim() || 'Session 05 — New Logged Session';
-          session = newSessionFull.includes('—') ? newSessionFull.split('—')[0].trim() : newSessionFull;
-          const sessionSelect = document.querySelector('#new-asset-session');
-          const newSessionOption = document.createElement('option');
-          newSessionOption.value = session;
-          newSessionOption.textContent = newSessionFull;
-          newSessionOption.selected = true;
-          sessionSelect.insertBefore(newSessionOption, sessionSelect.lastElementChild);
-        }
+        const assetList = document.querySelector('#asset-list');
         const newRow = document.createElement('article');
-        newRow.className = 'row'; newRow.dataset.type = 'document'; newRow.dataset.search = `${title.toLowerCase()} pdf`; newRow.dataset.view = 'asset-detail';
-        newRow.innerHTML = `<div class="file pdf">PDF</div><div class="rowmain"><div class="rowname">${title}</div><div class="meta"><span>1.4 MB</span>${session !== 'Unlinked' ? `<span class="tag session">${session}</span>` : ''}<span class="tag canon">${truth === 'canon' ? 'Canon' : truth === 'rumor' ? 'Rumor' : 'Reference'}</span></div></div><button class="secondary">View</button>`;
-        newRow.addEventListener('click', () => showView('asset-detail'));
-        document.querySelector('#asset-list').prepend(newRow);
+        newRow.className = 'row';
+        newRow.dataset.type = 'document';
+        newRow.dataset.search = `${title.toLowerCase()} pdf`;
+        newRow.style.cursor = 'pointer';
+        newRow.onclick = function() { openAssetDetail('asset-session-04'); };
+        newRow.innerHTML = `
+          <div class="file-type pdf">PDF</div>
+          <div class="row-main">
+            <div class="row-name">${title}</div>
+            <div class="row-meta">
+              <span>1.4 MB</span>
+              <span class="tag canon">${truth === 'canon' ? 'Canon' : 'Reference'}</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;" onclick="event.stopPropagation()">
+            <button class="btn-secondary" type="button" onclick="openAssetEdit('asset-session-04')">✎ Edit</button>
+            <button class="btn-secondary row-action-danger" type="button" onclick="deleteCardItem(this, event)">🗑 Delete</button>
+          </div>
+        `;
+        assetList.prepend(newRow);
         cancelAssetUpload();
       }
-      function refreshAssets() { const query = document.querySelector('#asset-search').value.toLowerCase().trim(); const type = document.querySelector('#asset-type-filter').value; document.querySelectorAll('#asset-list .row').forEach((row) => { row.hidden = !((type === 'all' || row.dataset.type === type) && row.dataset.search.includes(query)); }); }
-      document.querySelector('#asset-search').addEventListener('input', refreshAssets);
-      document.querySelector('#asset-type-filter').addEventListener('change', refreshAssets);
+
+      function openSessionDetail(id) {
+        views.forEach((v) => v.classList.remove('active'));
+        document.querySelector('#session-detail').classList.add('active');
+      }
+
+      function openSessionEdit(id) {
+        views.forEach((v) => v.classList.remove('active'));
+        document.querySelector('#session-edit').classList.add('active');
+      }
+
+      function closeSessionView() { switchTab('sessions'); }
+      function openAssetDetail(id) {
+        views.forEach((v) => v.classList.remove('active'));
+        document.querySelector('#asset-detail').classList.add('active');
+      }
+
+      function openAssetEdit(id) {
+        views.forEach((v) => v.classList.remove('active'));
+        document.querySelector('#asset-edit').classList.add('active');
+      }
+
+      function closeAssetView() { switchTab('assets'); }
+
+      function refreshSessions() {
+        const query = document.querySelector('#session-search').value.toLowerCase().trim();
+        document.querySelectorAll('.session-card-item').forEach((card) => {
+          card.style.display = card.dataset.search.includes(query) ? 'flex' : 'none';
+        });
+      }
+
+      function refreshAssets() {
+        const query = document.querySelector('#asset-search').value.toLowerCase().trim();
+        const typeFilter = document.querySelector('#asset-type-filter').value;
+        document.querySelectorAll('#asset-list .row').forEach((row) => {
+          const typeMatches = typeFilter === 'all' || row.dataset.type === typeFilter;
+          const searchMatches = row.dataset.search.includes(query);
+          row.style.display = (typeMatches && searchMatches) ? 'flex' : 'none';
+        });
+      }
+
+      function clearLiveScratchpad() {
+        document.querySelector('#live-scratchpad-input').value = '';
+      }
+
+      function insertScratchpadTag(type) {
+        const input = document.querySelector('#live-scratchpad-input');
+        let template = '';
+        if (type === 'loot') template = '\n- Loot: [Item Name] (Valued at __gp)';
+        if (type === 'npc') template = '\n- NPC Met: [NPC Name] - [Role/Faction]';
+        if (type === 'location') template = '\n- Location Discovered: [Location Name]';
+        
+        input.value += template;
+        input.focus();
+      }
+
+      function sortInitiative() {
+        const container = document.querySelector('#initiative-tracker-list');
+        const rows = Array.from(container.querySelectorAll('.init-row'));
+        
+        rows.sort((a, b) => {
+          const valA = parseInt(a.querySelector('.init-val').value) || 0;
+          const valB = parseInt(b.querySelector('.init-val').value) || 0;
+          return valB - valA;
+        });
+
+        rows.forEach(row => container.appendChild(row));
+      }
+
+      function addInitiativeRow() {
+        const container = document.querySelector('#initiative-tracker-list');
+        const row = document.createElement('div');
+        row.className = 'init-row';
+        row.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #faf8ff; border: 1px solid #e9d5ff; border-radius: 8px;';
+        row.innerHTML = `
+          <input type="number" class="init-val" value="10" style="width: 44px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-weight: 800; text-align: center;" />
+          <input type="text" placeholder="Combatant Name..." style="flex: 1; padding: 4px 6px; border: 1px solid #d6d3d1; border-radius: 6px; font-size: 12px; font-weight: 700;" />
+          <input type="text" value="HP --/--" style="width: 90px; padding: 4px; border: 1px solid #d6d3d1; border-radius: 6px; font-size: 11px;" />
+          <button class="btn-secondary row-action-danger" style="padding: 2px 6px; font-size: 10px;" type="button" onclick="this.closest('.init-row').remove()">🗑</button>
+        `;
+        container.appendChild(row);
+      }
+
+      function logScratchpadToSession() {
+        const notes = document.querySelector('#live-scratchpad-input').value.trim();
+        if (!notes) {
+          alert('Scratchpad is empty. Add some notes before converting.');
+          return;
+        }
+
+        views.forEach((v) => v.classList.remove('active'));
+        document.querySelector('#session-edit').classList.add('active');
+
+        document.querySelector('#session-form-heading').textContent = 'Log New Session from Scratchpad';
+        document.querySelector('#session-num-input').value = 'Session 05';
+        document.querySelector('#session-date-input').value = new Date().toISOString().split('T')[0];
+        document.querySelector('#session-title-input').value = 'Live Session Notes & Recap';
+        document.querySelector('#session-summary-input').value = notes;
+        document.querySelector('#session-secrets-input').value = '';
+      }
+
+      window.addEventListener('click', (e) => {
+        if (!e.target.closest('.switcher-wrap')) { menu.classList.remove('open'); }
+      });
+
+      /* Initial Startup Initialization */
+      selectEntity('elian-voss');
     </script>
   </body>
 </html>

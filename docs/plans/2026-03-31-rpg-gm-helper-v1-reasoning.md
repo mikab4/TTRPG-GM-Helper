@@ -17,19 +17,19 @@ At the same time, the project should remain a base for future learning in:
 
 The plan is designed to support the current milestone without blocking those longer-term directions.
 
-## Why We Chose A Modular Monolith
+## Why We Chose A Modular Monolith With One Worker Boundary
 
-Microservices were intentionally rejected for v1.
+Broad microservices remain rejected for v1. The approved follow-up architecture adds one independently runnable asset-processing worker because parsing and extraction are slow, failure-prone operations and this project is intentionally used to learn Redis, MongoDB, object storage, and a focused service boundary.
 
 Reasoning:
-- There is only one user and one product workflow.
-- Splitting services early would add deployment, coordination, and debugging overhead before the data model is even stable.
-- Search, extraction, entities, and notes are tightly connected. Splitting them now would mostly create boundaries that need to be undone or heavily revised later.
+- There is only one user and one product workflow, so campaign CRUD, review, and canonical writes remain together in FastAPI/PostgreSQL.
+- Splitting every domain area early would add deployment, coordination, and debugging overhead before the data model is even stable.
+- Parsing and extraction form one cohesive asynchronous boundary; splitting parser, extractor, asset, and review into separate services would create boundaries that need to be undone or heavily revised later.
 
 What we took instead:
-- one backend application
-- clear internal service boundaries
-- explicit interfaces for extraction, search, and external sync
+- one FastAPI application for canonical workflow
+- one worker for asset processing
+- clear internal interfaces for storage, parsing, extraction, review, and external sync
 
 This gives most of the learning value of good architecture without paying the operational cost of distributed systems too early.
 
@@ -218,14 +218,14 @@ Images, spreadsheets, and other uploaded binaries are better stored outside the 
 
 Reasoning:
 - large binary blobs bloat the database and backups
-- local filesystem storage is simpler in the current local-first deployment
-- object storage can replace local storage later without changing the core domain model much
+- MinIO provides an S3-compatible local deployment now and can later be replaced by managed object storage without changing asset contracts
+- API and processor processes must not depend on a shared filesystem mount
 - PostgreSQL should hold queryable metadata and relationships, not be the primary binary file store
 
 So the v1 direction is:
-- original uploaded files in backend-managed storage
+- original uploaded files in S3-compatible backend-managed storage (MinIO locally)
 - metadata in PostgreSQL
-- parsed outputs in PostgreSQL or storage depending on size
+- parsed-output workflow and provenance in PostgreSQL, with rebuildable versioned parsed-document projections in MongoDB
 
 ## Why Parsing Should Be Lazy But Cached
 
@@ -365,9 +365,7 @@ These were intentionally excluded because they add complexity without helping th
 - permissions
 - semantic or vector search
 - model training pipeline
-- microservices
-- Redis or background queue infrastructure
-- separate NoSQL storage
+- additional microservices beyond the asset processor
 - Kanka export and sync
 - fully automatic write-back from extracted notes without review
 - audio and video parsing
