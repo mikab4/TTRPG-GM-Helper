@@ -1,143 +1,67 @@
 # AGENTS.md
 
-## Project Purpose
+## Project
 
-RPG GM Helper is a single-user, local-first tool for tabletop RPG Game Masters. The first milestone focuses on:
-- storing campaign data in a structured way
-- ingesting source assets such as text documents, spreadsheets, and images
-- extracting candidate entities and relationships from parsed asset content
-- requiring human review before extracted data becomes canonical
-- searching across entities, sessions, and parsed asset text
+RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Masters. It stores campaign records and source assets, turns source material into reviewable structured data, preserves provenance, and supports retrieval across campaign information.
 
-This repository is intentionally being built as a foundation for later work on semantic search, model-assisted extraction, and training-oriented workflows.
+## Planning And Documentation
 
-## Source Of Truth
+- Documents directly under `docs/plans/` are current planning guidance.
+- Documents under `docs/plans/archive/` are historical and non-authoritative unless a current plan explicitly links to them.
+- Before planning or implementing feature behavior, inspect the filenames and opening discovery blocks of current plans. Read only relevant plans and surface conflicts instead of choosing silently.
+- Before planning or implementing feature behavior, inspect the headings and `Trigger` fields in `docs/deferred_design_options.md`. If requested work satisfies or may satisfy a trigger, flag the matching option before choosing an architecture and recommend whether to activate, reject, or continue deferring it. Do not implement an activated option until the decision is recorded in the applicable current plan and reasoning document.
+- When creating or updating a current plan, follow `docs/plans/README.md`, keep its discovery fields accurate, and maintain its corresponding `-reasoning.md` decision summary.
+- When implementation completes or materially changes a task in a current plan, update that task in the same work. Retain its original intent and steps, set its current status, add a concise summary of what was implemented, and correct outdated paths or schema descriptions. Update the sibling reasoning document when an architectural decision or trade-off changes.
+- Keep `README.md` limited to product description, setup, running, debugging, prerequisites, and verification commands.
+- Record architecture, workflow, scope, reasoning, and implementation handoffs under `docs/`, updating a current plan when intended behavior changes.
 
-Before making product or architecture changes, read:
-- `docs/plans/2026-03-31-rpg-gm-helper-v1.md`
-- `docs/plans/2026-03-31-rpg-gm-helper-v1-reasoning.md`
-- `docs/plans/2026-04-17-task-8-backend-design-sessions-source-assets.md` when working on sessions, assets, parsing, or provenance
-- `docs/plans/2026-04-17-task-8-backend-design-sessions-source-assets-reasoning.md` when changing the task-8 ingestion design
-- `README.md`
+## Architecture Boundaries
 
-If a proposed change conflicts with those documents, call it out explicitly instead of silently diverging.
+- Prefer a modular monolith. Add service boundaries or infrastructure only when a current plan justifies them.
+- Keep the backend in Python with FastAPI and the frontend as a separate React and TypeScript application.
+- PostgreSQL owns canonical domain and workflow state. Supporting stores or transports must not become competing sources of truth.
+- Keep domain rules, validation, extraction, review, and persistence in backend services. The frontend owns routing, forms, API calls, and presentation.
+- Use a plain typed API client at the frontend boundary. Do not add heavy client-state or framework abstractions without a concrete need.
+- Preserve campaign ownership and provenance for extracted entities and relationships.
+- Keep original assets outside PostgreSQL blobs and access storage through a backend-owned boundary.
+- Parsing and extraction are backend-owned capabilities. Ordinary asset metadata reads must remain cheap and must not trigger hidden processing.
+- Keep one generic `Entity` model unless a current plan explicitly changes the data model. Use JSONB for flexible metadata, not as a substitute for stable relational fields.
 
-## Repository Shape And Commands
+## Frontend Design Authority
 
-- The backend lives under `backend/` and uses `uv` with CPython 3.14.
-- The frontend lives under `frontend/` and uses React, TypeScript, Vite, ESLint, Prettier, and `npm`.
-- Prefer `uv sync` to create or update the backend environment.
-- Prefer `uv run <command>` for backend commands such as `pytest`, `ruff check`, `ruff format`, Alembic, and Uvicorn.
-- Prefer `npm install` in `frontend/` for frontend dependencies.
-- Prefer `npm run lint`, `npm run format:check`, and `npm run build` in `frontend/` as the baseline frontend verification.
-- Prefer fast, file-scoped verification before full suites when the smaller check gives enough confidence.
+- `docs/mockups/workspace-v1.html` is the authoritative visual and interaction reference for the frontend. Inspect the relevant mockup views before planning, implementing, or reviewing UI/UX work.
+- Match the mockup as strictly as the implemented product behavior permits. Preserve its composition, hierarchy, proportions, responsive intent, Inter/Cinzel typography, colors, spacing, borders, shadows, control styling, button placement, and interaction states. Do not make liberal creative substitutions or visual "improvements."
+- Treat any difference from the mockup—including colors, fonts, dimensions, spacing, component placement, button placement, or interaction behavior—as a design deviation requiring explicit approval from the responsible engineer before implementation.
+- If a required route, section, tab, state, or error-handling path has no mockup design, stop before making the design choice. Explain the missing design, propose the smallest mockup-consistent solution, and implement it only after the responsible engineer approves it.
+- Record every approved deviation in `docs/mockups/design-deviations.md`, including the affected surface, mockup baseline, approved change, rationale, and whether the mockup needs a later update. Product behavior may require additions, but it does not silently authorize presentation changes.
 
-## Architecture Rules
+## Repository And Commands
 
-- Prefer a modular monolith over microservices.
-- Keep the backend in Python with FastAPI.
-- Keep PostgreSQL as the primary and only datastore in v1.
-- Use React with TypeScript as the current frontend default, but keep the frontend architecture cheap to replace if an early switch becomes justified.
-- Keep the frontend as a separate app in the same repository, not a server-rendered full-stack framework.
-- Keep business logic, validation, extraction logic, and workflow rules in the backend rather than in React components or hooks.
-- Keep the frontend thin: routing, forms, tables, API calls, and presentation are in scope; domain logic and persistence rules belong in FastAPI services.
-- Use a plain typed API client at the frontend-backend boundary and avoid coupling domain behavior to React-only patterns.
-- Avoid heavy client-side state frameworks, custom hook abstractions, or React-specific architecture unless they solve a concrete v1 problem now.
-- Prefer styling and component structure that preserve CSS, UX flows, and API contracts if the frontend framework is changed later.
-- Reconsider the frontend framework only if React materially slows delivery of the admin-style UI, not merely because another framework looks cleaner.
-- Keep extraction and search behind internal service boundaries so future semantic search or model-backed extraction can be added cleanly.
-- Preserve provenance for extracted entities and relationships.
-- Store source assets and reusable parsed output so extraction can be rerun later.
-- Keep parsing backend-owned and canonical; do not move canonical parse logic into the frontend.
-- In v1, keep parsing implicit and limited to parse-dependent flows such as extraction, preview, and search. Ordinary asset metadata reads should stay cheap and must not trigger parsing.
-- Keep the backend upload contract single-purpose. If the frontend offers one combined session-plus-asset flow, orchestrate two API calls rather than adding a combined backend endpoint unless the user explicitly changes that decision.
+- Backend: `backend/`, CPython 3.14, `uv`.
+- Frontend: `frontend/`, React, TypeScript, Vite, npm.
+- Use `uv sync` for backend dependencies and `uv run <command>` for backend tools.
+- Use `npm install` for frontend dependencies and the scripts defined in `frontend/package.json`.
+- Prefer focused verification before full suites when it provides sufficient confidence.
 
-## V1 Scope
+## Backend Tests
 
-In scope:
-- campaign CRUD
-- entity CRUD
-- relationship CRUD
-- session CRUD
-- source asset storage
-- backend-owned parsing and parse-result caching for text-capable assets
-- extraction jobs and candidate review
-- PostgreSQL full-text search
+- Use `.agents/skills/py-db-tdd/SKILL.md` when working on Python backend tests.
+- Keep infrastructure plumbing in `backend/tests/conftest.py`; keep scenario data visible in each test's Arrange step.
+- Prefer explicit factory fixtures such as `owner_factory`, `campaign_factory`, `entity_factory`, and `relationship_factory`. Avoid named scenario fixtures.
+- Use `db_session_factory()` only when shared session state is part of the scenario.
+- Keep PostgreSQL container lifecycle and readiness logic in test support code, not individual tests.
+- Treat unavailable Docker as an environment failure for PostgreSQL-backed tests; do not silently skip coverage.
 
-## Data Modeling Guidance
+## Verification
 
-- Use one generic `Entity` model in v1 rather than separate tables for each RPG concept.
-- Use explicit `campaign_id` on campaign-owned resources.
-- Reserve room for future auth by keeping an owner or tenant placeholder in major tables.
-- Use JSONB only for flexible metadata, not as a substitute for the relational schema.
-- Do not use external system IDs such as Kanka IDs as canonical internal identity.
+- Verify changed behavior with focused tests.
+- Expand to broader tests when a change affects shared infrastructure or multiple features.
+- Treat failures from repository checks as blockers.
 
-## Implementation Guidance
+## Working Principles
 
-- Build the smallest working slice that supports the demo flow.
-- Prefer deterministic, testable behavior over ambitious automation.
-- Use a rules-first extraction implementation for v1, with a clean interface for a future LLM-backed extractor.
-- Keep original uploaded assets outside Postgres blobs and favor backend-owned parsing for canonical extracted representations.
-- When changing the current `session_notes + source_documents` shape, prefer in-place compatibility migration over resets so provenance and existing references stay intact.
-- Prefer boring, debuggable solutions when tradeoffs are unclear.
-- Prefer explicit variable names that describe the role of the value, not just its type.
-- Avoid broad names like `data`, `payload`, `response`, `result`, or `session` when a more specific name such as `campaign_create`, `created_entity_response`, or `db_session` is available.
-- Apply the same naming rule to fixtures, route handlers, services, and tests.
-
-## Backend Testing Guidance
-
-- For Python backend tests, use the repo-local `py-db-tdd` skill at `.agents/skills/py-db-tdd/SKILL.md`.
-- Prefer explicit factory fixtures such as `owner_factory`, `campaign_factory`, `entity_factory`, and `relationship_factory` for scenario data.
-- Keep infrastructure plumbing in `backend/tests/conftest.py`; keep scenario data visible in the Arrange step of each test.
-- Avoid named scenario fixtures such as `campaign_with_two_entities` or `owner_with_duplicate_campaign`.
-- Use `db_session_factory()` when shared session state is part of the scenario, not as the default setup tool.
-- Keep Postgres container lifecycle and readiness checks in test support code rather than in individual tests.
-- Assume `uv run pytest` is the default backend test entrypoint and that Postgres-backed tests provision a disposable Docker container automatically.
-- If Docker is unavailable, treat Postgres-backed test setup failures as real environment problems, not as reasons to silently skip coverage.
-
-## Frontend Guidance
-
-- Keep the v1 UI task-oriented and high-utility, but do not default to a bland utility look if a stronger workspace identity improves usability.
-- Start with routing, a shared layout, and typed API request and response shapes that match backend contracts.
-- Prefer simple React state and straightforward form handling until real complexity justifies additional client-side abstractions.
-- Do not add frontend infrastructure such as Redux, React Query, Zustand, or SSR frameworks unless a concrete requirement appears.
-- Prefer one coherent visual language across the app rather than mixing unrelated aesthetics.
-- Distinctive styling is allowed when it supports orientation and flow; avoid spectacle that makes tables, forms, and relationship scanning harder.
-- Optimize for a working CRUD, extraction review, and search flow, but treat empty states, offline states, and navigation context as product design work, not throwaway scaffolding.
-
-## Verification Expectations
-
-At minimum, cover:
-- CRUD flows for core records
-- extraction candidate generation
-- candidate approval and rejection
-- provenance preservation
-- search behavior
-- campaign ownership validation
-- migration-safe preservation of source-asset provenance when schema terminology changes
-- parse failure, retry, and stale-cache invalidation behavior for backend-owned parsed assets
-
-Use sample notes under `docs/sample-notes/` for repeatable tests and demos.
-
-- For Python changes, run `uv run ruff check` before claiming the work is complete.
-- If Python files were reformatted or newly created, also run `uv run ruff format`.
-- Treat `ruff` findings as blockers unless there is a documented reason not to.
-- When backend behavior changes, run the relevant `uv run pytest` coverage.
-- When frontend code changes, run `npm run lint`, `npm run format:check`, and `npm run build` in `frontend/`.
-
-## Documentation Expectations
-
-When changing architecture, scope, or major workflows:
-- Keep `README.md` limited to the general product description, installation, running the app, debugging, development prerequisites, and test/verification commands.
-- Do not add implementation status, task details, architectural decisions, reasoning, or plan summaries to `README.md`.
-- Record implementation details, design decisions, scope changes, reasoning, and handoffs only under `docs/`, updating the relevant file under `docs/plans/`.
-- Update `README.md` only when the general product description, setup, run, debugging, or verification instructions change.
-- update the relevant file under `docs/plans/` if the intended design changes
-
-## Working Style
-
-- Be explicit about assumptions that affect architecture or schema.
-- Push back on premature complexity.
-- Surface a simpler alternative when proposing a heavier design.
-- Do not introduce new infrastructure just to make the project look more advanced.
-- Optimize for a working product that can grow, not for maximal abstraction.
+- State assumptions that affect architecture, schema, or product behavior.
+- Push back on unnecessary complexity and surface a simpler alternative for substantial abstractions or infrastructure.
+- Prefer deterministic, testable, and debuggable behavior.
+- Use explicit, role-specific names when they improve clarity; avoid vague names when the domain concept is known.
+- Preserve existing data through compatible migrations unless a current plan explicitly authorizes a reset.

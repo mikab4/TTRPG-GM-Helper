@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+declare -A seen_format_files=()
+declare -A seen_lint_files=()
+format_files=()
+lint_files=()
+
+while IFS= read -r -d '' repository_path; do
+  case "$repository_path" in
+    frontend/*.js|frontend/*.jsx|frontend/*.ts|frontend/*.tsx|frontend/*.mjs|frontend/*.cjs|frontend/*.json|frontend/*.css|frontend/*.html|frontend/*.md|frontend/*.yaml|frontend/*.yml)
+      frontend_path="${repository_path#frontend/}"
+      if [[ -z "${seen_format_files[$frontend_path]+present}" ]]; then
+        format_files+=("$frontend_path")
+        seen_format_files["$frontend_path"]=1
+      fi
+      ;;
+  esac
+
+  case "$repository_path" in
+    frontend/*.js|frontend/*.jsx|frontend/*.ts|frontend/*.tsx|frontend/*.mjs|frontend/*.cjs)
+      frontend_path="${repository_path#frontend/}"
+      if [[ -z "${seen_lint_files[$frontend_path]+present}" ]]; then
+        lint_files+=("$frontend_path")
+        seen_lint_files["$frontend_path"]=1
+      fi
+      ;;
+  esac
+done < <(
+  git diff HEAD --name-only --diff-filter=ACMR -z
+  git ls-files --others --exclude-standard -z
+)
+
+if [[ ${#format_files[@]} -eq 0 ]]; then
+  echo '{"continue":true}'
+  exit 0
+fi
+
+if [[ ! -x frontend/node_modules/.bin/prettier ]]; then
+  echo '{"decision":"block","reason":"Frontend files changed, but Prettier is unavailable. Run npm install in frontend."}'
+  exit 0
+fi
+
+if [[ ${#lint_files[@]} -gt 0 && ! -x frontend/node_modules/.bin/eslint ]]; then
+  echo '{"decision":"block","reason":"Frontend code changed, but ESLint is unavailable. Run npm install in frontend."}'
+  exit 0
+fi
+
+quality_log="$(mktemp)"
+trap 'rm -f "$quality_log"' EXIT
+
+if ! (
+  cd frontend
+  ./node_modules/.bin/prettier --write "${format_files[@]}"
+) >"$quality_log" 2>&1; then
+  cat "$quality_log" >&2
+  echo '{"decision":"block","reason":"Prettier could not format the changed frontend files. Inspect the remaining formatting error."}'
+  exit 0
+fi
+
+if [[ ${#lint_files[@]} -gt 0 ]] && ! (
+  cd frontend
+  ./node_modules/.bin/eslint --fix "${lint_files[@]}"
+) >"$quality_log" 2>&1; then
+  cat "$quality_log" >&2
+  echo '{"decision":"block","reason":"ESLint could not fully fix the changed frontend files. Inspect the remaining lint diagnostics."}'
+  exit 0
+fi
+
+echo '{"continue":true}'

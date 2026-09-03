@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+declare -A seen_files=()
+backend_files=()
+
+while IFS= read -r -d '' repository_path; do
+  case "$repository_path" in
+    backend/*.py)
+      backend_path="${repository_path#backend/}"
+      if [[ -z "${seen_files[$backend_path]+present}" ]]; then
+        backend_files+=("$backend_path")
+        seen_files["$backend_path"]=1
+      fi
+      ;;
+  esac
+done < <(
+  git diff HEAD --name-only --diff-filter=ACMR -z
+  git ls-files --others --exclude-standard -z
+)
+
+if [[ ${#backend_files[@]} -eq 0 ]]; then
+  echo '{"continue":true}'
+  exit 0
+fi
+
+quality_log="$(mktemp)"
+trap 'rm -f "$quality_log"' EXIT
+export UV_CACHE_DIR="${TMPDIR:-/tmp}/rpg-gm-helper-uv-cache"
+
+if (
+  cd backend
+  uv run ruff format "${backend_files[@]}" &&
+    uv run ruff check --fix "${backend_files[@]}" &&
+    uv run ruff check "${backend_files[@]}"
+) >"$quality_log" 2>&1; then
+  echo '{"continue":true}'
+  exit 0
+fi
+
+cat "$quality_log" >&2
+echo '{"decision":"block","reason":"Backend auto-formatting or Ruff checks failed for changed Python files. Inspect the remaining Ruff diagnostics."}'

@@ -5,8 +5,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .codex/hooks/run-ruff-check",
-            "statusMessage": "Running Ruff on backend Python changes",
+            "command": "bash .codex/hooks/run-backend-quality",
+            "statusMessage": "Formatting and checking changed backend files",
+            "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/run-frontend-quality",
+            "statusMessage": "Formatting and checking changed frontend files",
             "timeout": 60
           }
         ]
