@@ -1,6 +1,8 @@
 # Cloud-Ready Asset Intelligence Pipeline Implementation Plan
 
-> **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Applies to:** asset storage, asynchronous processing, parsing, extraction, and processing-job recovery
+**Related code:** `backend/app/services/asset_*`, `backend/app/models/`, `processor/`, `compose.yaml`
+**Deferred design triggers:** None
 
 **Goal:** Build a real `.txt` asset-processing vertical slice immediately to learn Redis, MongoDB, MinIO/S3-compatible storage, and one worker-service boundary; then harden and extend that same path into a multilingual, model-ready pipeline.
 
@@ -129,7 +131,8 @@ For `.txt`, `sections` contains one paragraph-like section. Later formats add se
 2. Add explicit retry classes, attempt counters, delayed retry records, and terminal failure states in Postgres. Use a Redis dead-letter stream only for exhausted transport messages; Postgres remains authoritative.
 3. Request cancellation before asset deletion; workers check it between phases. Reconcile derived Mongo cleanup only after canonical state permits deletion.
 4. Extend the existing asset-delete maintenance flow to include processing jobs and derived projections.
-5. Add correlation IDs and structured logs without raw asset contents or credentials; commit `feat: harden processing recovery`.
+5. Add a periodic maintenance trigger and claim stale deleting-asset rows before external cleanup, using bounded batches and `FOR UPDATE SKIP LOCKED` (or an equivalently explicit lease) so concurrent runners do not duplicate work.
+6. Add correlation IDs and structured logs without raw asset contents or credentials; commit `feat: harden processing recovery`.
 
 ### Task 5: Generalize parsing to a multilingual, format-neutral contract
 
@@ -226,13 +229,14 @@ For `.txt`, `sections` contains one paragraph-like section. Later formats add se
 - Modify: `README.md`
 - Create: `docs/operations/asset-intelligence-local-runbook.md`
 - Create: `docs/operations/asset-intelligence-failure-recovery.md`
-- Create: `docs/plans/2026-08-08-cloud-ready-asset-intelligence-pipeline-reasoning.md`
-- Modify: `docs/possible_technical_debt.md`
+- Modify: `docs/plans/2026-08-08-cloud-ready-asset-intelligence-pipeline-reasoning.md`
+- Modify: `docs/technical_debt.md`
+- Modify: `docs/deferred_design_options.md`
 
 **Steps:**
 1. Document Compose startup, dependency inspection, outbox replay, consumer recovery, dead-letter diagnosis, Mongo rebuild, and safe teardown.
 2. Record why Postgres is canonical, Mongo is rebuildable, and the worker is the only new service boundary.
-3. Update paid-down technical debt and preserve remaining future concerns.
+3. Remove paid-down technical debt and preserve trigger-based future concerns as deferred design options.
 4. Document—without implementing—the auth/tenant migration seams: tenant-aware object keys, job correlation, service authentication rotation, and authorization requirements.
 5. Run the complete backend, processor, frontend, and Compose verification suite; commit `docs: document asset intelligence operations`.
 

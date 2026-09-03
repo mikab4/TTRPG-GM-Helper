@@ -6,7 +6,7 @@
 
 **Architecture:** The Campaign Registry is the default entry point and owns campaign creation. Selecting a campaign opens a campaign-scoped workspace with a persistent campaign switcher and a sidebar for Overview, Entities, and Relationships. All record reads and writes remain scoped to the selected campaign and use the existing typed API client plus local React state.
 
-**Visual reference:** [workspace-v1.html](../mockups/workspace-v1.html). Preserve its dark header, warm-gold campaign switcher, parchment cards, Inter/Cinzel typography, purple primary actions, input/select treatment, and narrow sidebar. Do not add Tailwind, a component library, a state-management library, or a CSS framework.
+**Visual reference:** [workspace-v1.html](../../mockups/workspace-v1.html). Preserve its dark header, warm-gold campaign switcher, parchment cards, Inter/Cinzel typography, purple primary actions, input/select treatment, and narrow sidebar. Do not add Tailwind, a component library, a state-management library, or a CSS framework.
 
 ## Scope boundary
 

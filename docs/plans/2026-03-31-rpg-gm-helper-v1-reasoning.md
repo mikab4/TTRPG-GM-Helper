@@ -1,387 +1,164 @@
-# Why This Plan
+# RPG GM Helper V1 Decision Reasoning
 
-## Problem We Are Actually Solving
+**Applies to:** overall product architecture, technology choices, ingestion, extraction, search, and deferred scope
+**Related code:** `backend/`, `frontend/`, `docs/mockups/workspace-v1.html`, `compose.yaml`; planned `processor/`
+**Deferred design triggers:** None
 
-The immediate goal is not to build a complete RPG worldbuilding platform. The goal is to produce a working, demoable tool that:
-- stores campaign data in a structured way
-- ingests source assets such as text documents, spreadsheets, and images
-- extracts candidate entities from parsed asset content
-- lets the user review those candidates before saving them
-- supports search over saved information
+## Purpose And Current Decision State
 
-At the same time, the project should remain a base for future learning in:
-- semantic search
-- model-assisted extraction
-- model training
-- broader backend and architecture skills
+The product must help a single local Game Master turn campaign material into structured, reviewable, searchable records while preserving where each fact came from. It is not trying to become a complete worldbuilding suite, public SaaS, or autonomous AI knowledge base in v1.
 
-The plan is designed to support the current milestone without blocking those longer-term directions.
+Tasks 1–8 are implemented. The next step is the real `.txt` processing slice in Task 9. This reasoning document records the decisions that still govern the current plan; completed implementation details remain authoritative in code, migrations, tests, and archived task plans.
 
-## Why We Chose A Modular Monolith With One Worker Boundary
+## Why A Modular Monolith Plus One Worker
 
-Broad microservices remain rejected for v1. The approved follow-up architecture adds one independently runnable asset-processing worker because parsing and extraction are slow, failure-prone operations and this project is intentionally used to learn Redis, MongoDB, object storage, and a focused service boundary.
+Campaign CRUD, validation, review, and canonical writes belong together in FastAPI because they share one product workflow and one source of truth. Broad microservices would add deployment, failure, and coordination costs without corresponding team or ownership boundaries.
 
-Reasoning:
-- There is only one user and one product workflow, so campaign CRUD, review, and canonical writes remain together in FastAPI/PostgreSQL.
-- Splitting every domain area early would add deployment, coordination, and debugging overhead before the data model is even stable.
-- Parsing and extraction form one cohesive asynchronous boundary; splitting parser, extractor, asset, and review into separate services would create boundaries that need to be undone or heavily revised later.
+Parsing and extraction are the one justified runtime boundary. They are slow, retryable, and failure-prone, so running them outside API requests improves isolation and creates a useful place to learn queueing and recovery behavior.
 
-What we took instead:
-- one FastAPI application for canonical workflow
-- one worker for asset processing
-- clear internal interfaces for storage, parsing, extraction, review, and external sync
+The chosen shape is therefore:
 
-This gives most of the learning value of good architecture without paying the operational cost of distributed systems too early.
+- one FastAPI application for canonical domain and workflow behavior;
+- one PostgreSQL database for canonical state;
+- one independently runnable asset processor for parsing and extraction;
+- narrow adapters for file storage, queue transport, parsed projections, and future model providers.
 
-## Why The Backend Stays In Python
+The simpler alternative remains synchronous processing in the monolith with PostgreSQL and local files. It would be cheaper for a product-only MVP. The approved worker/Redis/MinIO/MongoDB design is justified by the explicit infrastructure-learning goal, not by current scale.
 
-Python, FastAPI, and PostgreSQL are already familiar. That familiarity is not a weakness here; it is a way to protect delivery speed.
+## Why PostgreSQL Owns Canonical State
 
-Reasoning:
-- The backend contains the highest product risk in the first two weeks: schema design, extraction workflow, review flow, and search.
-- Relearning the backend stack at the same time would increase the chance of ending with an incomplete demo.
-- Python remains a strong choice for future NLP, extraction pipelines, and model experimentation.
+PostgreSQL is authoritative for campaigns, entities, relationships, sessions, assets, processing jobs, extraction jobs, candidates, review decisions, provenance, and outbox state. Transactional constraints are especially valuable for campaign isolation and human-reviewed promotion of candidates.
 
-So the plan keeps the backend in a known stack and moves the learning budget elsewhere.
+Supporting systems have narrower roles:
 
-## Why The Frontend Is TypeScript React
+- MinIO/S3 stores original file bytes and optional large artifacts.
+- Redis Streams transports work; it does not decide whether a job exists or succeeded.
+- MongoDB stores versioned parsed-document projections that can be rebuilt from originals and canonical metadata.
 
-The user explicitly wanted at least one meaningful new thing to learn.
+This replaces the obsolete claim that PostgreSQL is the only v1 database. Multiple datastores are accepted, but competing ownership is not.
 
-We considered:
-- TypeScript frontend only
-- full-stack TypeScript
-- keeping the stack familiar and using the novelty budget on search or LLM infrastructure
+## Where Schema Truth And Reasoning Live
 
-We chose TypeScript frontend only because it is the best balance of learning and delivery.
+The implemented relational schema is documented by the SQLAlchemy models, Alembic migrations, and tests. A handwritten table-and-column catalogue was rejected because it duplicated those sources and had already drifted from the implementation. Human-readable schema output should be generated from code or a live database when needed rather than maintained as another authority.
 
-Why this is the right tradeoff:
-- It adds a new skill with clear portfolio value.
-- It keeps the backend stable and fast to build.
-- It creates a typed client-server boundary, which is useful backend/frontend experience.
-- It avoids the cost of rewriting all backend work into a new ecosystem under time pressure.
+This reasoning document records only consequential choices that cannot be recovered reliably from the current schema: product meaning, ownership boundaries, trade-offs, and rejected alternatives. Routine additions such as columns, indexes, and nullable flags belong in models, migrations, and tests unless they change one of those decisions.
 
-Why we did not choose full-stack TypeScript:
-- too much stack churn for a two-week milestone
-- higher setup and debugging risk
-- likely to reduce the amount of product functionality completed
+UUID primary keys preserve stable identity across exports, future synchronization, and local-first evolution. The `Owner` record remains a future authentication and tenancy anchor even though v1 seeds one local owner and does not implement public authentication. Integer identifiers and an implicit singleton owner would be simpler today, but would make those later boundaries more disruptive to introduce.
 
-## Why The Frontend Stays Thin And Isolated
+## Why The Backend Remains Python And The Frontend Uses TypeScript React
 
-Choosing React for v1 does not mean the product should absorb React-shaped architecture.
+Python, FastAPI, and PostgreSQL protect delivery speed in the highest-risk areas: schema evolution, provenance, extraction workflow, and search. Python also fits later parsing and model experimentation.
 
-Reasoning:
-- The backend owns the risky logic in this milestone: CRUD validation, extraction review, provenance, and search behavior.
-- If workflow rules drift into hooks, client caches, or frontend-only abstractions, the product becomes harder to test and harder to change.
-- The UI needs to move quickly, but it does not need framework-specific complexity to do that.
+React with TypeScript provides a useful typed client boundary and deliberate frontend learning without forcing a backend rewrite. The frontend stays separate and thin: routing, forms, API calls, and presentation belong there; business rules, parsing, review, and persistence do not.
 
-What we took instead:
-- a separate frontend app in the same repository
-- a plain typed API client at the frontend-backend boundary
-- routing, forms, tables, and presentation in the frontend
-- business rules, persistence rules, and workflow logic in FastAPI services
+A plain typed API client is enough. Heavy client-state or framework abstractions remain unjustified until repeated state coordination creates a concrete need.
 
-This preserves an important escape hatch: if React turns out to be the wrong fit for the admin-style UI, the CSS, UX flows, and API contracts should remain reusable enough that replacing the frontend is a bounded cost rather than a rewrite of product behavior.
+## Why The Workspace Mockup Is Authoritative
 
-## Why PostgreSQL Is The Only Database In V1
+`docs/mockups/workspace-v1.html` is the app designer's approved representation of the frontend. UI implementation must reproduce its visual and interaction decisions rather than treating it as loose inspiration. That includes composition, hierarchy, proportions, responsive intent, Inter/Cinzel typography, palette, spacing, borders, shadows, controls, button placement, and interaction states.
 
-The project may later explore SQL, NoSQL, semantic search, and more advanced storage patterns. That does not justify starting with multiple datastores.
+The mockup cannot specify product behavior that had not been designed when it was created. When an implemented requirement needs a missing route, section, tab, state, or error path, the gap must be surfaced to the responsible engineer with the smallest mockup-consistent proposal. Approval is required before implementation. The same approval rule applies to every deliberate visual difference, including seemingly minor color, font, spacing, sizing, or placement changes.
 
-Reasoning:
-- PostgreSQL is enough for structured entities, notes, relationships, extraction jobs, and keyword search.
-- PostgreSQL full-text search is sufficient for the first milestone.
-- Using a second database now would mostly be complexity for the sake of learning, not product need.
+Approved differences are recorded in `docs/design-deviations.md` so implementation does not silently redefine the design and the mockup can be updated later when appropriate. Existing frontend differences predate this explicit authority and are not automatically approved; conformance is checked on touched surfaces unless a separate full audit is commissioned.
 
-The plan still leaves room for later expansion:
-- JSONB can hold flexible metadata without replacing the relational core
-- parsed text and structured content can be preserved for future embeddings or training
-- search lives behind a service boundary so vector search can be added later
+## Why Campaign Scope Is Explicit
 
-## Why Backend-Owned Asset Ingestion Is Now Worth It
+Single-user does not mean single-campaign. Explicit `campaign_id` fields, campaign-scoped routes, and composite foreign keys prevent accidental cross-campaign links and preserve a future path to authorization.
 
-The earlier plan assumed a smaller text-first workflow. That assumption no longer holds once v1 includes:
+The implemented schema already enforces campaign ownership for entity relationships, session/asset links, and provenance references. Future processing, extraction, review, and search contracts must preserve the same boundary rather than relying on UI context.
 
-- text documents
-- spreadsheets
-- images and maps as storable assets
+## Why One Generic Entity Model Remains Correct
 
-At that point, letting the frontend be the canonical parser becomes the weaker design.
+People, places, organizations, items, events, deities, and miscellaneous records share identity, name, summary, campaign ownership, provenance, and timestamps. One `Entity` table keeps CRUD and relationships consistent while JSONB holds genuinely flexible metadata.
 
-Reasoning:
-- spreadsheets and tables carry structure that should not be flattened away in the browser
-- original uploaded files need a backend-owned storage and provenance path anyway
-- canonical parsing should behave the same for web UI, future batch imports, and later multi-user deployment
-- entities and relationships need provenance back to stable backend-owned assets, not frontend-only parse guesses
+Stable concepts remain relational. JSONB is not a substitute for fields that need constraints, joins, or indexing. The implemented entity type is constrained rather than arbitrary free text, but richer type-specific forms and metadata contracts remain deferred until real use cases justify them.
 
-What we take instead:
-- backend-owned upload and storage of original assets
-- backend-owned parsing
-- lazy parse with cached results
-- a hybrid parsed-cache model so small outputs stay in Postgres and large outputs go to storage
+Separate tables per entity kind would create duplicated endpoints, migrations, forms, and relationship logic before subtype behavior is known.
 
-## Why Parsing Is Separate From Extraction
+## Why Relationships Have Explicit Semantics And A Persisted Catalog
 
-Parsing and extraction solve different problems.
+A free-text relationship label is too weak for reliable direction, filtering, and display. The implemented design combines:
 
-Parsing is the canonical representation step:
-- take an uploaded file format such as text, spreadsheet, or image
-- decode it into normalized backend-owned content
-- preserve reusable text, structure, and parse metadata for later consumers
+- a relationship row with source, target, type, lifecycle, visibility, certainty, notes, confidence, and provenance;
+- campaign-scoped relationship-type definitions with forward/reverse labels, symmetry, family, and allowed source/target entity types.
 
-Extraction is the interpretation step:
-- read parsed content
-- propose entities, relationships, or other candidate campaign facts
-- require review before those proposals become canonical records
+This supports GM-facing language without hard-coding every possible campaign vocabulary. The compatibility API exists because constraining previously free entity-type data required an explicit, reviewable migration rather than silent coercion.
 
-This separation is deliberate:
-- one parse result can support preview, search, and extraction
-- parse output should be stable and reusable when the source file and parser version have not changed
-- extraction logic may change independently as rules improve or future model-backed approaches are added
+## Why Sessions And Source Assets Are Separate
 
-If these were collapsed into one step, the system would tie asset ingestion to one downstream workflow and make search, debugging, and provenance harder.
+A session is a campaign event with a number or label, date, and summary. A source asset is evidence: a text file, spreadsheet, image, map, or other upload that may optionally relate to a session. Conflating them breaks down as soon as one session has multiple files or an asset is not session-specific.
 
-## Why Search And Extraction Should Not Operate On Raw Files
+The completed compatibility migration preserved existing `session_notes` and `source_documents` data while reshaping them into `sessions` and `source_assets`. Compatible migration was chosen over reset because existing campaign data must survive schema improvement.
 
-The original file is the source artifact, not the application's working representation.
+## Why Asset Ingestion And Storage Are Backend-Owned
 
-Reasoning:
-- a `.docx`, spreadsheet, image, or text upload does not expose content in one uniform way
-- keyword search over raw container bytes is not meaningful
-- letting each consumer open and interpret the file separately would duplicate file-format logic and create inconsistent behavior between preview, search, and extraction
-- parsed content is easier to cache, version, inspect, and debug than ad hoc file reads buried inside feature code
+Backend ownership gives every caller the same validation, checksum, storage, lifecycle, and provenance behavior. Browser-side canonical parsing would produce inconsistent results across the UI, future imports, and worker processing.
 
-So the correct boundary is:
-- the file remains the preserved source artifact
-- parsing produces canonical backend-owned content
-- search and extraction consume that parsed content rather than the raw file container
+Original files do not belong in PostgreSQL blobs. The implemented upload path already goes through `backend/app/services/asset_storage.py`; its local-filesystem backend is transitional. Task 9 changes the implementation to MinIO through an S3-compatible boundary so the API and worker never depend on a shared local path.
 
-## Why Search Is Keyword Search First
+Asset metadata reads must never hide parsing or queue submission. Processing is an explicit workflow with observable state.
 
-Semantic search is a future goal, but it was intentionally deferred.
+## Why Parsing Is Asynchronous, Explicit, And Separate From Extraction
 
-Reasoning:
-- The first thing to validate is the product workflow, not the sophistication of retrieval.
-- PostgreSQL full-text search is cheap, robust, and easy to debug.
-- Good structured data plus good provenance and review is more valuable early than weak semantic search over noisy auto-generated records.
+Parsing normalizes a file into reusable text and structure. Extraction interprets that representation and proposes campaign facts. Keeping them separate allows preview, search, and multiple extractor versions to reuse one parse while preserving debuggability and provenance.
 
-The design still prepares for semantic search later by:
-- storing parsed text and structured content
-- preserving provenance
-- isolating search logic behind a service
+The old lazy-parse-on-dependent-read design is rejected. It makes latency and failure surprising, couples cheap reads to expensive work, and obscures retry state. The worker pipeline instead uses explicit processing jobs and callbacks.
 
-Future model-assisted search does not remove the need for parsing.
+The obsolete hybrid parse cache—small content inline in PostgreSQL and large content in file storage—is also rejected for new processing. MongoDB is the rebuildable, versioned parsed-document projection. The existing `AssetParseResult` table remains compatibility/provenance groundwork and must not become a competing current projection design.
 
-Reasoning:
-- models still work better with normalized text, structure, chunk boundaries, and metadata than with arbitrary file containers
-- parsed content remains useful for preview, keyword search, provenance, caching, and repeatable reprocessing
-- direct file-to-model calls may be useful in some future workflows, but they should be an optional consumer path, not the system's primary abstraction
+Search and extraction consume parsed documents, not raw file containers. Raw bytes remain the preserved source artifact.
 
-## Why Extraction Is Rules-First With An LLM Interface
+## Why The First Worker Slice Is Narrow
 
-The product idea depends on turning free text into structured records, so extraction is part of v1. But full LLM dependence was rejected as the center of the first milestone.
+Task 9 proves one real path through MinIO, PostgreSQL, Redis, the processor, MongoDB, and an idempotent FastAPI completion callback using `.txt`. It postpones extraction, retries, outbox relay, and additional formats so infrastructure failures can be localized.
 
-Reasoning:
-- LLM-first extraction is attractive, but it introduces variability, prompt iteration overhead, API dependence, and harder testing.
-- In a two-week build, predictable behavior matters more than ambitious automation quality.
-- A review step is required anyway, so rules-based extraction can still demonstrate the workflow.
+An in-process queue or fake storage implementation would not validate the approved boundaries. Building all formats and recovery behavior at once would increase debugging surface before the core path works.
 
-What we chose:
-- a clean extraction interface
-- a rules-based implementation as the default
-- a future-compatible path for an optional LLM-backed implementation
-- model-backed extraction would still consume parsed, normalized asset content rather than replacing parsing itself
+Direct Redis publication is acceptable only in this first learning slice. Task 10 immediately adds a transactional outbox because a database commit followed by queue publication otherwise has an unavoidable failure window.
 
-This keeps the demo stable while preserving the future learning path.
+## Why Parsed Documents Are Format-Neutral And Multilingual
 
-## Why Sessions And Source Assets Stay Separate
+The target parsed projection records asset identity, checksum, parser kind/version, and ordered sections. Each section can carry Unicode text, optional structure, source location, and language hints. CSV/XLSX, PDF, and later office formats add section kinds without changing storage, job, callback, or provenance contracts.
 
-There was an important terminology correction during planning:
+Language is a per-section hint rather than one definitive document label because campaign notes may mix Hebrew, English, names, and invented terms. Exact Unicode preservation is more important than premature normalization or forced classification.
 
-- a `session` is a timeline event in the campaign
-- a `source_asset` is an uploaded artifact or evidence record
+DOCX and ODT require bounded archive inspection before support. Images remain storable but unparsed until OCR has its own explicit plan and security/performance budget.
 
-This matters because a session is not just a text blob. One session can have multiple attached artifacts such as:
+## Why Extraction Is Rules-First And Human-Reviewed
 
-- GM recap text
-- player notes
-- spreadsheets
-- maps or reference images
+Deterministic rules provide a debuggable baseline. Extractor, parser, source checksum, and optional provider/model/prompt versions belong in provenance so results can be reproduced and compared.
 
-Keeping these separate makes the model more durable:
-- sessions stay useful even when no text has been parsed yet
-- assets can exist without being tied to one play session
-- provenance points to the specific asset that supported extraction
+Extractors create candidates, never canonical entities or relationships. Users must be able to edit, approve, or reject those candidates through FastAPI-owned workflow rules. This protects the campaign record from uncertain model output and keeps the future model adapter replaceable.
 
-## Why Original Binaries Should Not Live In PostgreSQL
+Extraction runs and candidates remain separate records because rerun history and review state have different lifecycles. One generic candidate table supports a single review queue while entity and relationship extraction are still evolving; separate subtype tables can wait until their behavior requires distinct constraints rather than merely distinct payloads.
 
-Images, spreadsheets, and other uploaded binaries are better stored outside the relational database.
+An LLM-first autonomous write path would add nondeterminism, cost, and trust problems before the review loop is proven.
 
-Reasoning:
-- large binary blobs bloat the database and backups
-- MinIO provides an S3-compatible local deployment now and can later be replaced by managed object storage without changing asset contracts
-- API and processor processes must not depend on a shared filesystem mount
-- PostgreSQL should hold queryable metadata and relationships, not be the primary binary file store
+## Why Search Is PostgreSQL Full-Text Search First
 
-So the v1 direction is:
-- original uploaded files in S3-compatible backend-managed storage (MinIO locally)
-- metadata in PostgreSQL
-- parsed-output workflow and provenance in PostgreSQL, with rebuildable versioned parsed-document projections in MongoDB
+The first retrieval goal is dependable campaign-scoped keyword search across entity names/summaries, sessions, and parsed asset text. PostgreSQL full-text search is inspectable, inexpensive, and sufficient for that milestone.
 
-## Why Parsing Should Be Lazy But Cached
+Semantic/vector search remains a later option behind the search service boundary. Good provenance and reviewed structured data matter more than sophisticated retrieval over noisy records. Parsed sections still provide future chunking and embedding inputs without committing v1 to a vector database.
 
-Always parsing on upload is wasteful for assets that may never be searched or extracted. Parsing on every use without caching is also wasteful.
+## Why Auth, External Sync, And More Services Are Deferred
 
-So the chosen tradeoff is:
-- upload first
-- keep ordinary asset metadata reads cheap
-- parse only on first real parse-dependent consumer need such as preview, search, or extraction
-- reuse cached results until the source checksum or parser version changes
+The app is local and single-user. The `Owner` record and explicit campaign ownership preserve a migration path, but public login, authorization policy, and tenant enforcement would add substantial product and test scope without helping the current workflow.
 
-This avoids unnecessary work while keeping parsing canonical and reusable.
+External platform synchronization, including Kanka, is deferred because it introduces identity mapping, conflict resolution, deletion semantics, rate limits, and secret management. Export can be added before bidirectional sync if portability becomes important.
 
-## Why We Did Not Add A Public Parse Endpoint
+Separate CRUD services, model serving, production cloud deployment, semantic search, OCR, training pipelines, and automatic model write-back are likewise outside v1.
 
-The design considered whether v1 should expose a dedicated parse endpoint.
+## Why The Current Sequence Is Correct
 
-We rejected that for now.
+The completed Tasks 1–8 established canonical records, campaign isolation, provenance seams, backend-owned uploads, typed frontend flows, and schema compatibility before distributed processing was introduced.
 
-Reasoning:
-- extraction, search, and preview already provide natural parse trigger points
-- a public parse endpoint would add another contract, more tests, and more state transitions to explain
-- the real requirement is visible parse status and reusable parse output, not manual parse ceremony
+The remaining order follows dependency and risk:
 
-So the chosen rule is:
-- parsing stays implicit in v1
-- but only parse-dependent flows may trigger it
-- ordinary asset list/detail reads should not parse
+1. Prove the narrow `.txt` processing spine.
+2. Make dispatch and recovery durable.
+3. Add extraction and review on the stable parsed contract.
+4. Extend formats without reshaping the pipeline.
+5. Add search after parsed content exists.
+6. Polish and verify the complete demo flow.
 
-## Why The Frontend Can Use One Form But The Backend Should Stay Two Calls
-
-The product may still want one UI flow where a GM can create a session and attach an asset without thinking about API boundaries.
-
-That does not require one backend endpoint.
-
-Reasoning:
-- `POST /assets` should stay responsible for asset upload and asset metadata only
-- mixing session creation into a multipart upload endpoint would increase validation and transaction complexity
-- the frontend can still present one form and orchestrate:
-  1. `POST /sessions`
-  2. `POST /assets`
-
-This keeps the UX smooth without making the backend contract do two jobs.
-
-## Why This Became A Compatibility Migration
-
-By the time the sessions/assets work was revisited, the repo already had migrations, models, and provenance fields built around `session_notes` and `source_documents`.
-
-That changes the nature of the work.
-
-Reasoning:
-- the main risk is no longer choosing a schema from scratch
-- the main risk is preserving provenance and extraction links while moving to better names and a broader asset model
-- resetting the schema would hide the hard part instead of solving it
-
-So the correct direction is:
-- in-place migration
-- preserve IDs and provenance
-- backfill parse cache rows from existing document text before removing the old main-row text field
-
-## Why Parsed Cache Storage Is Hybrid
-
-Not all parse output should be stored the same way.
-
-Reasoning:
-- small parsed text is convenient to keep inline in PostgreSQL
-- large structured parse output from spreadsheets or complex documents can bloat rows if kept inline
-- storage-backed artifacts are better for larger derived payloads
-
-So the cache should be hybrid:
-- small outputs inline in the database
-- larger outputs in storage, referenced from the database
-
-The threshold should be configurable in backend settings rather than fixed only by code constants.
-
-## Why Kanka Is Deferred
-
-Kanka may still be useful later as an inspiration source or optional integration, but it is no longer part of the current v1 milestone.
-
-Reasoning:
-- It is not central to validating the core workflow of source text, extraction, review, and canonical persistence.
-- It adds schema and interface work for a feature that may never be implemented.
-- The current milestone is stronger if it stays focused on the product's own source of truth.
-
-The chosen boundary is now:
-- this app is the source of truth
-- Kanka is deferred from v1
-- the schema should not reserve tables for Kanka until the integration is reintroduced with a concrete use case
-
-## Why Auth Is Deferred But Not Ignored
-
-Single-user local-first is the correct default for the first milestone.
-
-Reasoning:
-- Auth, sessions, password flows, and multi-user ownership would consume a large part of the two-week budget.
-- None of those are necessary to validate the core workflow.
-
-However, ignoring auth completely would be shortsighted. So the plan reserves for future auth by:
-- including an owner placeholder in the schema
-- avoiding global implicit campaign assumptions
-- making campaign ownership explicit in API shapes
-
-That keeps later auth work moderate instead of forcing a rewrite.
-
-## Why The UI Is Admin-Style
-
-A polished product UI was rejected for v1.
-
-Reasoning:
-- The main learning and product value in this slice are backend workflow, data modeling, extraction, and review.
-- An admin-style interface is enough to demo those clearly.
-- Spending too much time on visual polish would reduce the amount of actual product behavior delivered.
-
-The frontend should still be clean and typed, but it does not need a strong design system or heavy client architecture in the first milestone.
-
-## Why The Data Model Uses A Generic Entity Table
-
-We considered a more specialized schema with separate tables for characters, locations, factions, and other record types.
-
-We rejected that for v1.
-
-Reasoning:
-- The exact domain model is not stable yet.
-- A generic entity table is faster to implement and easier to evolve in the early stage.
-- The review and search workflows care more about consistent storage and filtering than about perfect type specialization.
-
-The tradeoff:
-- some type-specific validation is weaker in v1
-- but iteration speed is much better
-
-This is the right tradeoff for an early product slice.
-
-## What We Intentionally Deferred
-
-These were intentionally excluded because they add complexity without helping the first milestone enough:
-- multi-user auth
-- permissions
-- semantic or vector search
-- model training pipeline
-- additional microservices beyond the asset processor
-- Kanka export and sync
-- fully automatic write-back from extracted notes without review
-- audio and video parsing
-
-Deferring these is not avoidance. It is how the plan stays coherent and achievable.
-
-## Why This Plan Is A Good Fit
-
-This plan is a good fit because it balances four things that usually conflict:
-- a demoable product
-- one meaningful new technology to learn
-- a backend and data model you still own
-- a clean path toward more advanced future features
-
-In short:
-- it is ambitious enough to be worth showing
-- narrow enough to actually finish
-- simple enough to debug
-- extensible enough to keep growing after the milestone
+This order keeps each increment observable and testable while avoiding abstractions whose requirements have not yet appeared.

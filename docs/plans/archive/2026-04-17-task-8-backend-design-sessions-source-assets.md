@@ -349,7 +349,7 @@ Parse/file-dependent operation contract:
 - expose asset truth, lifecycle, and storage status; do not expose parse status or last-parsed information before parse orchestration exists
 - keep ordinary asset reads cheap and never trigger parsing from session/asset list or detail screens in this task
 - render Sessions and Assets only as sections of a selected campaign workspace; the campaign switcher changes the current campaign context without creating a global assets/sessions backend contract
-- use `docs/plans/2026-07-24-workspace-layout-frontend-scope.md` for the established shell, `docs/plans/2026-07-24-campaign-sessions-assets-frontend-scope.md` for the session/asset extension, and `docs/mockups/workspace-v1.html` as the visual reference
+- use the completed workspace-layout and campaign-sessions-assets plans in this directory for the established frontend behavior, and `docs/mockups/workspace-v1.html` as the visual reference
 
 ### 5. Documentation sync
 
@@ -358,8 +358,6 @@ Update all source-of-truth docs that still describe the old shape:
 - `README.md`
 - `docs/plans/2026-03-31-rpg-gm-helper-v1.md`
 - `docs/plans/2026-03-31-rpg-gm-helper-v1-reasoning.md`
-- `docs/schemas.md`
-- `docs/schema-reasoning.md`
 
 ## Test Plan
 
