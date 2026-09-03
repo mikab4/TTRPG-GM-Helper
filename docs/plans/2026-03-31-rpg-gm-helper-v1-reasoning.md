@@ -59,7 +59,7 @@ A plain typed API client is enough. Heavy client-state or framework abstractions
 
 The mockup cannot specify product behavior that had not been designed when it was created. When an implemented requirement needs a missing route, section, tab, state, or error path, the gap must be surfaced to the responsible engineer with the smallest mockup-consistent proposal. Approval is required before implementation. The same approval rule applies to every deliberate visual difference, including seemingly minor color, font, spacing, sizing, or placement changes.
 
-Approved differences are recorded in `docs/design-deviations.md` so implementation does not silently redefine the design and the mockup can be updated later when appropriate. Existing frontend differences predate this explicit authority and are not automatically approved; conformance is checked on touched surfaces unless a separate full audit is commissioned.
+Approved differences are recorded in `docs/mockups/design-deviations.md` so implementation does not silently redefine the design and the mockup can be updated later when appropriate. Existing frontend differences predate this explicit authority and are not automatically approved; conformance is checked on touched surfaces unless a separate full audit is commissioned.
 
 ## Why Campaign Scope Is Explicit
 

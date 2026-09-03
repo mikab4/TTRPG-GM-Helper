@@ -28,7 +28,7 @@ Deliver a demoable first milestone with these user-visible capabilities:
 - The backend remains in Python so development stays fast.
 - The frontend is TypeScript React so the project includes one deliberate new learning area.
 - The frontend stays a separate app with routing, forms, tables, API calls, and presentation only; domain rules remain in backend services.
-- `docs/mockups/workspace-v1.html` is authoritative for frontend visual and interaction design. Missing designs and any deviations require engineer approval before implementation and must be recorded in `docs/design-deviations.md`.
+- `docs/mockups/workspace-v1.html` is authoritative for frontend visual and interaction design. Missing designs and any deviations require engineer approval before implementation and must be recorded in `docs/mockups/design-deviations.md`.
 - PostgreSQL is the canonical datastore in v1. Redis is transient work transport and MongoDB is a rebuildable parsed-document projection; neither owns canonical campaign truth.
 - Original assets use a backend-owned storage boundary. The current implementation is local filesystem storage; Task 9 adds an S3-compatible implementation backed by MinIO. No API or worker code may rely on a shared local filesystem path after that transition.
 - Parsing is an explicit asynchronous workflow. Ordinary asset metadata reads must remain cheap and must not trigger hidden processing.
