@@ -16,10 +16,7 @@ def test_entity_type_compatibility_report_groups_legacy_types(
 
     assert response.status_code == 200
     compatibility_report = response.json()
-    issues_by_type = {
-        issue["legacy_type"]: issue
-        for issue in compatibility_report["issues"]
-    }
+    issues_by_type = {issue["legacy_type"]: issue for issue in compatibility_report["issues"]}
 
     assert compatibility_report["has_issues"] is True
     assert compatibility_report["issue_count"] == 2
@@ -27,7 +24,10 @@ def test_entity_type_compatibility_report_groups_legacy_types(
     assert issues_by_type["faction"]["count"] == 1
     assert issues_by_type["faction"]["raw_variants"] == ["faction"]
     assert {
-        (entity["entity_name"], entity["campaign_name"],)
+        (
+            entity["entity_name"],
+            entity["campaign_name"],
+        )
         for entity in issues_by_type["faction"]["example_entities"]
     } == {("Night Choir", "Shadows of Glass")}
     assert issues_by_type["npc"]["count"] == 2
@@ -97,8 +97,7 @@ def test_entity_type_compatibility_migration_applies_explicit_mapping(
     assert response.status_code == 200
     migration_result = response.json()
     updated_types_by_legacy_type = {
-        updated_type["legacy_type"]: updated_type
-        for updated_type in migration_result["updated_types"]
+        updated_type["legacy_type"]: updated_type for updated_type in migration_result["updated_types"]
     }
 
     assert migration_result["updated_count"] == 2

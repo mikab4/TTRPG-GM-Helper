@@ -427,13 +427,12 @@ BUILT_IN_RELATIONSHIP_TYPES: dict[str, RelationshipTypeDescriptor] = {
     ),
 }
 
+
 def build_descriptor_from_custom_type(
     custom_type_definition: RelationshipTypeDefinition,
 ) -> RelationshipTypeDescriptor:
     reverse_label = (
-        custom_type_definition.label
-        if custom_type_definition.is_symmetric
-        else custom_type_definition.reverse_label
+        custom_type_definition.label if custom_type_definition.is_symmetric else custom_type_definition.reverse_label
     )
     return RelationshipTypeDescriptor(
         key=custom_type_definition.key,
@@ -442,12 +441,10 @@ def build_descriptor_from_custom_type(
         reverse_label=reverse_label,
         is_symmetric=custom_type_definition.is_symmetric,
         allowed_source_types=tuple(
-            normalize_str_enum_value(EntityType, entity_type)
-            for entity_type in custom_type_definition.allowed_source_types
+            normalize_str_enum_value(EntityType, entity_type) for entity_type in custom_type_definition.allowed_source_types
         ),
         allowed_target_types=tuple(
-            normalize_str_enum_value(EntityType, entity_type)
-            for entity_type in custom_type_definition.allowed_target_types
+            normalize_str_enum_value(EntityType, entity_type) for entity_type in custom_type_definition.allowed_target_types
         ),
         is_custom=True,
         campaign_id=custom_type_definition.campaign_id,
@@ -472,8 +469,7 @@ def list_relationship_type_descriptors(
             )
         )
         descriptors.extend(
-            build_descriptor_from_custom_type(custom_type_definition)
-            for custom_type_definition in custom_type_definitions
+            build_descriptor_from_custom_type(custom_type_definition) for custom_type_definition in custom_type_definitions
         )
     return sorted(descriptors, key=lambda descriptor: (descriptor.family, descriptor.label))
 

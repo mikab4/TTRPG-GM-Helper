@@ -150,7 +150,7 @@ def ensure_postgres_test_container() -> PostgresTestContainer:
 def remove_postgres_test_container(container_name: str) -> None:
     try:
         _run_subprocess(["docker", "rm", "--force", container_name])
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    except FileNotFoundError, subprocess.CalledProcessError:
         return
 
 

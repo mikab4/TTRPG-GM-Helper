@@ -214,10 +214,7 @@ def test_create_relationship_rejects_invalid_type_pair(
     )
 
     assert response.status_code == 422
-    assert (
-        response.json()["detail"]
-        == "Relationship type is not valid for the source and target entity types."
-    )
+    assert response.json()["detail"] == "Relationship type is not valid for the source and target entity types."
 
 
 def test_create_relationship_rejects_source_asset_when_asset_delete_is_in_progress(
@@ -286,9 +283,7 @@ def test_create_relationship_returns_conflict_when_trigger_backstop_rejects_asse
         raise IntegrityError(
             "INSERT INTO entity_relationships",
             params=None,
-            orig=Exception(
-                "Source asset cannot accept new provenance references while deletion is in progress."
-            ),
+            orig=Exception("Source asset cannot accept new provenance references while deletion is in progress."),
         )
 
     monkeypatch.setattr("app.services.relationship_service.Session.commit", failing_commit)
@@ -354,9 +349,7 @@ def test_create_relationship_rejects_inverse_duplicate_for_symmetric_type(
     )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "detail": "Symmetric relationship already exists for these entities."
-    }
+    assert response.json() == {"detail": "Symmetric relationship already exists for these entities."}
 
 
 def test_list_relationships_supports_type_and_family_filters(
@@ -407,9 +400,7 @@ def test_list_relationships_supports_type_and_family_filters(
     )
 
     assert response.status_code == 200
-    assert [
-        listed_relationship["relationship_type"] for listed_relationship in response.json()
-    ] == ["spouse_of"]
+    assert [listed_relationship["relationship_type"] for listed_relationship in response.json()] == ["spouse_of"]
 
 
 def test_list_relationships_supports_family_only_filter(
@@ -460,9 +451,7 @@ def test_list_relationships_supports_family_only_filter(
     )
 
     assert response.status_code == 200
-    assert [
-        listed_relationship["relationship_type"] for listed_relationship in response.json()
-    ] == ["spouse_of"]
+    assert [listed_relationship["relationship_type"] for listed_relationship in response.json()] == ["spouse_of"]
 
 
 def test_list_relationships_rejects_mismatched_type_and_family_filters(
@@ -499,9 +488,7 @@ def test_list_relationships_rejects_mismatched_type_and_family_filters(
     )
 
     assert response.status_code == 422
-    assert response.json() == {
-        "detail": "Relationship type does not belong to the requested relationship family."
-    }
+    assert response.json() == {"detail": "Relationship type does not belong to the requested relationship family."}
 
 
 def test_get_relationship_returns_stored_record(
@@ -665,7 +652,4 @@ def test_update_relationship_rejects_invalid_type_pair(
     )
 
     assert response.status_code == 422
-    assert (
-        response.json()["detail"]
-        == "Relationship type is not valid for the source and target entity types."
-    )
+    assert response.json()["detail"] == "Relationship type is not valid for the source and target entity types."

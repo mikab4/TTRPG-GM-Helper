@@ -37,9 +37,7 @@ def test_list_relationship_types_includes_built_in_and_custom_types(
     assert response.status_code == 200
     listed_types = response.json()
     listed_type_keys = {listed_type["key"] for listed_type in listed_types}
-    custom_type_response = next(
-        listed_type for listed_type in listed_types if listed_type["key"] == "bodyguard_of"
-    )
+    custom_type_response = next(listed_type for listed_type in listed_types if listed_type["key"] == "bodyguard_of")
 
     assert "sibling_of" in listed_type_keys
     assert "bodyguard_of" in listed_type_keys
@@ -205,9 +203,7 @@ def test_update_custom_relationship_type_rejects_reverse_label_for_existing_symm
     )
 
     assert response.status_code == 422
-    assert response.json() == {
-        "detail": "Symmetric relationship types cannot define a reverse label."
-    }
+    assert response.json() == {"detail": "Symmetric relationship types cannot define a reverse label."}
 
 
 def test_delete_custom_relationship_type_rejects_used_type(

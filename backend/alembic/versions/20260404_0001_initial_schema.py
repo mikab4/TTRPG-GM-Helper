@@ -89,9 +89,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["campaign_id"], ["campaigns.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("id", "campaign_id", name="uq_session_note_id_campaign"),
-        sa.UniqueConstraint(
-            "campaign_id", "session_number", name="uq_session_note_campaign_number"
-        ),
+        sa.UniqueConstraint("campaign_id", "session_number", name="uq_session_note_campaign_number"),
     )
     op.create_index("ix_session_notes_campaign_id", "session_notes", ["campaign_id"], unique=False)
     op.create_table(
@@ -125,9 +123,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("id", "campaign_id", name="uq_source_document_id_campaign"),
     )
-    op.create_index(
-        "ix_source_documents_campaign_id", "source_documents", ["campaign_id"], unique=False
-    )
+    op.create_index("ix_source_documents_campaign_id", "source_documents", ["campaign_id"], unique=False)
     op.create_index(
         "ix_source_documents_session_note_id_campaign_id",
         "source_documents",
@@ -159,9 +155,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("id", "campaign_id", name="uq_extraction_job_id_campaign"),
     )
-    op.create_index(
-        "ix_extraction_jobs_campaign_id", "extraction_jobs", ["campaign_id"], unique=False
-    )
+    op.create_index("ix_extraction_jobs_campaign_id", "extraction_jobs", ["campaign_id"], unique=False)
     op.create_index(
         "ix_extraction_jobs_source_document_id_campaign_id",
         "extraction_jobs",
@@ -343,15 +337,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_entity_relationships_source_document_id_campaign_id", table_name="entity_relationships"
-    )
-    op.drop_index(
-        "ix_entity_relationships_target_entity_id_campaign_id", table_name="entity_relationships"
-    )
-    op.drop_index(
-        "ix_entity_relationships_source_entity_id_campaign_id", table_name="entity_relationships"
-    )
+    op.drop_index("ix_entity_relationships_source_document_id_campaign_id", table_name="entity_relationships")
+    op.drop_index("ix_entity_relationships_target_entity_id_campaign_id", table_name="entity_relationships")
+    op.drop_index("ix_entity_relationships_source_entity_id_campaign_id", table_name="entity_relationships")
     op.drop_index("ix_entity_relationships_campaign_id", table_name="entity_relationships")
     op.drop_index(
         "ix_extraction_candidates_extraction_job_id_campaign_id",

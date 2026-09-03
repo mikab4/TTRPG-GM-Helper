@@ -512,9 +512,7 @@ def test_delete_asset_returns_conflict_when_entity_provenance_still_references_i
 
     # Assert
     assert response.status_code == 409
-    assert response.json() == {
-        "detail": "Source asset cannot be deleted while dependent records still reference it."
-    }
+    assert response.json() == {"detail": "Source asset cannot be deleted while dependent records still reference it."}
 
 
 def test_delete_asset_returns_conflict_when_relationship_provenance_still_references_it(
@@ -544,9 +542,7 @@ def test_delete_asset_returns_conflict_when_relationship_provenance_still_refere
 
     # Assert
     assert response.status_code == 409
-    assert response.json() == {
-        "detail": "Source asset cannot be deleted while dependent records still reference it."
-    }
+    assert response.json() == {"detail": "Source asset cannot be deleted while dependent records still reference it."}
 
 
 def test_delete_asset_returns_conflict_when_extraction_job_still_references_it(
@@ -578,9 +574,7 @@ def test_delete_asset_returns_conflict_when_extraction_job_still_references_it(
 
     # Assert
     assert response.status_code == 409
-    assert response.json() == {
-        "detail": "Source asset cannot be deleted while dependent records still reference it."
-    }
+    assert response.json() == {"detail": "Source asset cannot be deleted while dependent records still reference it."}
 
 
 def test_delete_asset_returns_conflict_when_storage_delete_fails(

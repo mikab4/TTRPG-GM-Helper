@@ -47,9 +47,7 @@ def test_ensure_postgres_test_container_returns_runtime_database_url(
 
     runtime_container = pg_test_support.ensure_postgres_test_container()
 
-    assert runtime_container.database_url == (
-        "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/rpg_gm_helper"
-    )
+    assert runtime_container.database_url == ("postgresql+psycopg://postgres:postgres@127.0.0.1:55432/rpg_gm_helper")
     assert runtime_container.container_name.startswith(pg_test_support.POSTGRES_TEST_CONTAINER_PREFIX)
     assert recorded_commands[1][-1] == pg_test_support.POSTGRES_TEST_IMAGE
 
@@ -76,7 +74,7 @@ def test_ensure_postgres_test_container_fails_when_docker_cli_is_missing(
 def test_ensure_postgres_test_container_fails_when_docker_daemon_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    
+
     def unavailable_docker(
         command: list[str],
         *,
@@ -101,4 +99,3 @@ def test_ensure_postgres_test_container_fails_when_docker_daemon_is_unavailable(
         match="Docker is installed but the daemon is unavailable",
     ):
         pg_test_support.ensure_postgres_test_container()
-

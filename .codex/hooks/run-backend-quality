@@ -31,8 +31,9 @@ export UV_CACHE_DIR="${TMPDIR:-/tmp}/rpg-gm-helper-uv-cache"
 
 if (
   cd backend
-  uv run ruff format "${backend_files[@]}" &&
-    uv run ruff check --fix "${backend_files[@]}" &&
+  uv run ruff check --fix "${backend_files[@]}" &&
+    uv run ruff format "${backend_files[@]}" &&
+    uv run ruff format --check "${backend_files[@]}" &&
     uv run ruff check "${backend_files[@]}"
 ) >"$quality_log" 2>&1; then
   echo '{"continue":true}'

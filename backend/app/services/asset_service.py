@@ -233,10 +233,7 @@ def retry_deleting_assets(
             select(SourceAsset.id)
             .where(
                 SourceAsset.lifecycle_status == SourceAssetLifecycleStatus.DELETING.value,
-                (
-                    SourceAsset.delete_started_at.is_(None)
-                    | (SourceAsset.delete_started_at <= retry_started_before)
-                ),
+                (SourceAsset.delete_started_at.is_(None) | (SourceAsset.delete_started_at <= retry_started_before)),
             )
             .order_by(SourceAsset.delete_started_at.asc().nullsfirst(), SourceAsset.id)
         )
@@ -405,27 +402,31 @@ def _ensure_asset_delete_has_no_blocking_references(
     asset_id: UUID,
 ) -> None:
     entity_reference_exists = db_session.scalar(
-        select(exists().where(
-            Entity.campaign_id == campaign_id,
-            Entity.source_asset_id == asset_id,
-        ))
+        select(
+            exists().where(
+                Entity.campaign_id == campaign_id,
+                Entity.source_asset_id == asset_id,
+            )
+        )
     )
     relationship_reference_exists = db_session.scalar(
-        select(exists().where(
-            Relationship.campaign_id == campaign_id,
-            Relationship.source_asset_id == asset_id,
-        ))
+        select(
+            exists().where(
+                Relationship.campaign_id == campaign_id,
+                Relationship.source_asset_id == asset_id,
+            )
+        )
     )
     extraction_job_reference_exists = db_session.scalar(
-        select(exists().where(
-            ExtractionJob.campaign_id == campaign_id,
-            ExtractionJob.source_asset_id == asset_id,
-        ))
+        select(
+            exists().where(
+                ExtractionJob.campaign_id == campaign_id,
+                ExtractionJob.source_asset_id == asset_id,
+            )
+        )
     )
     if entity_reference_exists or relationship_reference_exists or extraction_job_reference_exists:
-        raise ConflictError(
-            "Source asset cannot be deleted while dependent records still reference it."
-        )
+        raise ConflictError("Source asset cannot be deleted while dependent records still reference it.")
 
 
 def _finalize_asset_delete(
@@ -529,9 +530,7 @@ def _raise_delete_recovery_conflict(
 
 
 def _get_asset_campaign_id(db_session: Session, *, asset_id: UUID) -> UUID:
-    campaign_id = db_session.scalar(
-        select(SourceAsset.campaign_id).where(SourceAsset.id == asset_id)
-    )
+    campaign_id = db_session.scalar(select(SourceAsset.campaign_id).where(SourceAsset.id == asset_id))
     if campaign_id is None:
         raise NotFoundError("Source asset not found.")
     return campaign_id

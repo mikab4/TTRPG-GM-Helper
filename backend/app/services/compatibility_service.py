@@ -88,9 +88,7 @@ def migrate_entity_types(
     migration_request: EntityTypeMigrationRequest,
 ) -> EntityTypeMigrationResult:
     compatibility_report = build_entity_type_compatibility_report(db_session)
-    unresolved_issues_by_legacy_type = {
-        issue.legacy_type: issue for issue in compatibility_report.issues
-    }
+    unresolved_issues_by_legacy_type = {issue.legacy_type: issue for issue in compatibility_report.issues}
     unresolved_legacy_types = set(unresolved_issues_by_legacy_type)
     mappings_by_legacy_type = {
         normalize_legacy_entity_type(mapping.legacy_type): mapping.target_type.value
@@ -99,9 +97,7 @@ def migrate_entity_types(
 
     missing_legacy_types = sorted(unresolved_legacy_types - set(mappings_by_legacy_type))
     if missing_legacy_types:
-        raise ConflictError(
-            "Missing mappings for legacy entity types: " + ", ".join(missing_legacy_types) + "."
-        )
+        raise ConflictError("Missing mappings for legacy entity types: " + ", ".join(missing_legacy_types) + ".")
 
     updated_types: list[EntityTypeMigrationResultItem] = []
     total_updated_count = 0
@@ -111,11 +107,7 @@ def migrate_entity_types(
         updated_count = 0
         for raw_legacy_variant in raw_legacy_variants:
             updated_count += (
-                db_session.execute(
-                    update(Entity)
-                    .where(Entity.type == raw_legacy_variant)
-                    .values(type=target_type)
-                ).rowcount
+                db_session.execute(update(Entity).where(Entity.type == raw_legacy_variant).values(type=target_type)).rowcount
                 or 0
             )
         total_updated_count += updated_count

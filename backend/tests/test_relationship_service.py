@@ -35,9 +35,7 @@ def test_create_relationship_translates_trigger_backstop_conflict_to_conflict_er
             raise IntegrityError(
                 "INSERT INTO entity_relationships",
                 params=None,
-                orig=Exception(
-                    "Source asset cannot accept new provenance references while deletion is in progress."
-                ),
+                orig=Exception("Source asset cannot accept new provenance references while deletion is in progress."),
             )
 
         def recording_rollback() -> None:
@@ -109,9 +107,7 @@ def test_update_relationship_translates_trigger_backstop_conflict_to_conflict_er
             raise IntegrityError(
                 "UPDATE entity_relationships",
                 params=None,
-                orig=Exception(
-                    "Source asset cannot accept new provenance references while deletion is in progress."
-                ),
+                orig=Exception("Source asset cannot accept new provenance references while deletion is in progress."),
             )
 
         def recording_rollback() -> None:
