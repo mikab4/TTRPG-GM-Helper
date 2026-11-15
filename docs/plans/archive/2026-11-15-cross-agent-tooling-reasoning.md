@@ -32,15 +32,19 @@ Superpowers and gstack are removed. Their planning, brainstorming, and review wo
 
 Accepted cost: generic discipline is no longer injected every session. Neither harness requires test-first, and the `AGENTS.md` testing rules covered how tests look, not whether they are written. Mitigation: a one-line test-first rule in `AGENTS.md` (Task 5), and hooks enforce formatting and lint. Rejected for now: a Stop hook that blocks when `backend/app/` changes without `backend/tests/` changes, because test-first has real exceptions (refactors, config) and the hook would misfire; revisit with new research if agents keep skipping tests.
 
-Personal user-level skills and instructions (`~/.codex/skills/`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) are out of scope. The project does not depend on them, so sharing them between agents is personal setup, not repository tooling. Task 9 only removes the third-party packs.
+Personal user-level skills and instructions (`~/.codex/skills/`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) are out of scope. The project does not depend on them, so sharing them between agents is personal setup, not repository tooling. Task 8 only removes the third-party packs.
 
-Simpler alternative kept available: Tasks 1–5 alone give a working cross-agent setup; Tasks 6–8 add value but are optional.
+Simpler alternative kept available: Tasks 1–5 alone give a working cross-agent setup; Tasks 6–7 add value but are optional.
 
 ## Skill Selection
 
 New skills must add information or verification a model cannot derive alone. UI verification is prioritized because the mockup-authority rule is the strictest rule in `AGENTS.md` and currently has no check. Generic code-review and planning skills are rejected in favor of built-in features and `docs/plans/README.md`.
 
 Rejected: a separate `new-alembic-migration` skill (Task 6). Applying migrations needs no agent (`compose.yaml` sets `AUTO_APPLY_MIGRATIONS`; local runs use `alembic upgrade head`). For writing them, the revision-ID convention is better enforced in `backend/alembic/env.py` (tracked in `docs/issues.md`), data preservation is already an `AGENTS.md` rule, and `downgrade()` follows from the existing revisions. The remaining gap, which migration tests to write, is a few lines in `py-db-tdd`, which already loads for backend tests.
+
+Rejected: a `close-plan-task` skill. Its steps (set status, add a summary, correct paths, update the reasoning document) restate the `AGENTS.md` plan-completion rule, which already loads every session, so the skill would add context cost without new information. If plans drift (for example, more than one `Next` task), add a script check instead.
+
+Deferred: skill-usage logging. With two project skills, use is visible without a log, and a `Skill`-tool hook records only Claude. It is tracked in `docs/deferred_design_options.md` under "Skill-usage logging".
 
 ### UI Verification: Tool Plus Thin Skill
 
@@ -50,7 +54,7 @@ Rejected: each agent's own browser tooling (a different procedure per agent); un
 
 ### Skill Gotchas
 
-A problem goes into a skill's `## Gotchas` only when code cannot prevent it. A fixture, a clear error, a lint rule, or a test reaches every agent and human on every run; a skill entry helps only when the skill is loaded. Entries are one line with a file pointer, capped at about 8 per skill, and pruned during Task 10's review.
+A problem goes into a skill's `## Gotchas` only when code cannot prevent it. A fixture, a clear error, a lint rule, or a test reaches every agent and human on every run; a skill entry helps only when the skill is loaded. Entries are one line with a file pointer, capped at about 8 per skill.
 
 New gotchas are captured through an `AGENTS.md` rule: the agent proposes a code fix or gotcha in its final message after a costly repository-specific problem, and the user approves it. The rule is in `AGENTS.md` because it is always loaded, and approval keeps the list small.
 

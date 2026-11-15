@@ -51,3 +51,13 @@ These are not current technical debt. Reconsider an option only when its trigger
 **Current default:** The current plans under `docs/plans/` remain authoritative. The proposal is not adopted.
 
 **Consider:** Drop MongoDB, defer Redis, S3 storage, and the separate worker until hosting, keep parsed sections and jobs in PostgreSQL, import from Google Docs and Sheets, and build the AI layer first as a standalone toolkit. Adopting it requires the plan, reasoning, and `AGENTS.md` updates listed at the end of the proposal.
+
+## Skill-usage logging
+
+**Trigger:** The repository has more project skills than `py-db-tdd` and `verify-ui-against-mockup`, a skill appears to go unused, or a skill's `## Gotchas` list reaches its cap of about 8 entries.
+
+**Decision required:** Decide whether usage data is needed to prune or rewrite skills, and whether a Claude-only signal is acceptable given that Codex does not invoke skills through a tool.
+
+**Current default:** No logging; judge skill use and prune gotchas by hand when a skill is edited.
+
+**Consider:** A Claude `PreToolUse` hook on `Skill`, and on `Read` of `.agents/skills/*/SKILL.md` to catch direct reads through the `.claude/skills` symlink, that appends the skill name and date to a gitignored log. Review the log, then remove or rewrite skills that never trigger and prune their gotchas.

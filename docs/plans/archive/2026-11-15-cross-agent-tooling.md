@@ -29,7 +29,6 @@ Resolve each question at the start of the task that owns it, then record the ans
 | Q2 | Which Codex allow-rules are general enough to commit to `.claude/settings.json`? | Task 4 |
 | Q3 | What conventions do existing Alembic revisions and `backend/tests/test_migrations.py` follow? | Task 6 |
 | Q4 | Which browser tool does UI verification use: a Playwright dev dependency, or the agent's own browser tooling? | Task 7 (resolved: Playwright) |
-| Q5 | Is a `close-plan-task` skill worth its context cost, or is the `AGENTS.md` rule enough? | Task 8 |
 
 ---
 
@@ -119,7 +118,7 @@ Verification: checks a–d pass in a shell. Claude (`claude -p`): each hook bloc
    - Use `sqlite_engine` for SQLite tables; calling `Base.metadata.create_all` directly fails on `'{}'::jsonb` server defaults (`patched_jsonb_defaults` in `conftest.py`).
 4. Record the gotcha rule for all skills in `docs/agent-tooling.md`:
    - Add a gotcha only when an agent actually hit the problem, it cost a debug cycle, and code (a fixture, a clear error, a lint rule, or a test) cannot prevent it. Otherwise fix the code.
-   - Each entry is one line with a file pointer. Cap of about 8 per skill; at the cap, convert an entry to code or delete it. Task 10's review also prunes gotchas.
+   - Each entry is one line with a file pointer. Cap of about 8 per skill; at the cap, convert an entry to code or delete it.
    - Placement rule: a rule goes in `AGENTS.md` only if it applies to every task in its area and fits in one line; longer procedures, examples, and gotchas go in a skill. Each fact lives in one place.
 5. Add one line to `AGENTS.md`: when an agent hits a repository-specific problem that cost a debug cycle, its final message proposes a code fix or a one-line gotcha for the matching skill, and it does not edit the skill without approval.
 6. Rewrite the `description` to: "Use when writing, changing, or reviewing pytest tests under `backend/tests/`, including when a backend feature or bug fix needs new or updated tests." Use the same trigger wording in the `py-db-tdd` pointer line in `AGENTS.md`.
@@ -157,15 +156,7 @@ Verification: checks a–d pass in a shell. Claude (`claude -p`): each hook bloc
 
 **Summary:** Added `playwright` and `@types/node` (so `tsc` checks the script) to `frontend/devDependencies` and `npm run mockup:compare -- <screen> [--width <px>]`, which runs `frontend/scripts/mockup-compare/compare.ts` with Node's built-in TypeScript support. The tool starts Vite with `VITE_API_BASE_URL=/mockup-api`, serves fixtures from `fixtures.ts` (camelCase app types converted to the snake_case wire format), opens the app route and the mockup at each width, and writes `app.png`, `mockup.png`, and `report.md` to gitignored `frontend/.mockup-compare/<screen>/`. `screens.ts` holds each screen's route, fake API, and selector map; `app: null` and `mockup: null` mark elements that exist on one side only. Border colors with no border and `gap` on non-flex/grid elements are not reported. `tsconfig.scripts.json` is referenced from `tsconfig.json`, and ESLint and Prettier cover `scripts/`. The skill and a matching `AGENTS.md` pointer under Frontend Design Authority were added. Verified on the Entities tab (screen `entities`): the run completes with no errors, a broken selector and an unfaked request both fail it with exit code 1, and the unapproved differences are recorded in `docs/issues.md` under "Entities Tab Differs From the Mockup".
 
-## Task 8: Optional `close-plan-task` Skill
-
-**Status:** Planned
-**Estimate:** 20 minutes, or 0 if rejected
-
-1. Resolve Q5.
-2. If accepted, create a skill that walks the `AGENTS.md` and `docs/plans/README.md` completion steps: set status, add a summary, correct outdated paths, update the reasoning document when a decision changed.
-
-## Task 9: User-Level Cleanup (outside the repository)
+## Task 8: User-Level Cleanup (outside the repository)
 
 **Status:** Complete
 **Estimate:** 30 minutes
@@ -178,13 +169,3 @@ Not committed; recorded so both machines' agents end up consistent.
 4. ~~Create `~/.claude/CLAUDE.md` with the Working Style rules from `~/.codex/AGENTS.md`.~~ Dropped: out of scope.
 
 **Implemented:** Deleted the `~/.agents/skills/superpowers` symlink. The superpowers plugin was already gone. Deleted `~/.codex/skills/gstack/`, the `~/.codex/skills/gstack-*` symlinks, `~/.codex/disabled-skills/gstack/`, and the `~/gstack/` source clone. Steps 3 and 4 were dropped because user-level skills and personal instructions are personal setup that this project does not depend on; the project's skills and rules live in the repository. Former Q6 is removed with them.
-
-## Task 10: Optional Skill-Usage Logging
-
-**Status:** Planned
-**Estimate:** 30 minutes
-
-Start only after the other tasks have been used for a few weeks.
-
-1. Add a Claude `PreToolUse` hook on the `Skill` tool that appends the skill name and date to a gitignored log.
-2. Review the log; remove or rewrite skills that never trigger.
