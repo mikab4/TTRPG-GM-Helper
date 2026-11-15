@@ -45,3 +45,6 @@ frontend/.env
 # Claude Code local state
 .claude/settings.local.json
 .claude/worktrees/
+
+# SQLTools scratch files
+*.session.sql
