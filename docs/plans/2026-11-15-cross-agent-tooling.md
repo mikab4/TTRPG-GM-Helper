@@ -109,13 +109,29 @@ Verification: checks a–d pass in a shell. Claude (`claude -p`): each hook bloc
 
 ## Task 5: Slim `py-db-tdd`
 
-**Status:** Planned
-**Estimate:** 30 minutes
+**Status:** Complete
+**Estimate:** 45 minutes
 
-1. Remove generic testing guidance that a current model already follows (AAA layout, one rule per test, no logic in tests, naming style).
-2. Keep repository-specific content: factory fixtures in `backend/tests/factories.py`, `db_session_factory()` usage, PostgreSQL container fixtures in `backend/tests/pg_test_support.py`, and "unavailable Docker is a failure, not a skip."
-3. Add a `## Gotchas` section, seeded only with problems agents have actually hit in this repository.
-4. Rewrite the `description` so it states when to trigger (editing or adding files under `backend/tests/`).
+1. Remove generic testing guidance that a current model already follows: AAA layout, one rule per test, no logic in tests, naming style, DAMP over DRY, fixture scopes by cost, explicit dependencies over `autouse`, and not over-factoring simple cases.
+2. Do not restate the "Backend Tests" rules in `AGENTS.md`; open the skill with one line saying it follows them. Add only what `AGENTS.md` lacks: factory fixtures (`owner_factory`, `campaign_factory`, etc.) and `db_session_factory()` in `backend/tests/conftest.py`, both bound to SQLite; model factory classes in `backend/tests/factories.py`; PostgreSQL fixtures (`postgres_test_container`, `postgres_test_settings`) in `conftest.py` backed by `backend/tests/pg_test_support.py`; and "unavailable Docker is a failure, not a skip." State the rule: tests use SQLite through the factories by default, and use the PostgreSQL fixtures only when the behavior depends on PostgreSQL (migrations, JSONB, PostgreSQL-only constraints). Also show the `db_session=` keyword that passes an open session into a factory fixture, and one short example test using `api_request` and factory fixtures.
+3. Add a `## Gotchas` section with two one-line entries, each pointing to the fixture that holds the workaround:
+   - Use `api_request` for API tests; a hand-built client hangs on sync FastAPI handlers (`sync_api_test_runtime_shim` in `conftest.py`).
+   - Use `sqlite_engine` for SQLite tables; calling `Base.metadata.create_all` directly fails on `'{}'::jsonb` server defaults (`patched_jsonb_defaults` in `conftest.py`).
+4. Record the gotcha rule for all skills in `docs/agent-tooling.md`:
+   - Add a gotcha only when an agent actually hit the problem, it cost a debug cycle, and code (a fixture, a clear error, a lint rule, or a test) cannot prevent it. Otherwise fix the code.
+   - Each entry is one line with a file pointer. Cap of about 8 per skill; at the cap, convert an entry to code or delete it. Task 10's review also prunes gotchas.
+   - Placement rule: a rule goes in `AGENTS.md` only if it applies to every task in its area and fits in one line; longer procedures, examples, and gotchas go in a skill. Each fact lives in one place.
+5. Add one line to `AGENTS.md`: when an agent hits a repository-specific problem that cost a debug cycle, its final message proposes a code fix or a one-line gotcha for the matching skill, and it does not edit the skill without approval.
+6. Rewrite the `description` to: "Use when writing, changing, or reviewing pytest tests under `backend/tests/`, including when a backend feature or bug fix needs new or updated tests." Use the same trigger wording in the `py-db-tdd` pointer line in `AGENTS.md`.
+7. Add one line to the "Backend Tests" section of `AGENTS.md`: a backend behavior change or bug fix includes a test that fails without the change; write it first.
+8. Verify:
+   - a. `claude -p` with a backend bug-fix request loads `py-db-tdd` and writes the test first.
+   - b. `codex exec` still lists `py-db-tdd`.
+   - c. Every file path and fixture name in the skill exists (`grep` in `backend/tests/`).
+   - d. `AGENTS.md` stays under 200 lines.
+9. Update documentation: set this task's status and add a summary. Check that `docs/agent-tooling.md` describes the gotcha and placement rules.
+
+**Summary:** Rewrote `.agents/skills/py-db-tdd/SKILL.md` from 12 rule sections to four short sections: a file map (`conftest.py`, `factories.py`, `pg_test_support.py`), SQLite-by-default with PostgreSQL only for migrations, JSONB, or PostgreSQL-only constraints, factory `db_session=` usage, and one API test example. It also has the two gotchas. The skill opens by deferring to the `AGENTS.md` Backend Tests rules instead of restating them. `AGENTS.md` (now 70 lines) gained the gotcha-proposal line, the new `py-db-tdd` trigger wording, and the test-first line. `docs/agent-tooling.md` gained "Where Rules Go" and "Skill Gotchas" sections. Verified: every path and fixture named in the skill exists. `claude -p --setting-sources project` with a backend bug-fix request loaded `py-db-tdd` and planned the failing test before the fix. `codex exec` lists `py-db-tdd`.
 
 ## Task 6: `new-alembic-migration` Skill
 

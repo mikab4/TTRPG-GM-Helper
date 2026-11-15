@@ -22,11 +22,15 @@ Rejected: a committed copy with a pre-commit drift check (duplicates every skill
 
 Rules that must hold in every session live in `AGENTS.md`, because agents do not reliably invoke skills (published evals report agents skipping available skills in roughly half of cases). Skills hold on-demand procedures and repository gotchas. Anything a script can check is a hook.
 
+A rule goes in `AGENTS.md` only if it applies to every task in its area and fits in one line; each fact lives in one place, so skills do not restate `AGENTS.md`. `AGENTS.md` loads every session and each line costs attention on every task (Anthropic best practices recommend under 200 lines), and context files with unnecessary requirements lower task success (Gloaguen et al., ICLR 2026). Skills hold longer procedures, examples, and gotchas, and `AGENTS.md` points to each skill, which raised skill use from 44% to 95%+ in Vercel's evals.
+
+Rejected: moving skill content into `AGENTS.md` to avoid skipped skills (grows the always-on cost for every task), and keeping `AGENTS.md` rules duplicated in skills (double context cost and drift).
+
 ## No Third-Party Skill Packs
 
 Superpowers and gstack are removed. Their planning, brainstorming, and review workflows overlap built-in agent features (plan modes, `/code-review`, `/review`, subagents) and spend context restating behavior current models already follow. Superpowers' main measured benefit came from its session-start prompt telling the agent to use skills, which `AGENTS.md` provides directly.
 
-Accepted cost: generic discipline (such as test-first) is no longer injected every session. Mitigation: the repository-specific testing rules already sit in `AGENTS.md`, and formatting/lint are enforced by hooks.
+Accepted cost: generic discipline is no longer injected every session. Neither harness requires test-first, and the `AGENTS.md` testing rules covered how tests look, not whether they are written. Mitigation: a one-line test-first rule in `AGENTS.md` (Task 5), and hooks enforce formatting and lint. Rejected for now: a Stop hook that blocks when `backend/app/` changes without `backend/tests/` changes, because test-first has real exceptions (refactors, config) and the hook would misfire; revisit with new research if agents keep skipping tests.
 
 Personal user-level skills and instructions (`~/.codex/skills/`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) are out of scope. The project does not depend on them, so sharing them between agents is personal setup, not repository tooling. Task 9 only removes the third-party packs.
 
@@ -35,6 +39,14 @@ Simpler alternative kept available: Tasks 1–5 alone give a working cross-agent
 ## Skill Selection
 
 New skills must add information or verification a model cannot derive alone. UI verification is prioritized because the mockup-authority rule is the strictest rule in `AGENTS.md` and currently has no check. Generic code-review and planning skills are rejected in favor of built-in features and `docs/plans/README.md`.
+
+### Skill Gotchas
+
+A problem goes into a skill's `## Gotchas` only when code cannot prevent it. A fixture, a clear error, a lint rule, or a test reaches every agent and human on every run; a skill entry helps only when the skill is loaded. Entries are one line with a file pointer, capped at about 8 per skill, and pruned during Task 10's review.
+
+New gotchas are captured through an `AGENTS.md` rule: the agent proposes a code fix or gotcha in its final message after a costly repository-specific problem, and the user approves it. The rule is in `AGENTS.md` because it is always loaded, and approval keeps the list small.
+
+Rejected: a separate `gotchas.md` linked from the skill (agents often skip linked files); comments in `conftest.py` only (seen only when that code is opened); a check only at plan-task completion (misses unplanned work); manual capture only (depends on the user remembering).
 
 ## Hook Safety
 

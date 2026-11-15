@@ -15,6 +15,7 @@ RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Mast
 - Keep `README.md` limited to product description, setup, running, debugging, prerequisites, and verification commands.
 - Record architecture, workflow, scope, reasoning, and implementation handoffs under `docs/`, updating a current plan when intended behavior changes.
 - Agent instructions, skills, and hooks are shared between Codex and Claude Code; see `docs/agent-tooling.md` before changing them.
+- When a repository-specific problem costs a debug cycle, propose a code fix or a one-line gotcha for the matching skill in your final message. Do not edit the skill without approval.
 
 ## Architecture Boundaries
 
@@ -46,7 +47,8 @@ RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Mast
 
 ## Backend Tests
 
-- Use `.agents/skills/py-db-tdd/SKILL.md` when working on Python backend tests.
+- Use `.agents/skills/py-db-tdd/SKILL.md` when writing, changing, or reviewing pytest tests under `backend/tests/`, including when a backend feature or bug fix needs new or updated tests.
+- A backend behavior change or bug fix includes a test that fails without the change; write it first.
 - Keep infrastructure plumbing in `backend/tests/conftest.py`; keep scenario data visible in each test's Arrange step.
 - Prefer explicit factory fixtures such as `owner_factory`, `campaign_factory`, `entity_factory`, and `relationship_factory`. Avoid named scenario fixtures.
 - Use `db_session_factory()` only when shared session state is part of the scenario.
