@@ -41,3 +41,13 @@ These are not current technical debt. Reconsider an option only when its trigger
 **Current default:** Keep explicit foreign keys, deletion checks, database triggers, and tests aligned.
 
 **Consider:** First add schema-level contract coverage that detects new asset references without matching deletion coordination. Consider a reference registry only if explicit foreign keys and checks remain unmanageable; a polymorphic registry would otherwise duplicate ownership information and weaken relational clarity.
+
+## AI-first PostgreSQL-only pipeline
+
+**Trigger:** Work is about to start on v1 Task 9 or any task in the cloud-ready asset pipeline plan, or work is requested on LLM extraction, evals, RAG, Google Docs/Sheets import, multi-user access, or player-facing data separation.
+
+**Decision required:** Decide whether to adopt `docs/proposals/2026-11-11-ai-first-pipeline-alternative.md` in place of the MinIO, Redis Streams, MongoDB, and worker pipeline before building any of that infrastructure.
+
+**Current default:** The current plans under `docs/plans/` remain authoritative. The proposal is not adopted.
+
+**Consider:** Drop MongoDB, defer Redis, S3 storage, and the separate worker until hosting, keep parsed sections and jobs in PostgreSQL, import from Google Docs and Sheets, and build the AI layer first as a standalone toolkit. Adopting it requires the plan, reasoning, and `AGENTS.md` updates listed at the end of the proposal.
