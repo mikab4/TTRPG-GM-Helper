@@ -42,6 +42,12 @@ New skills must add information or verification a model cannot derive alone. UI 
 
 Rejected: a separate `new-alembic-migration` skill (Task 6). Applying migrations needs no agent (`compose.yaml` sets `AUTO_APPLY_MIGRATIONS`; local runs use `alembic upgrade head`). For writing them, the revision-ID convention is better enforced in `backend/alembic/env.py` (tracked in `docs/issues.md`), data preservation is already an `AGENTS.md` rule, and `downgrade()` follows from the existing revisions. The remaining gap, which migration tests to write, is a few lines in `py-db-tdd`, which already loads for backend tests.
 
+### UI Verification: Tool Plus Thin Skill
+
+Deterministic work (capture, fake API, style measurement) is code in `frontend/scripts/mockup-compare/` so it gets type checks, lint, and package resolution, and humans can run it without an agent. The skill holds only the judgment steps: reading screenshots for composition, checking `design-deviations.md`, and reporting. Playwright is a pinned dev dependency so Codex and Claude run the same check. Faked API data keeps runs deterministic and keeps test records out of the dev database; typing fixtures with `frontend/src/types` makes API drift a build error. Measured computed styles catch exact color, size, and spacing differences that screenshots alone miss. Differences found on existing screens go to `docs/issues.md`, because `design-deviations.md` records approvals only and this plan does not change application code.
+
+Rejected: each agent's own browser tooling (a different procedure per agent); unpinned `npx playwright` (version drift); a real backend with seeded data (slow, writes to the dev database); screenshot-only judgment (unreliable on exact values); pixel diff (flags every content difference and adds a second dependency); the selector map in the skill folder (no package resolution, type checks, or lint there); fixing differences inside Task 7 (outside this plan's scope, and each fix needs design approval).
+
 ### Skill Gotchas
 
 A problem goes into a skill's `## Gotchas` only when code cannot prevent it. A fixture, a clear error, a lint rule, or a test reaches every agent and human on every run; a skill entry helps only when the skill is loaded. Entries are one line with a file pointer, capped at about 8 per skill, and pruned during Task 10's review.

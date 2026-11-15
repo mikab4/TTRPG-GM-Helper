@@ -1,7 +1,7 @@
 # Cross-Agent Tooling Implementation Plan
 
 **Applies to:** AI agent instructions, skills, hooks, and permissions for Codex and Claude Code
-**Related code:** `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.codex/`, `.claude/`, `.githooks/`, `.gitignore`
+**Related code:** `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.codex/`, `.claude/`, `.githooks/`, `.gitignore`, `frontend/package.json`, `frontend/scripts/mockup-compare/`
 **Deferred design triggers:** None
 
 **Goal:** Make the repository's agent setup work identically in Codex and Claude Code from one shared source, drop third-party skill packs (superpowers, gstack), and keep only project-specific skills that add information a current model does not already have.
@@ -28,7 +28,7 @@ Resolve each question at the start of the task that owns it, then record the ans
 | Q1 | Does Claude Code accept Codex's `statusMessage` hook field, or must it be dropped from the Claude config? | Task 3 |
 | Q2 | Which Codex allow-rules are general enough to commit to `.claude/settings.json`? | Task 4 |
 | Q3 | What conventions do existing Alembic revisions and `backend/tests/test_migrations.py` follow? | Task 6 |
-| Q4 | Which browser tool does UI verification use: a Playwright dev dependency, or the agent's own browser tooling? | Task 7 |
+| Q4 | Which browser tool does UI verification use: a Playwright dev dependency, or the agent's own browser tooling? | Task 7 (resolved: Playwright) |
 | Q5 | Is a `close-plan-task` skill worth its context cost, or is the `AGENTS.md` rule enough? | Task 8 |
 
 ---
@@ -144,15 +144,18 @@ Verification: checks a–d pass in a shell. Claude (`claude -p`): each hook bloc
 
 **Summary:** Q3: revisions use `YYYYMMDD_NNNN` IDs and `YYYYMMDD_NNNN_slug.py` file names, always implement `downgrade()` (0003 copies data back), and are tested in `backend/tests/test_migrations.py` with schema checks after `upgraded_postgres_test_engine()` plus, for data reshapes, an upgrade-from-previous-revision backfill test. The separate skill was dropped: once the revision-ID fix in `docs/issues.md` lands, the only guidance not already in `AGENTS.md` or the existing migrations is which tests to write. That went into a "Migration Tests" section in `.agents/skills/py-db-tdd/SKILL.md`. Migration problems that code can fix are tracked in `docs/issues.md`. Step 3 was not run because no skill was created.
 
-## Task 7: `verify-ui-against-mockup` Skill
+## Task 7: `verify-ui-against-mockup` Skill and `mockup:compare` Tool
 
-**Status:** Planned
-**Estimate:** 1 to 2 hours, depending on Q4
+**Status:** Complete
 
 1. Resolve Q4. A new dev dependency requires recording the decision here and in the reasoning document before installation.
 2. Create `.agents/skills/verify-ui-against-mockup/SKILL.md`: locate the matching view in `docs/mockups/workspace-v1.html`, run the frontend, capture screenshots, compare composition, typography, colors, spacing, and control placement, and list every difference.
 3. For each difference, check `docs/mockups/design-deviations.md`; report unapproved differences instead of fixing them silently.
 4. Verify on one existing screen.
+
+**Decisions:** Q4: Playwright as a pinned dev dependency in `frontend/`. API responses are faked by route interception with fixtures typed by `frontend/src/types`; no backend or database runs. Default widths are 1440, 800, and 390, plus a `--width` band when a change touches a 640–768 px rule. The tool measures computed styles of mapped element pairs and saves screenshots; a missing selector or unfaked API request fails the run. Deterministic work lives in a tool in `frontend/scripts/mockup-compare/`; the skill holds only the judgment and reporting steps. Differences found on the trial screen go to `docs/issues.md`, not into app code.
+
+**Summary:** Added `playwright` and `@types/node` (so `tsc` checks the script) to `frontend/devDependencies` and `npm run mockup:compare -- <screen> [--width <px>]`, which runs `frontend/scripts/mockup-compare/compare.ts` with Node's built-in TypeScript support. The tool starts Vite with `VITE_API_BASE_URL=/mockup-api`, serves fixtures from `fixtures.ts` (camelCase app types converted to the snake_case wire format), opens the app route and the mockup at each width, and writes `app.png`, `mockup.png`, and `report.md` to gitignored `frontend/.mockup-compare/<screen>/`. `screens.ts` holds each screen's route, fake API, and selector map; `app: null` and `mockup: null` mark elements that exist on one side only. Border colors with no border and `gap` on non-flex/grid elements are not reported. `tsconfig.scripts.json` is referenced from `tsconfig.json`, and ESLint and Prettier cover `scripts/`. The skill and a matching `AGENTS.md` pointer under Frontend Design Authority were added. Verified on the Entities tab (screen `entities`): the run completes with no errors, a broken selector and an unfaked request both fail it with exit code 1, and the unapproved differences are recorded in `docs/issues.md` under "Entities Tab Differs From the Mockup".
 
 ## Task 8: Optional `close-plan-task` Skill
 

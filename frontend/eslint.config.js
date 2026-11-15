@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "eslint.config.js", "src/test/setup.mjs"],
+    ignores: ["dist", "eslint.config.js", "src/test/setup.mjs", ".mockup-compare"],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
@@ -16,7 +16,7 @@ export default tseslint.config(
       ecmaVersion: 2022,
       globals: globals.browser,
       parserOptions: {
-        project: "./tsconfig.eslint.json",
+        project: ["./tsconfig.eslint.json", "./tsconfig.scripts.json"],
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -25,6 +25,12 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+    },
+  },
+  {
+    files: ["scripts/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   eslintConfigPrettier,

@@ -29,6 +29,7 @@ dist/
 
 # Frontend
 node_modules/
+frontend/.mockup-compare/
 
 # Local environment files
 .env

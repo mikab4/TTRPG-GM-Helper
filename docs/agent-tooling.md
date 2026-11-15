@@ -52,3 +52,4 @@ The git pre-commit hook in `.githooks/pre-commit` runs for both agents and for h
 | `.codex/config.toml`, `.codex/hooks.json` | Codex wiring only |
 | `.claude/settings.json` | Claude hook wiring and shared permissions |
 | `.claude/settings.local.json` | Personal Claude settings; gitignored |
+| `frontend/scripts/mockup-compare/` | `npm run mockup:compare` tool used by `verify-ui-against-mockup`; output goes to gitignored `frontend/.mockup-compare/` |

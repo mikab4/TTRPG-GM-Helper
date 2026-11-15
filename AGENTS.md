@@ -35,6 +35,7 @@ RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Mast
 - Match the mockup as strictly as the implemented product behavior permits. Preserve its composition, hierarchy, proportions, responsive intent, Inter/Cinzel typography, colors, spacing, borders, shadows, control styling, button placement, and interaction states. Do not make liberal creative substitutions or visual "improvements."
 - Treat any difference from the mockup—including colors, fonts, dimensions, spacing, component placement, button placement, or interaction behavior—as a design deviation requiring explicit approval from the responsible engineer before implementation.
 - If a required route, section, tab, state, or error-handling path has no mockup design, stop before making the design choice. Explain the missing design, propose the smallest mockup-consistent solution, and implement it only after the responsible engineer approves it.
+- Use `.agents/skills/verify-ui-against-mockup/SKILL.md` when planning, implementing, or reviewing a change to a frontend screen, to compare it with `docs/mockups/workspace-v1.html` and report every difference.
 - Record every approved deviation in `docs/mockups/design-deviations.md`, including the affected surface, mockup baseline, approved change, rationale, and whether the mockup needs a later update. Product behavior may require additions, but it does not silently authorize presentation changes.
 
 ## Repository And Commands

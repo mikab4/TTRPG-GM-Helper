@@ -11,7 +11,8 @@
     "format:check": "prettier --check .",
     "build": "tsc -b && vite build",
     "test": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mockup:compare": "node scripts/mockup-compare/compare.ts"
   },
   "dependencies": {
     "lucide-react": "^1.7.0",
@@ -23,6 +24,7 @@
     "@eslint/js": "^9.35.0",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.2",
@@ -31,6 +33,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.4.0",
     "jsdom": "^26.1.0",
+    "playwright": "^1.65.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.41.0",
