@@ -40,6 +40,8 @@ Simpler alternative kept available: Tasks 1–5 alone give a working cross-agent
 
 New skills must add information or verification a model cannot derive alone. UI verification is prioritized because the mockup-authority rule is the strictest rule in `AGENTS.md` and currently has no check. Generic code-review and planning skills are rejected in favor of built-in features and `docs/plans/README.md`.
 
+Rejected: a separate `new-alembic-migration` skill (Task 6). Applying migrations needs no agent (`compose.yaml` sets `AUTO_APPLY_MIGRATIONS`; local runs use `alembic upgrade head`). For writing them, the revision-ID convention is better enforced in `backend/alembic/env.py` (tracked in `docs/issues.md`), data preservation is already an `AGENTS.md` rule, and `downgrade()` follows from the existing revisions. The remaining gap, which migration tests to write, is a few lines in `py-db-tdd`, which already loads for backend tests.
+
 ### Skill Gotchas
 
 A problem goes into a skill's `## Gotchas` only when code cannot prevent it. A fixture, a clear error, a lint rule, or a test reaches every agent and human on every run; a skill entry helps only when the skill is loaded. Entries are one line with a file pointer, capped at about 8 per skill, and pruned during Task 10's review.

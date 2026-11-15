@@ -135,12 +135,14 @@ Verification: checks a–d pass in a shell. Claude (`claude -p`): each hook bloc
 
 ## Task 6: `new-alembic-migration` Skill
 
-**Status:** Planned
+**Status:** Replaced (folded into `py-db-tdd`)
 **Estimate:** 45 minutes
 
 1. Resolve Q3 by reading `backend/alembic/versions/`, `backend/alembic/env.py`, and `backend/tests/test_migrations.py`.
 2. Create `.agents/skills/new-alembic-migration/SKILL.md` covering: revision naming, data-preserving migrations (from `AGENTS.md`), required migration test coverage, and gotchas.
 3. Verify: ask each agent to draft a trivial migration in a scratch branch and confirm it follows the skill.
+
+**Summary:** Q3: revisions use `YYYYMMDD_NNNN` IDs and `YYYYMMDD_NNNN_slug.py` file names, always implement `downgrade()` (0003 copies data back), and are tested in `backend/tests/test_migrations.py` with schema checks after `upgraded_postgres_test_engine()` plus, for data reshapes, an upgrade-from-previous-revision backfill test. The separate skill was dropped: once the revision-ID fix in `docs/issues.md` lands, the only guidance not already in `AGENTS.md` or the existing migrations is which tests to write. That went into a "Migration Tests" section in `.agents/skills/py-db-tdd/SKILL.md`. Migration problems that code can fix are tracked in `docs/issues.md`. Step 3 was not run because no skill was created.
 
 ## Task 7: `verify-ui-against-mockup` Skill
 

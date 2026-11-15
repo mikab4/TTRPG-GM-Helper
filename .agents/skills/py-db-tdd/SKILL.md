@@ -20,6 +20,13 @@ Follow the "Backend Tests" rules in `AGENTS.md`. This skill adds where the test 
 - Default: SQLite. Factory fixtures, `db_session_factory`, and `api_request` all use `sqlite_engine`.
 - Use PostgreSQL only when the behavior depends on it: migrations, JSONB behavior, or PostgreSQL-only constraints. See `postgres_session` in `backend/tests/test_models.py` and `backend/tests/test_migrations.py`.
 
+## Migration Tests
+
+A new revision in `backend/alembic/versions/` needs tests in `backend/tests/test_migrations.py`:
+
+- Every revision: check its tables, columns, or constraints after upgrading to `head` with `upgraded_postgres_test_engine()`.
+- A revision that moves, renames, or reshapes existing data also needs a data-preservation test: `command.upgrade` to the previous revision, insert old-shape rows with raw SQL, upgrade to `head`, assert the data survived, and `command.downgrade(..., "base")` in `finally`. Template: `test_upgrade_from_20260410_backfills_legacy_source_document_into_source_asset_and_parse_result`.
+
 ## Factory Fixtures
 
 Each factory fixture opens, commits, and closes its own session, and returns a detached row. To create rows inside a session you already hold, pass `db_session=`:
