@@ -40,3 +40,7 @@ frontend/.env
 .DS_Store
 .idea/
 .vscode/
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/

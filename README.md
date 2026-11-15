@@ -7,6 +7,7 @@ RPG GM Helper is a local-first workspace for tabletop RPG Game Masters. It manag
 - Docker Engine, or Docker Desktop with WSL integration
 - CPython 3.14 and [uv](https://docs.astral.sh/uv/) for local backend debugging and tests
 - Node.js and npm for local frontend debugging and tests
+- jq, for the Codex and Claude Code Stop hooks
 
 ## Run the application
 

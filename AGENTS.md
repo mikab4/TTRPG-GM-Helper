@@ -14,6 +14,7 @@ RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Mast
 - When implementation completes or materially changes a task in a current plan, update that task in the same work. Retain its original intent and steps, set its current status, add a concise summary of what was implemented, and correct outdated paths or schema descriptions. Update the sibling reasoning document when an architectural decision or trade-off changes.
 - Keep `README.md` limited to product description, setup, running, debugging, prerequisites, and verification commands.
 - Record architecture, workflow, scope, reasoning, and implementation handoffs under `docs/`, updating a current plan when intended behavior changes.
+- Agent instructions, skills, and hooks are shared between Codex and Claude Code; see `docs/agent-tooling.md` before changing them.
 
 ## Architecture Boundaries
 

@@ -15,9 +15,9 @@ Natural-language input is sufficient. Do not require a saved plan or rigid headi
 
 ## Initial plan workflow
 
-1. **REQUIRED SUB-SKILL:** Use `superpowers:receiving-code-review` to assess the finding rather than assuming it is correct.
+1. Treat the finding as a claim to verify, not a fact. Check it against the current code before accepting it.
 2. Read applicable `AGENTS.md` instructions and their required source-of-truth documents. Read every user-supplied scope or design reference before deciding the plan.
-3. Inspect only the files, contracts, tests, and nearby behavior needed to verify the finding. State a reasoned objection if it conflicts with an approved design or is not technically sound.
+3. Inspect only the files, contracts, tests, and nearby behavior needed to verify the finding. If it is wrong or conflicts with an approved design, state a reasoned objection citing repository evidence (file:line, plan, or test).
 4. Produce a plan only. Include the verified success condition, exact files likely to change, lifecycle/error/cleanup behavior, a simpler alternative when adding meaningful complexity, and behavioral tests.
 5. Do not implement, edit product code, create test code, modify configuration, run mutating application commands, or create a plan document unless the user separately requests that artifact.
 

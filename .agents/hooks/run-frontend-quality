@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/hook-common.sh"
+
 declare -A seen_format_files=()
 declare -A seen_lint_files=()
 format_files=()
@@ -33,18 +35,15 @@ done < <(
 )
 
 if [[ ${#format_files[@]} -eq 0 ]]; then
-  echo '{"continue":true}'
-  exit 0
+  allow_stop
 fi
 
 if [[ ! -x frontend/node_modules/.bin/prettier ]]; then
-  echo '{"decision":"block","reason":"Frontend files changed, but Prettier is unavailable. Run npm install in frontend."}'
-  exit 0
+  block_stop "Frontend files changed, but Prettier is unavailable. Run npm install in frontend."
 fi
 
 if [[ ${#lint_files[@]} -gt 0 && ! -x frontend/node_modules/.bin/eslint ]]; then
-  echo '{"decision":"block","reason":"Frontend code changed, but ESLint is unavailable. Run npm install in frontend."}'
-  exit 0
+  block_stop "Frontend code changed, but ESLint is unavailable. Run npm install in frontend."
 fi
 
 quality_log="$(mktemp)"
@@ -54,18 +53,14 @@ if ! (
   cd frontend
   ./node_modules/.bin/prettier --write "${format_files[@]}"
 ) >"$quality_log" 2>&1; then
-  cat "$quality_log" >&2
-  echo '{"decision":"block","reason":"Prettier could not format the changed frontend files. Inspect the remaining formatting error."}'
-  exit 0
+  block_stop "Prettier could not format the changed frontend files. Remaining Prettier output:" "$quality_log"
 fi
 
 if [[ ${#lint_files[@]} -gt 0 ]] && ! (
   cd frontend
   ./node_modules/.bin/eslint --fix "${lint_files[@]}"
 ) >"$quality_log" 2>&1; then
-  cat "$quality_log" >&2
-  echo '{"decision":"block","reason":"ESLint could not fully fix the changed frontend files. Inspect the remaining lint diagnostics."}'
-  exit 0
+  block_stop "ESLint could not fully fix the changed frontend files. Remaining ESLint output:" "$quality_log"
 fi
 
-echo '{"continue":true}'
+allow_stop

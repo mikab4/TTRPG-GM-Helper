@@ -5,13 +5,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .codex/hooks/run-backend-quality",
+            "command": "bash .agents/hooks/run-backend-quality",
             "statusMessage": "Formatting and checking changed backend files",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash .codex/hooks/run-frontend-quality",
+            "command": "bash .agents/hooks/run-frontend-quality",
             "statusMessage": "Formatting and checking changed frontend files",
             "timeout": 60
           }
