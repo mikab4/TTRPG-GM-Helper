@@ -1,41 +1,62 @@
 # RPG GM Helper V1 Decision Reasoning
 
 **Applies to:** overall product architecture, technology choices, ingestion, extraction, search, and deferred scope
-**Related code:** `backend/`, `frontend/`, `docs/mockups/workspace-v1.html`, `compose.yaml`; planned `processor/`
-**Deferred design triggers:** None
+**Related code:** `backend/`, `frontend/`, `docs/mockups/workspace-v1.html`, `compose.yaml`
+**Deferred design triggers:** World-owned reusable assets: the tenant level (campaign, owner, or world) must be decided before Task 13 adds membership and before Task 14 adds embedding tables
 
 ## Purpose And Current Decision State
 
-The product must help a single local Game Master turn campaign material into structured, reviewable, searchable records while preserving where each fact came from. It is not trying to become a complete worldbuilding suite, public SaaS, or autonomous AI knowledge base in v1.
+The product must help a Game Master turn campaign material into structured, reviewable, searchable records while preserving where each fact came from. It runs for one local GM today and is being built toward several users, with players who see only part of the campaign data. It is not trying to become a complete worldbuilding suite or an autonomous AI knowledge base.
 
-Tasks 1–8 are implemented. The next step is the real `.txt` processing slice in Task 9. This reasoning document records the decisions that still govern the current plan; completed implementation details remain authoritative in code, migrations, tests, and archived task plans.
+Tasks 1–8 are implemented. The next step is Task 9, which fixes the problems found in the 2026-11-16 review before the pipeline is built. This reasoning document records the decisions that still govern the current plan; completed implementation details remain authoritative in code, migrations, tests, and archived task plans.
 
-## Why A Modular Monolith Plus One Worker
+## Direction Change On 2026-11-16
+
+The deferred option "AI-first PostgreSQL-only pipeline" was **activated**. The proposal written on 2026-11-11 replaced the MinIO, Redis Streams, MongoDB, and separate-worker pipeline; this section keeps its reasoning, and the proposal itself was deleted after adoption. The old detailed plan and its reasoning are archived under `docs/plans/archive/2026-08-08-cloud-ready-asset-intelligence-pipeline*.md`.
+
+Two things changed since the old pipeline was approved:
+
+| Change | Before | Now |
+|--------|--------|-----|
+| Learning goal | Infrastructure: Redis, MongoDB, MinIO, a worker service | AI engineering: LLM extraction, evals, RAG, later MCP and agents |
+| Product direction | Single user on a local computer | Multiple users, with players who see only part of the campaign data |
+
+The old reasoning already said the worker pipeline was "justified by the explicit infrastructure-learning goal, not by current scale" and named the PostgreSQL-only design as the cheaper alternative. With the learning goal gone, the justification is gone too.
+
+| Technology | Decision | Reason |
+|------------|----------|--------|
+| MongoDB | Dropped | The data is relational. Access rules need joins and transactions. `asset_parse_results` already has JSONB and raw-text columns |
+| MinIO / S3 | Deferred until hosting | Local disk works for one machine. `AssetStorage` is the place to plug S3 in |
+| Redis Streams | Deferred | A PostgreSQL job row is enough until the queue is a bottleneck |
+| Separate worker service | Deferred until hosting | Start as a backend module. Split it out when one user's slow job can hurt other users |
+| Transactional outbox, dead-letter stream | Dropped | They coordinate PostgreSQL with Redis. Without Redis there is nothing to coordinate |
+| pgvector | Added | Retrieval inside PostgreSQL, so access rules apply to it too |
+
+The deferred infrastructure is recorded as "Hosted processing infrastructure" in `docs/deferred_design_options.md`.
+
+"World-owned reusable assets" **remains deferred** but now has a deadline: the tenant level must be decided before Task 13. Moving the boundary later means migrating every table.
+
+## Why A Modular Monolith Without A Separate Worker
 
 Campaign CRUD, validation, review, and canonical writes belong together in FastAPI because they share one product workflow and one source of truth. Broad microservices would add deployment, failure, and coordination costs without corresponding team or ownership boundaries.
 
-Parsing and extraction are the one justified runtime boundary. They are slow, retryable, and failure-prone, so running them outside API requests improves isolation and creates a useful place to learn queueing and recovery behavior.
+Parsing and extraction are slow, retryable, and failure-prone, so they must not run inside ordinary API requests. For one local user, a PostgreSQL job row and a backend background task give that isolation without a second service. On startup, jobs stuck in `running` are marked `failed` so they can be rerun.
 
 The chosen shape is therefore:
 
-- one FastAPI application for canonical domain and workflow behavior;
-- one PostgreSQL database for canonical state;
-- one independently runnable asset processor for parsing and extraction;
-- narrow adapters for file storage, queue transport, parsed projections, and future model providers.
+- one FastAPI application for canonical domain and workflow behavior, including parsing and extraction modules;
+- one PostgreSQL database for all state, including parsed sections, jobs, candidates, and embeddings;
+- narrow adapters for file storage and model providers.
 
-The simpler alternative remains synchronous processing in the monolith with PostgreSQL and local files. It would be cheaper for a product-only MVP. The approved worker/Redis/MinIO/MongoDB design is justified by the explicit infrastructure-learning goal, not by current scale.
+A separate worker with a queue was the previous design. It becomes justified again when the app is hosted and one user's slow job can hurt other users.
 
-## Why PostgreSQL Owns Canonical State
+## Why PostgreSQL Is The Only Datastore
 
-PostgreSQL is authoritative for campaigns, entities, relationships, sessions, assets, processing jobs, extraction jobs, candidates, review decisions, provenance, and outbox state. Transactional constraints are especially valuable for campaign isolation and human-reviewed promotion of candidates.
+PostgreSQL is authoritative for campaigns, entities, relationships, sessions, assets, jobs, parsed sections, candidates, review decisions, provenance, membership, and visibility. Transactional constraints are especially valuable for campaign isolation and human-reviewed promotion of candidates.
 
-Supporting systems have narrower roles:
+Once players exist, every read must pass an access rule. Keeping parsed text and embeddings in the same database means one set of rules, enforced by joins and Row-Level Security, covers search and retrieval as well as CRUD. A second store would need its own copy of those rules and could leak text the rules were meant to hide.
 
-- MinIO/S3 stores original file bytes and optional large artifacts.
-- Redis Streams transports work; it does not decide whether a job exists or succeeded.
-- MongoDB stores versioned parsed-document projections that can be rebuilt from originals and canonical metadata.
-
-This replaces the obsolete claim that PostgreSQL is the only v1 database. Multiple datastores are accepted, but competing ownership is not.
+Only original file bytes live outside PostgreSQL, behind `AssetStorage`.
 
 ## Where Schema Truth And Reasoning Live
 
@@ -92,73 +113,86 @@ The completed compatibility migration preserved existing `session_notes` and `so
 
 ## Why Asset Ingestion And Storage Are Backend-Owned
 
-Backend ownership gives every caller the same validation, checksum, storage, lifecycle, and provenance behavior. Browser-side canonical parsing would produce inconsistent results across the UI, future imports, and worker processing.
+Backend ownership gives every caller the same validation, checksum, storage, lifecycle, and provenance behavior. Browser-side canonical parsing would produce inconsistent results across the UI and imports.
 
-Original files do not belong in PostgreSQL blobs. The implemented upload path already goes through `backend/app/services/asset_storage.py`; its local-filesystem backend is transitional. Task 9 changes the implementation to MinIO through an S3-compatible boundary so the API and worker never depend on a shared local path.
+Original files do not belong in PostgreSQL blobs. Uploads and imports go through `backend/app/services/asset_storage.py`. Its local-filesystem backend stays until hosting. Callers never use paths, so an S3 backend can replace it without changing them. The boundary can only store and delete today; Task 10 adds reading and storing bytes that do not come from an upload.
 
-Asset metadata reads must never hide parsing or queue submission. Processing is an explicit workflow with observable state.
+Notes come from Google Docs and Google Sheets first, because that is where the real notes are. A live document can change, so every import saves a snapshot as a source asset and provenance points to that fixed version.
+
+Asset metadata reads must never hide parsing or job submission. Processing is an explicit workflow with observable state.
 
 ## Why Parsing Is Asynchronous, Explicit, And Separate From Extraction
 
 Parsing normalizes a file into reusable text and structure. Extraction interprets that representation and proposes campaign facts. Keeping them separate allows preview, search, and multiple extractor versions to reuse one parse while preserving debuggability and provenance.
 
-The old lazy-parse-on-dependent-read design is rejected. It makes latency and failure surprising, couples cheap reads to expensive work, and obscures retry state. The worker pipeline instead uses explicit processing jobs and callbacks.
+The old lazy-parse-on-dependent-read design is rejected. It makes latency and failure surprising, couples cheap reads to expensive work, and obscures retry state. Processing instead starts from an explicit job.
 
-The obsolete hybrid parse cache—small content inline in PostgreSQL and large content in file storage—is also rejected for new processing. MongoDB is the rebuildable, versioned parsed-document projection. The existing `AssetParseResult` table remains compatibility/provenance groundwork and must not become a competing current projection design.
+Parsed sections are stored in `asset_parse_results`, versioned by parser kind, parser version, and source checksum. That uniqueness makes reruns idempotent and is the same pattern used to cache LLM results by checksum, model, and prompt version. An earlier revision of this document called the table compatibility groundwork and placed parsed documents in MongoDB; that is superseded.
 
-Search and extraction consume parsed documents, not raw file containers. Raw bytes remain the preserved source artifact.
+Search and extraction consume parsed sections, not raw file containers. Raw bytes remain the preserved source artifact.
 
-## Why The First Worker Slice Is Narrow
+## Why Hardening Comes Before The Pipeline
 
-Task 9 proves one real path through MinIO, PostgreSQL, Redis, the processor, MongoDB, and an idempotent FastAPI completion callback using `.txt`. It postpones extraction, retries, outbox relay, and additional formats so infrastructure failures can be localized.
+The 2026-11-16 code and security review found a small set of correctness and schema problems: files left behind on campaign delete, races that return 500 instead of 409, a missing lock in the asset-delete trigger, free-text status columns, and over-eager loading of campaign collections. None is severe for one local user. All of them get more expensive once jobs, candidates, chunks, and membership are built on the same tables, so Task 9 fixes them first.
 
-An in-process queue or fake storage implementation would not validate the approved boundaries. Building all formats and recovery behavior at once would increase debugging surface before the core path works.
+The model-versus-migration check matters most. The API tests run on SQLite with tables built from the models, so a forgotten migration can pass the whole suite. The pipeline adds several migrations in a row.
 
-Direct Redis publication is acceptable only in this first learning slice. Task 10 immediately adds a transactional outbox because a database commit followed by queue publication otherwise has an unavoidable failure window.
+Some suggestions were deliberately not scheduled now. Reordering composite keys to put `campaign_id` first is correct but rewrites every composite key, so it waits for the tenant-level decision. Optimistic locking, `SKIP LOCKED`, pagination, and running migrations as a deploy step only matter with several users or instances.
 
 ## Why Parsed Documents Are Format-Neutral And Multilingual
 
-The target parsed projection records asset identity, checksum, parser kind/version, and ordered sections. Each section can carry Unicode text, optional structure, source location, and language hints. CSV/XLSX, PDF, and later office formats add section kinds without changing storage, job, callback, or provenance contracts.
+The parsed contract records asset identity, checksum, parser kind/version, and ordered sections. Each section can carry Unicode text, optional structure, source location, and a language field. Spreadsheets, PDF, and later office formats add section kinds without changing storage, job, or provenance contracts.
 
-Language is a per-section hint rather than one definitive document label because campaign notes may mix Hebrew, English, names, and invented terms. Exact Unicode preservation is more important than premature normalization or forced classification.
+English notes are supported first because the GM's own notes are in English. Players' notes are in Hebrew and mixed language, so the contract stays multilingual from the start: no English-only shortcuts in code, a multilingual embedding model, and language recorded per section rather than per document. Exact Unicode preservation is more important than premature normalization or forced classification. A known later problem is resolving one name written in two scripts to one entity.
 
 DOCX and ODT require bounded archive inspection before support. Images remain storable but unparsed until OCR has its own explicit plan and security/performance budget.
 
-## Why Extraction Is Rules-First And Human-Reviewed
+## Why Extraction Has A Rules Baseline, A Real Model, And Human Review
 
-Deterministic rules provide a debuggable baseline. Extractor, parser, source checksum, and optional provider/model/prompt versions belong in provenance so results can be reproduced and compared.
+Deterministic rules provide a debuggable baseline and a fixture oracle. A real LLM is now called behind the same extractor interface, because learning LLM extraction and evals is the goal. Extractor, parser, source checksum, provider, model, and prompt versions belong in provenance so results can be reproduced and compared.
 
-Extractors create candidates, never canonical entities or relationships. Users must be able to edit, approve, or reject those candidates through FastAPI-owned workflow rules. This protects the campaign record from uncertain model output and keeps the future model adapter replaceable.
+Evals are part of the design, not an afterthought. A hand-labeled set and a scoring script are the regression check for every prompt or model change; without them a prompt change cannot be judged.
+
+Extractors create candidates, never canonical entities or relationships. Users must be able to edit, approve, or reject those candidates through FastAPI-owned workflow rules. This protects the campaign record from uncertain model output and keeps the model adapter replaceable. Candidates are GM-only until reviewed, so model output cannot leak to players.
 
 Extraction runs and candidates remain separate records because rerun history and review state have different lifecycles. One generic candidate table supports a single review queue while entity and relationship extraction are still evolving; separate subtype tables can wait until their behavior requires distinct constraints rather than merely distinct payloads.
 
-An LLM-first autonomous write path would add nondeterminism, cost, and trust problems before the review loop is proven.
+The AI work is built first as a standalone toolkit so its hours go to AI rather than routes, migrations, and UI approvals. To stop the toolkit and the app from drifting apart, the toolkit uses this app's entity and relationship types as its output schema.
 
-## Why Search Is PostgreSQL Full-Text Search First
+## Why Search Combines Full-Text Search And pgvector In PostgreSQL
 
-The first retrieval goal is dependable campaign-scoped keyword search across entity names/summaries, sessions, and parsed asset text. PostgreSQL full-text search is inspectable, inexpensive, and sufficient for that milestone.
+Dependable campaign-scoped keyword search across entity names/summaries, sessions, and parsed asset text comes first. PostgreSQL full-text search is inspectable, inexpensive, and sufficient for that.
 
-Semantic/vector search remains a later option behind the search service boundary. Good provenance and reviewed structured data matter more than sophisticated retrieval over noisy records. Parsed sections still provide future chunking and embedding inputs without committing v1 to a vector database.
+Semantic retrieval is added behind the same search service with pgvector rather than a dedicated vector database. Queries are always inside one campaign, so the number of vectors searched is small, and keeping them in PostgreSQL lets visibility filters run before an LLM sees any text. A dedicated vector store would only be needed for search across campaigns.
 
-## Why Auth, External Sync, And More Services Are Deferred
+Good provenance and reviewed structured data still matter more than sophisticated retrieval over noisy records.
 
-The app is local and single-user. The `Owner` record and explicit campaign ownership preserve a migration path, but public login, authorization policy, and tenant enforcement would add substantial product and test scope without helping the current workflow.
+## Why Users And Players Are In Scope, And What Stays Deferred
 
-External platform synchronization, including Kanka, is deferred because it introduces identity mapping, conflict resolution, deletion semantics, rate limits, and secret management. Export can be added before bidirectional sync if portability becomes important.
+Players who see only part of the campaign are now a product goal, so login, membership, and visibility are planned work (Task 13) instead of deferred scope. The `Owner` record and explicit campaign ownership were kept as the seam for this, and every query already filters by `campaign_id`, so one role check at the campaign level covers all child resources.
 
-Separate CRUD services, model serving, production cloud deployment, semantic search, OCR, training pipelines, and automatic model write-back are likewise outside v1.
+Login uses a managed auth provider; building it by hand adds risk without learning value. Access is enforced in services, with Row-Level Security as a second guard, because a forgotten filter in one query would otherwise leak data. The frontend and LLM prompts are never security boundaries.
+
+Until Task 13 lands the API has no login, so it must not be reachable from other machines. That is why Task 9 binds the Compose ports to the local machine.
+
+External platform synchronization, including Kanka, is deferred because it introduces identity mapping, conflict resolution, deletion semantics, rate limits, and secret management. Google Docs and Sheets import is one-way and snapshot-based, which avoids those problems.
+
+Separate CRUD services, model serving, production cloud deployment, OCR, training pipelines, and automatic model write-back are outside v1.
 
 ## Why The Current Sequence Is Correct
 
-The completed Tasks 1–8 established canonical records, campaign isolation, provenance seams, backend-owned uploads, typed frontend flows, and schema compatibility before distributed processing was introduced.
+The completed Tasks 1–8 established canonical records, campaign isolation, provenance seams, backend-owned uploads, typed frontend flows, and schema compatibility.
 
 The remaining order follows dependency and risk:
 
-1. Prove the narrow `.txt` processing spine.
-2. Make dispatch and recovery durable.
-3. Add extraction and review on the stable parsed contract.
-4. Extend formats without reshaping the pipeline.
-5. Add search after parsed content exists.
-6. Polish and verify the complete demo flow.
+1. Fix known problems before building on the same tables (Task 9).
+2. Get real notes into parsed sections (Task 10).
+3. Add rules extraction and review on the stable section contract (Task 11).
+4. Put a real model behind the extractor and measure it (Task 12).
+5. Add users, membership, and visibility (Task 13).
+6. Add permission-aware search and question answering (Tasks 14–15).
+7. Polish and verify the complete demo flow (Task 16).
+
+Steps 4 and 5 can swap. Doing visibility first makes the AI work permission-aware from the start; doing the LLM first reaches the learning goal sooner. This is an open decision in the plan.
 
 This order keeps each increment observable and testable while avoiding abstractions whose requirements have not yet appeared.

@@ -14,7 +14,7 @@ These are not current technical debt. Reconsider an option only when its trigger
 
 ## World-owned reusable assets
 
-**Trigger:** One canonical asset must be shared by multiple campaigns with campaign-local annotations, visibility, or interpretation.
+**Trigger:** One canonical asset must be shared by multiple campaigns with campaign-local annotations, visibility, or interpretation, or work is about to start on users and membership (v1 Task 13) or on embedding tables (v1 Task 14). The tenant level must be decided before either, because moving the boundary later means migrating every table.
 
 **Decision required:** Decide whether reusable assets introduce a world-level ownership boundary before changing campaign ownership or provenance rules.
 
@@ -42,15 +42,15 @@ These are not current technical debt. Reconsider an option only when its trigger
 
 **Consider:** First add schema-level contract coverage that detects new asset references without matching deletion coordination. Consider a reference registry only if explicit foreign keys and checks remain unmanageable; a polymorphic registry would otherwise duplicate ownership information and weaken relational clarity.
 
-## AI-first PostgreSQL-only pipeline
+## Hosted processing infrastructure
 
-**Trigger:** Work is about to start on v1 Task 9 or any task in the cloud-ready asset pipeline plan, or work is requested on LLM extraction, evals, RAG, Google Docs/Sheets import, multi-user access, or player-facing data separation.
+**Trigger:** The app is about to be hosted for more than one user, one user's slow parsing or extraction job delays other users, or the PostgreSQL job row and background task can no longer keep up.
 
-**Decision required:** Decide whether to adopt `docs/proposals/2026-11-11-ai-first-pipeline-alternative.md` in place of the MinIO, Redis Streams, MongoDB, and worker pipeline before building any of that infrastructure.
+**Decision required:** Decide which of S3-compatible storage, a separate worker service, and a queue are needed, and in what order, based on the problem actually observed.
 
-**Current default:** The current plans under `docs/plans/` remain authoritative. The proposal is not adopted.
+**Current default:** Local disk behind `AssetStorage`, parsing and extraction as backend modules, and a PostgreSQL job row with a background task. MongoDB is dropped, not deferred.
 
-**Consider:** Drop MongoDB, defer Redis, S3 storage, and the separate worker until hosting, keep parsed sections and jobs in PostgreSQL, import from Google Docs and Sheets, and build the AI layer first as a standalone toolkit. Adopting it requires the plan, reasoning, and `AGENTS.md` updates listed at the end of the proposal.
+**Consider:** Add an S3 backend to `AssetStorage` first. Split the worker out next. Add a queue such as Redis Streams only if the PostgreSQL job table becomes a bottleneck; a transactional outbox is needed only once a queue exists. The archived plan `docs/plans/archive/2026-08-08-cloud-ready-asset-intelligence-pipeline.md` describes that design.
 
 ## Skill-usage logging
 

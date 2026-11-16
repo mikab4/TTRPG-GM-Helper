@@ -2,7 +2,7 @@
 
 ## Project
 
-RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Masters. It stores campaign records and source assets, turns source material into reviewable structured data, preserves provenance, and supports retrieval across campaign information.
+RPG GM Helper is a workspace for tabletop RPG Game Masters. It stores campaign records and source assets, turns source material into reviewable structured data with rules and an LLM, preserves provenance, and supports retrieval across campaign information. It runs locally for one GM today and has no login yet; it is being built toward several users, with players who see only part of the campaign data.
 
 ## Planning And Documentation
 
@@ -21,7 +21,9 @@ RPG GM Helper is a single-user, local-first workspace for tabletop RPG Game Mast
 
 - Prefer a modular monolith. Add service boundaries or infrastructure only when a current plan justifies them.
 - Keep the backend in Python with FastAPI and the frontend as a separate React and TypeScript application.
-- PostgreSQL owns canonical domain and workflow state. Supporting stores or transports must not become competing sources of truth.
+- PostgreSQL is the only datastore and owns all domain and workflow state. Do not add another database, queue, or service unless a current plan justifies it.
+- Enforce access rules in backend services. The frontend and LLM prompts are never security boundaries. New routes must be campaign-scoped and must not take the caller's identity from a request parameter or body.
+- Extractors, including LLMs, create candidates only. A human approves before anything becomes an entity or relationship.
 - Keep domain rules, validation, extraction, review, and persistence in backend services. The frontend owns routing, forms, API calls, and presentation.
 - Use a plain typed API client at the frontend boundary. Do not add heavy client-state or framework abstractions without a concrete need.
 - Preserve campaign ownership and provenance for extracted entities and relationships.
