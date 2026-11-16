@@ -137,6 +137,8 @@ The 2026-11-16 code and security review found a small set of correctness and sch
 
 The model-versus-migration check matters most. The API tests run on SQLite with tables built from the models, so a forgotten migration can pass the whole suite. The pipeline adds several migrations in a row.
 
+The asset-delete trigger takes `FOR KEY SHARE`, not the `FOR SHARE` first planned. Both close the race, because the delete path locks the asset row `FOR UPDATE` before it checks references. `FOR SHARE` also blocks ordinary updates of the asset row, and two transactions that each cite an asset and then update it deadlocked in a test. The parsing pipeline is expected to do exactly that when it creates a job row and sets `parse_status`. The cost of the weaker lock is a rule: any code that moves an asset from `active` to `deleting` must lock the row `FOR UPDATE` first.
+
 Some suggestions were deliberately not scheduled now. Reordering composite keys to put `campaign_id` first is correct but rewrites every composite key, so it waits for the tenant-level decision. Optimistic locking, `SKIP LOCKED`, pagination, and running migrations as a deploy step only matter with several users or instances.
 
 ## Why Parsed Documents Are Format-Neutral And Multilingual

@@ -8,7 +8,7 @@
 
 **Source of the fixes:** `docs/plans/rpg-gm-helper-v1.md`, Task 9. The fix numbers (#1–#14) below are that task's row numbers. This document does not restate the problems; read the task first.
 
-**Status of this plan:** Drafted 2026-11-16 from a read-only code analysis. The engineer approved the branch split on 2026-11-16. Four decisions are open (see "Open decisions"); the branches they block are marked.
+**Status of this plan:** Drafted 2026-11-16 from a read-only code analysis. The engineer approved the branch split on 2026-11-16. Three decisions are open (see "Open decisions"); the branches they block are marked.
 
 ## Progress
 
@@ -22,7 +22,7 @@ Last updated 2026-11-16.
 | #10 | `task9/lazy-collections` | Merged to `main`. No explicit `selectinload` was needed |
 | #11 | `task9/uuid7` | Merged to `main` |
 | #13 | `task9/compose-bind` | Merged to `main`. The engineer's browser check under WSL is still open |
-| #5 | `task9/lane-1-trigger-lock` | Implemented with `FOR SHARE` and rebased onto `main`; lock strength is an open decision (D6) |
+| #5 | `task9/lane-1-trigger-lock` | Implemented with `FOR KEY SHARE` (D6 decided) and reviewed; waiting for the engineer's merge |
 | #1, #8, #9 | — | Blocked on D1, D3, D2 |
 | #12, #4 | — | Wait for #5 on `main` |
 | #14 | — | Optional; not started |
@@ -32,8 +32,6 @@ The six merged branches were stacked and fast-forwarded in one line, because the
 Follow-ups the integrator still owes:
 
 - Keep Task 9 in `rpg-gm-helper-v1.md` in step as further fixes land; it is updated for the six merged branches.
-- If D6 changes the lock, correct row #5 of that task and the sibling reasoning document, which both say `FOR SHARE`.
-- After #5 is on `main`, add a test for revision `20261116_0004` to `backend/tests/test_migrations.py`. The `py-db-tdd` skill requires each revision to have one there; the lane branch kept its tests in a separate file because `migration-gate` owned `test_migrations.py`.
 - Move the PostgreSQL session fixture into `backend/tests/conftest.py`. Four new test files each define their own copy because branch agents may not edit `conftest.py`; `AGENTS.md` keeps test plumbing in `conftest.py`.
 
 ---
@@ -322,7 +320,7 @@ The engineer decides these. Agents do not.
 | D2 | #9 | Model-declared `CHECK` constraints are also enforced in the SQLite tests, and the compatibility tests need legacy entity types to exist. A `CHECK` on `entities.type` also makes the compatibility report permanently empty, while v1 Task 13 still expects that feature | Leave `entities.type` out of #9 for now and constrain only the status columns. Constrain `entities.type` when the compatibility feature is retired |
 | D3 | #8 | The auto-ID callback needs `revision_environment = true`, so plain `alembic revision` would need a running database | Rely on the static naming test in the #7 brief and skip the callback. The naming rule is then enforced by a test, not by generation |
 
-| D6 | #5 | `FOR SHARE` (Task 9's wording, and what the branch has) or `FOR KEY SHARE` in the trigger. Measured on the branch: both close the race; with `FOR SHARE`, two transactions that each cite an asset and then update its row deadlock, and with `FOR KEY SHARE` both succeed | `FOR KEY SHARE`, with a comment in `_begin_asset_delete` that any change from `active` to `deleting` must lock the row `FOR UPDATE` before checking references. Task 10's pipeline is likely to cite an asset and update its `parse_status` in one transaction |
+| D6 | #5 | Decided 2026-11-16: `FOR KEY SHARE`. Both locks close the race; with `FOR SHARE`, two transactions that each cite an asset and then update its row deadlock | — |
 
 Also undecided for #9: whether `source_assets.truth_status`, `extraction_candidates.candidate_type`, `extraction_jobs.extractor_kind`, `asset_parse_results.parser_kind`, and `relationship_type_definitions.family` get constraints, and whether Task 10 will soon add job statuses that a new `CHECK` would have to be migrated for.
 

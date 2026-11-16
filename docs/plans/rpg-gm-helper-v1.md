@@ -281,7 +281,7 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 2 | A duplicate campaign name under a race returns 500 instead of 409 | `create_campaign`, `update_campaign` | Catch `IntegrityError`, roll back, raise `ConflictError`, as `session_service` already does |
 | 3 | Same check-then-insert race for custom relationship types | `create_relationship_type`, `backend/app/services/relationship_type_service.py` | Same fix as #2 |
 | 4 | Duplicate relationships are prevented only by a query; no constraint backs it | `_validate_duplicates`, `backend/app/services/relationship_service.py` | Add a unique constraint on campaign, type, source, and target for the directed case; keep the service check for symmetric types. The migration must report existing duplicates instead of deleting them |
-| 5 | The asset-delete trigger reads `lifecycle_status` without a row lock, so a new reference can be accepted while a delete is in progress | `enforce_active_source_asset_reference`, migration `20260502_0003` | Write a concurrency test that shows the race first; then add `FOR SHARE` to the trigger's `SELECT` in a new migration |
+| 5 | The asset-delete trigger reads `lifecycle_status` without a row lock, so a new reference can be accepted while a delete is in progress | `enforce_active_source_asset_reference`, migration `20260502_0003` | Write a concurrency test that shows the race first; then add a row lock to the trigger's `SELECT` in a new migration. Originally specified as `FOR SHARE`; changed to `FOR KEY SHARE` on 2026-11-16, see the progress table |
 | 6 | Campaign delete with session-linked assets or provenance references has no PostgreSQL test (it works today; verified by hand on 2026-11-16) | `backend/tests/` | Add PostgreSQL-backed tests for the three cases: session-linked asset, relationship citing an asset, entity citing an asset |
 
 **Schema and migration safety:**
@@ -313,9 +313,9 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 10 | Complete | Eleven collections on `Campaign`, `Owner`, `Entity`, and `ExtractionJob` use `lazy="select"`. No query needed an explicit `selectinload`. Entity and campaign delete rely on the database cascade; `backend/tests/test_delete_cascade_postgres.py` covers both on PostgreSQL |
 | 11 | Complete | `UUIDPrimaryKeyMixin` defaults to `uuid7` |
 | 13 | Complete | The three published ports are bound to `127.0.0.1`; PostgreSQL stays published for host-side debugging. Reachability from a Windows browser under WSL has not been checked by hand |
-| 5 | Implemented, not merged | Revision `20261116_0004` adds a row lock to the trigger and a concurrency test shows the race. The lock strength (`FOR SHARE` or `FOR KEY SHARE`) is undecided |
+| 5 | Complete | Revision `20261116_0004` adds `FOR KEY SHARE` to the trigger's asset lookup. A concurrency test reproduces the race and a second one shows that two transactions which each cite an asset and then update its row both commit. `FOR SHARE` was measured to deadlock in that case. The lock depends on the delete path taking `FOR UPDATE` before it checks references; `_begin_asset_delete` carries a comment saying so |
 | 1, 8, 9 | Blocked | Each waits on an engineer decision |
-| 4, 12 | Planned | Wait for #5, because migrations land one at a time |
+| 4, 12 | Planned | Migrations land one at a time: #12 next, then #4 |
 | 14 | Planned | Optional |
 
 **Not in this task:**
