@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID, uuid7
 
 from sqlalchemy import JSON, DateTime, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -36,4 +36,4 @@ class TimestampMixin:
 
 
 class UUIDPrimaryKeyMixin:
-    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True, default=uuid7)
