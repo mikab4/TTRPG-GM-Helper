@@ -175,17 +175,7 @@ def wait_for_backend_lock_wait(
     poll_interval_seconds: float = 0.02,
     stop_waiting: Callable[[], bool] | None = None,
 ) -> dict[str, object] | None:
-    """Block until the given PostgreSQL backend is waiting on a heavyweight lock.
-
-    Polls ``pg_stat_activity`` from a separate connection. Raises
-    ``PostgresTestHarnessError`` with the backend's last observed state when the
-    timeout expires, so a race test fails clearly instead of hanging. Returns the
-    backend's ``pg_stat_activity`` state at the moment it was seen waiting.
-
-    ``stop_waiting`` lets a caller accept that the statement may not block at
-    all: when it returns true (for example ``future.done``), the helper returns
-    ``None`` instead of waiting for a lock.
-    """
+    """Return the backend's pg_stat_activity row once it waits on a lock, or None once stop_waiting() is true."""
     deadline = time.monotonic() + timeout_seconds
     last_observed_state: dict[str, object] | None = None
 

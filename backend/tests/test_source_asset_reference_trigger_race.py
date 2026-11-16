@@ -1,10 +1,3 @@
-"""Race tests for the `enforce_active_source_asset_reference` trigger function.
-
-The asset delete path locks the asset row `FOR UPDATE`, checks for references,
-and then marks the asset `deleting`. A citing insert that starts while that
-lock is held must not be accepted once the delete commits.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -12,18 +5,19 @@ from concurrent.futures import ThreadPoolExecutor
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Engine, func, select, text
+from sqlalchemy import Connection, Engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import Settings
 from app.models import Campaign, Entity, ExtractionJob, Owner, Relationship, SourceAsset
 from app.schemas.relationships import RelationshipCreate
+from app.services.asset_service import _begin_asset_delete
 from app.services.errors import ConflictError
 from app.services.relationship_service import create_relationship
 from tests.pg_test_support import upgraded_postgres_test_engine, wait_for_backend_lock_wait
 
-CITING_WRITE_TIMEOUT_SECONDS = 10.0
+CONCURRENT_WRITE_TIMEOUT_SECONDS = 10.0
 
 
 @pytest.fixture
@@ -67,47 +61,49 @@ def _seed_campaign_with_active_asset(engine: Engine) -> dict[str, UUID]:
         }
 
 
-def _run_citing_write_during_asset_delete(
+def _backend_pid(db_session: DBSession) -> int:
+    return db_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
+
+
+def _lock_asset_row_for_delete(connection: Connection, *, source_asset_id: UUID) -> None:
+    connection.execute(
+        text("SELECT id FROM source_assets WHERE id = :asset_id FOR UPDATE"),
+        {"asset_id": source_asset_id},
+    )
+
+
+def _mark_asset_deleting(connection: Connection, *, source_asset_id: UUID) -> None:
+    connection.execute(
+        text("UPDATE source_assets SET lifecycle_status = 'deleting' WHERE id = :asset_id"),
+        {"asset_id": source_asset_id},
+    )
+
+
+def _run_citing_write_while_asset_delete_holds_row_lock(
     engine: Engine,
     *,
     source_asset_id: UUID,
     citing_write: Callable[[DBSession], object],
 ) -> object:
-    """Run `citing_write` while another transaction locks and deletes the asset.
+    with engine.connect() as deleting_connection, DBSession(engine) as citing_session:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with deleting_connection.begin():
+                _lock_asset_row_for_delete(deleting_connection, source_asset_id=source_asset_id)
+                citing_backend_pid = _backend_pid(citing_session)
+                blocked_citing_write = executor.submit(citing_write, citing_session)
+                wait_for_backend_lock_wait(engine, backend_pid=citing_backend_pid)
+                _mark_asset_deleting(deleting_connection, source_asset_id=source_asset_id)
+            return blocked_citing_write.result(timeout=CONCURRENT_WRITE_TIMEOUT_SECONDS)
 
-    Returns the citing write's result, or re-raises the exception it raised.
-    """
-    deleting_connection = engine.connect()
-    deleting_transaction = deleting_connection.begin()
-    citing_session = DBSession(engine)
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        # Step a: the delete transaction locks the asset row, as `_begin_asset_delete` does.
-        deleting_connection.execute(
-            text("SELECT id FROM source_assets WHERE id = :asset_id FOR UPDATE"),
-            {"asset_id": source_asset_id},
-        )
 
-        # Step b: the citing transaction starts its write on another connection and blocks.
-        citing_backend_pid = citing_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
-        citing_future = executor.submit(citing_write, citing_session)
-        wait_for_backend_lock_wait(engine, backend_pid=citing_backend_pid)
+def _count_rows_citing_asset(engine: Engine, model, *, source_asset_id: UUID) -> int:
+    with DBSession(engine) as verify_session:
+        return verify_session.scalar(select(func.count()).select_from(model).where(model.source_asset_id == source_asset_id))
 
-        # Step c: the delete transaction marks the asset deleting and commits.
-        deleting_connection.execute(
-            text("UPDATE source_assets SET lifecycle_status = 'deleting' WHERE id = :asset_id"),
-            {"asset_id": source_asset_id},
-        )
-        deleting_transaction.commit()
 
-        # Step d: the citing write unblocks.
-        return citing_future.result(timeout=CITING_WRITE_TIMEOUT_SECONDS)
-    finally:
-        if deleting_transaction.is_active:
-            deleting_transaction.rollback()
-        deleting_connection.close()
-        executor.shutdown(wait=True)
-        citing_session.close()
+def _asset_column(engine: Engine, column, *, source_asset_id: UUID) -> str:
+    with DBSession(engine) as verify_session:
+        return verify_session.scalar(select(column).where(SourceAsset.id == source_asset_id))
 
 
 def test_create_relationship_rejects_asset_whose_delete_commits_while_insert_waits(
@@ -133,19 +129,13 @@ def test_create_relationship_rejects_asset_whose_delete_commits_while_insert_wai
 
     # Act / Assert
     with pytest.raises(ConflictError, match="deletion is in progress"):
-        _run_citing_write_during_asset_delete(
+        _run_citing_write_while_asset_delete_holds_row_lock(
             postgres_engine,
             source_asset_id=seeded_ids["source_asset_id"],
             citing_write=create_citing_relationship,
         )
 
-    with DBSession(postgres_engine) as verify_session:
-        citing_relationship_count = verify_session.scalar(
-            select(func.count())
-            .select_from(Relationship)
-            .where(Relationship.source_asset_id == seeded_ids["source_asset_id"])
-        )
-    assert citing_relationship_count == 0
+    assert _count_rows_citing_asset(postgres_engine, Relationship, source_asset_id=seeded_ids["source_asset_id"]) == 0
 
 
 def test_entity_insert_rejects_asset_whose_delete_commits_while_insert_waits(
@@ -167,29 +157,59 @@ def test_entity_insert_rejects_asset_whose_delete_commits_while_insert_waits(
 
     # Act / Assert
     with pytest.raises(IntegrityError, match="deletion is in progress"):
-        _run_citing_write_during_asset_delete(
+        _run_citing_write_while_asset_delete_holds_row_lock(
             postgres_engine,
             source_asset_id=seeded_ids["source_asset_id"],
             citing_write=insert_citing_entity,
         )
 
-    with DBSession(postgres_engine) as verify_session:
-        citing_entity_count = verify_session.scalar(
-            select(func.count()).select_from(Entity).where(Entity.source_asset_id == seeded_ids["source_asset_id"])
-        )
-    assert citing_entity_count == 0
+    assert _count_rows_citing_asset(postgres_engine, Entity, source_asset_id=seeded_ids["source_asset_id"]) == 0
+
+
+def test_begin_asset_delete_waits_for_uncommitted_citing_insert_and_then_rejects_delete(
+    postgres_engine: Engine,
+) -> None:
+    # Arrange
+    seeded_ids = _seed_campaign_with_active_asset(postgres_engine)
+    source_asset_id = seeded_ids["source_asset_id"]
+
+    with DBSession(postgres_engine) as citing_session, DBSession(postgres_engine) as deleting_session:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            citing_session.add(
+                Entity(
+                    campaign_id=seeded_ids["campaign_id"],
+                    type="location",
+                    name="Broken Observatory",
+                    source_asset_id=source_asset_id,
+                )
+            )
+            citing_session.flush()
+            deleting_backend_pid = _backend_pid(deleting_session)
+
+            # Act
+            asset_delete = executor.submit(
+                _begin_asset_delete,
+                deleting_session,
+                campaign_id=seeded_ids["campaign_id"],
+                asset_id=source_asset_id,
+            )
+            wait_for_backend_lock_wait(postgres_engine, backend_pid=deleting_backend_pid, stop_waiting=asset_delete.done)
+            citing_session.commit()
+
+            # Assert
+            with pytest.raises(ConflictError):
+                asset_delete.result(timeout=CONCURRENT_WRITE_TIMEOUT_SECONDS)
+
+    assert _asset_column(postgres_engine, SourceAsset.lifecycle_status, source_asset_id=source_asset_id) == "active"
+    assert _count_rows_citing_asset(postgres_engine, Entity, source_asset_id=source_asset_id) == 1
 
 
 def test_twin_transactions_that_cite_an_asset_and_then_update_it_both_commit(
     postgres_engine: Engine,
 ) -> None:
-    # Arrange: two transactions each insert an extraction job citing the same
-    # asset, so each holds the trigger's lock on the asset row.
+    # Arrange
     seeded_ids = _seed_campaign_with_active_asset(postgres_engine)
     source_asset_id = seeded_ids["source_asset_id"]
-    first_session = DBSession(postgres_engine)
-    second_session = DBSession(postgres_engine)
-    executor = ThreadPoolExecutor(max_workers=2)
 
     def update_asset_parse_status(citing_session: DBSession) -> None:
         citing_session.execute(
@@ -197,41 +217,32 @@ def test_twin_transactions_that_cite_an_asset_and_then_update_it_both_commit(
             {"asset_id": source_asset_id},
         )
 
-    try:
-        for citing_session in (first_session, second_session):
-            citing_session.add(
-                ExtractionJob(
-                    campaign_id=seeded_ids["campaign_id"],
-                    source_asset_id=source_asset_id,
-                    status="pending",
-                    extractor_kind="rules",
+    with DBSession(postgres_engine) as first_session, DBSession(postgres_engine) as second_session:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            for citing_session in (first_session, second_session):
+                citing_session.add(
+                    ExtractionJob(
+                        campaign_id=seeded_ids["campaign_id"],
+                        source_asset_id=source_asset_id,
+                        status="pending",
+                        extractor_kind="rules",
+                    )
                 )
-            )
-            citing_session.flush()
-        first_backend_pid = first_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
-        second_backend_pid = second_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
+                citing_session.flush()
+            first_backend_pid = _backend_pid(first_session)
+            second_backend_pid = _backend_pid(second_session)
 
-        # Act: each transaction updates the asset row before either commits.
-        # The first update may finish or block; the second then runs against it.
-        first_update = executor.submit(update_asset_parse_status, first_session)
-        wait_for_backend_lock_wait(postgres_engine, backend_pid=first_backend_pid, stop_waiting=first_update.done)
-        second_update = executor.submit(update_asset_parse_status, second_session)
-        wait_for_backend_lock_wait(postgres_engine, backend_pid=second_backend_pid, stop_waiting=second_update.done)
+            # Act
+            first_update = executor.submit(update_asset_parse_status, first_session)
+            wait_for_backend_lock_wait(postgres_engine, backend_pid=first_backend_pid, stop_waiting=first_update.done)
+            second_update = executor.submit(update_asset_parse_status, second_session)
+            wait_for_backend_lock_wait(postgres_engine, backend_pid=second_backend_pid, stop_waiting=second_update.done)
 
-        first_update.result(timeout=CITING_WRITE_TIMEOUT_SECONDS)
-        first_session.commit()
-        second_update.result(timeout=CITING_WRITE_TIMEOUT_SECONDS)
-        second_session.commit()
-    finally:
-        executor.shutdown(wait=True)
-        first_session.close()
-        second_session.close()
+            first_update.result(timeout=CONCURRENT_WRITE_TIMEOUT_SECONDS)
+            first_session.commit()
+            second_update.result(timeout=CONCURRENT_WRITE_TIMEOUT_SECONDS)
+            second_session.commit()
 
     # Assert
-    with DBSession(postgres_engine) as verify_session:
-        citing_job_count = verify_session.scalar(
-            select(func.count()).select_from(ExtractionJob).where(ExtractionJob.source_asset_id == source_asset_id)
-        )
-        parse_status = verify_session.scalar(select(SourceAsset.parse_status).where(SourceAsset.id == source_asset_id))
-    assert citing_job_count == 2
-    assert parse_status == "running"
+    assert _count_rows_citing_asset(postgres_engine, ExtractionJob, source_asset_id=source_asset_id) == 2
+    assert _asset_column(postgres_engine, SourceAsset.parse_status, source_asset_id=source_asset_id) == "running"

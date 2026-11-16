@@ -1,19 +1,4 @@
-"""Lock the cited source asset row in the active-reference trigger.
-
-`enforce_active_source_asset_reference` backs the triggers on `entities`,
-`entity_relationships`, and `extraction_jobs`. It read
-`source_assets.lifecycle_status` without a row lock, so a citing write could
-pass the check while an asset delete held the row `FOR UPDATE` and then commit
-after the asset became `deleting`.
-
-The lookup now takes `FOR KEY SHARE`. That is enough because it conflicts with
-the `FOR UPDATE` the delete path takes before it checks references and marks
-the asset `deleting`, so a citing write waits for the delete and re-checks the
-committed row. It does not conflict with ordinary non-key updates of the asset
-row (`FOR NO KEY UPDATE`), so a transaction that cites an asset and then updates
-that row, such as setting `parse_status`, does not deadlock against its twin.
-`FOR SHARE` would.
-"""
+"""Lock the cited source asset row in the active-reference trigger."""
 
 from __future__ import annotations
 
@@ -26,7 +11,7 @@ branch_labels = None
 depends_on = None
 
 
-LOCKING_FUNCTION_SQL = """
+KEY_SHARE_LOCKING_FUNCTION_SQL = """
         CREATE OR REPLACE FUNCTION enforce_active_source_asset_reference()
         RETURNS trigger AS $$
         BEGIN
@@ -53,8 +38,7 @@ LOCKING_FUNCTION_SQL = """
         $$ LANGUAGE plpgsql;
         """
 
-# Body created by revision 20260502_0003, restored verbatim on downgrade.
-PREVIOUS_FUNCTION_SQL = """
+UNLOCKED_FUNCTION_SQL_FROM_20260502_0003 = """
         CREATE OR REPLACE FUNCTION enforce_active_source_asset_reference()
         RETURNS trigger AS $$
         BEGIN
@@ -82,8 +66,8 @@ PREVIOUS_FUNCTION_SQL = """
 
 
 def upgrade() -> None:
-    op.execute(LOCKING_FUNCTION_SQL)
+    op.execute(KEY_SHARE_LOCKING_FUNCTION_SQL)
 
 
 def downgrade() -> None:
-    op.execute(PREVIOUS_FUNCTION_SQL)
+    op.execute(UNLOCKED_FUNCTION_SQL_FROM_20260502_0003)
