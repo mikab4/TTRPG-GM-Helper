@@ -1,27 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
+from sqlalchemy import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
-from app.config import Settings
 from app.models import Campaign, Entity, Owner, Relationship
 from app.schemas import RelationshipCreate
 from app.services import ConflictError, relationship_service
-from tests.pg_test_support import upgraded_postgres_test_engine
 
 
 @pytest.fixture
-def postgres_session(
-    monkeypatch: pytest.MonkeyPatch,
-    postgres_test_settings: Settings,
-):
-    with upgraded_postgres_test_engine(
-        monkeypatch=monkeypatch,
-        settings=postgres_test_settings,
-    ) as engine:
-        with DBSession(engine) as session:
-            yield session
+def postgres_session(postgres_engine: Engine) -> Iterator[DBSession]:
+    with DBSession(postgres_engine) as session:
+        yield session
 
 
 def _persist_mentor_and_student(postgres_session: DBSession) -> tuple[Campaign, Entity, Entity]:

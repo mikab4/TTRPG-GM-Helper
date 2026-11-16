@@ -23,11 +23,12 @@ Last updated 2026-11-16.
 | #11 | `task9/uuid7` | Merged to `main` |
 | #13 | `task9/compose-bind` | Merged to `main`. The engineer opened the app from a Windows browser under WSL on 2026-11-16 and it loaded |
 | #5 | `task9/lane-1-trigger-lock` | Merged to `main` with `FOR KEY SHARE` (D6 decided) |
-| #12 | `task9/lane-2-drop-duplicate-indexes` | Reviewed; waiting for the engineer's merge |
-| #1 | `task9/campaign-delete-files` | Reviewed (D1 decided); stacked on the #12 branch; waiting for the engineer's merge |
+| #12 | `task9/lane-2-drop-duplicate-indexes` | Merged to `main` |
+| #1 | `task9/campaign-delete-files` | Reviewed (D1 decided); waiting for the engineer's merge |
+| — | `task9/test-harness-cleanup` | Reviewed; stacked on the #1 branch |
 | #8 | — | Closed without a branch (D3 decided: no auto-ID callback) |
-| #4 | — | Next, after #12 is on `main` |
-| #9 | — | After #4. D2 decided: status columns only |
+| #4 | `task9/lane-3-unique-relationships` | Reviewed; stacked on the harness branch. The engineer's local database held no duplicates on 2026-11-16 |
+| #9 | — | Next. D2 decided: status columns only |
 | #14 | — | Optional; not started |
 
 The six merged branches were stacked and fast-forwarded in one line, because the engineer merges with `--ff-only`. Later branches are rebased onto `main` before they are handed over.

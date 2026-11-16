@@ -317,8 +317,8 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 1 | Complete | Decided 2026-11-16: `delete_campaign` marks the campaign's assets `deleting`, removes the files, then deletes the campaign row. A failed removal leaves the campaign in place with a 409, and repeating the delete finishes it. An asset uploaded while the files are being removed also stops the delete with a 409. Background deletion is deferred in `docs/deferred_design_options.md` |
 | 12 | Complete | Revision `20261116_0005` drops both indexes and the models no longer declare them. `uq_sessions_campaign_number` and `uq_relationship_type_definitions_campaign_key` already start with `campaign_id` |
 | 8 | Complete | Decided 2026-11-16: no auto-ID callback. It would make plain `alembic revision` need a running database. The naming test added with #7 enforces the format instead; keep passing `--rev-id YYYYMMDD_NNNN` |
-| 4 | Next | Revision `20261116_0006` |
-| 9 | Planned | Decided 2026-11-16: `CHECK` constraints on the status columns only. `entities.type` stays unconstrained while the entity-type compatibility feature exists. Lands after #4 |
+| 4 | Complete | Revision `20261116_0006` adds `uq_entity_relationships_campaign_type_source_target`. The migration lists existing duplicates and refuses to run without changing any row. `_commit_relationship_write` maps that constraint's violation to the same 409 as the service check. The inverse pair of a symmetric type is still guarded only by `_validate_duplicates`, so that race stays open. `ix_entity_relationships_campaign_id` is now covered by the new constraint and was left in place |
+| 9 | Next | Decided 2026-11-16: `CHECK` constraints on the status columns only. `entities.type` stays unconstrained while the entity-type compatibility feature exists. Lands after #4 |
 | 14 | Planned | Optional |
 
 **Not in this task:**
