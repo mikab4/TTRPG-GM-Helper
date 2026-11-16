@@ -8,12 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.enums import EntityType, RelationshipFamily, normalize_str_enum_value
 from app.models import Entity, Relationship
+from app.models.relationship import DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT
 from app.schemas import RelationshipCreate, RelationshipUpdate
 from app.services.asset_service import ensure_asset_accepts_provenance_reference
 from app.services.campaign_lookup import ensure_campaign_exists
 from app.services.errors import ConflictError, NotFoundError
 from app.services.relationship_catalog import list_relationship_type_descriptors_by_family
 from app.services.relationship_descriptor_resolver import get_descriptor_or_raise
+
+DIRECTED_DUPLICATE_RELATIONSHIP_MESSAGE = "Relationship already exists for these entities."
 
 
 def create_relationship(
@@ -252,7 +255,15 @@ def _commit_relationship_write(db_session: Session) -> None:
             raise ConflictError(
                 "Source asset cannot accept new provenance references while deletion is in progress."
             ) from exc
+        if _violates_directed_relationship_uniqueness(exc):
+            raise ConflictError(DIRECTED_DUPLICATE_RELATIONSHIP_MESSAGE) from exc
         raise
+
+
+def _violates_directed_relationship_uniqueness(integrity_error: IntegrityError) -> bool:
+    driver_diagnostics = getattr(integrity_error.orig, "diag", None)
+    violated_constraint_name = getattr(driver_diagnostics, "constraint_name", None)
+    return violated_constraint_name == DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT
 
 
 def _is_source_asset_delete_conflict(exc: IntegrityError) -> bool:
@@ -339,4 +350,4 @@ def _validate_duplicates(
         Relationship.target_entity_id == target_entity_id,
     )
     if db_session.scalar(duplicate_statement) is not None:
-        raise ConflictError("Relationship already exists for these entities.")
+        raise ConflictError(DIRECTED_DUPLICATE_RELATIONSHIP_MESSAGE)

@@ -352,6 +352,42 @@ def test_create_relationship_rejects_inverse_duplicate_for_symmetric_type(
     assert response.json() == {"detail": "Symmetric relationship already exists for these entities."}
 
 
+def test_create_relationship_rejects_directed_duplicate(
+    api_request,
+    campaign_factory,
+    entity_factory,
+    relationship_factory,
+) -> None:
+    # Arrange
+    test_campaign = campaign_factory()
+    mentor_entity = entity_factory(campaign_id=test_campaign.id, type="person", name="Jo")
+    student_entity = entity_factory(campaign_id=test_campaign.id, type="person", name="Mika")
+    relationship_factory(
+        campaign_id=test_campaign.id,
+        source_entity=mentor_entity,
+        target_entity=student_entity,
+        relationship_type="mentor_of",
+    )
+
+    # Act
+    response = api_request(
+        "POST",
+        f"/api/campaigns/{test_campaign.id}/relationships",
+        json={
+            "source_entity_id": str(mentor_entity.id),
+            "target_entity_id": str(student_entity.id),
+            "relationship_type": "mentor_of",
+            "lifecycle_status": "current",
+            "visibility_status": "public",
+            "certainty_status": "confirmed",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Relationship already exists for these entities."}
+
+
 def test_list_relationships_supports_type_and_family_filters(
     api_request,
     campaign_factory,

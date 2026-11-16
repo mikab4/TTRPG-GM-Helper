@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     Text,
+    UniqueConstraint,
     Uuid,
     text,
 )
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from app.models.campaign import Campaign
     from app.models.entity import Entity
     from app.models.source_asset import SourceAsset
+
+DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT = "uq_entity_relationships_campaign_type_source_target"
 
 
 class Relationship(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -48,6 +51,13 @@ class Relationship(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             ["source_assets.id", "source_assets.campaign_id"],
             ondelete="RESTRICT",
             name="fk_entity_relationships_source_asset_campaign",
+        ),
+        UniqueConstraint(
+            "campaign_id",
+            "relationship_type",
+            "source_entity_id",
+            "target_entity_id",
+            name=DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT,
         ),
         Index("ix_entity_relationships_campaign_id", "campaign_id"),
         Index(

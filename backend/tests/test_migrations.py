@@ -536,6 +536,158 @@ def test_20261116_0005_drops_duplicate_campaign_id_indexes_and_downgrade_restore
         assert downgraded_index_columns_by_table[table_name][index_name] == ["campaign_id"]
 
 
+DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT = "uq_entity_relationships_campaign_type_source_target"
+
+
+def read_unique_constraint_columns_by_name(connection: Connection, table_name: str) -> dict[str, list[str]]:
+    return {
+        constraint["name"]: constraint["column_names"]
+        for constraint in inspect(connection).get_unique_constraints(table_name)
+    }
+
+
+def test_20261116_0006_adds_directed_relationship_unique_constraint_and_downgrade_removes_it(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    alembic_config = build_alembic_config()
+    previous_revision = ScriptDirectory.from_config(alembic_config).get_revision("20261116_0006").down_revision
+
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            upgraded_constraint_columns = read_unique_constraint_columns_by_name(connection, "entity_relationships")
+
+        # Act
+        command.downgrade(alembic_config, previous_revision)
+
+        with engine.connect() as connection:
+            downgraded_constraint_columns = read_unique_constraint_columns_by_name(connection, "entity_relationships")
+
+    # Assert
+    assert upgraded_constraint_columns[DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT] == [
+        "campaign_id",
+        "relationship_type",
+        "source_entity_id",
+        "target_entity_id",
+    ]
+    assert DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT not in downgraded_constraint_columns
+
+
+def test_relationship_rejects_directed_duplicate_through_orm(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with DBSession(engine) as db_session:
+            # Arrange
+            campaign = Campaign(owner=Owner(email="gm@example.com"), name="Campaign A")
+            source_entity = Entity(campaign=campaign, type="person", name="Tarannon")
+            target_entity = Entity(campaign=campaign, type="person", name="Civu")
+            db_session.add_all(
+                [
+                    campaign,
+                    Relationship(
+                        campaign=campaign,
+                        source_entity=source_entity,
+                        target_entity=target_entity,
+                        relationship_type="knows",
+                    ),
+                ]
+            )
+            db_session.commit()
+
+            db_session.add(
+                Relationship(
+                    campaign=campaign,
+                    source_entity=source_entity,
+                    target_entity=target_entity,
+                    relationship_type="knows",
+                )
+            )
+
+            # Act / Assert
+            with pytest.raises(IntegrityError, match=DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT):
+                db_session.commit()
+
+            db_session.rollback()
+
+
+def test_upgrade_to_20261116_0006_with_duplicate_relationships_fails_listing_them_and_keeps_every_row(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    engine = create_test_engine(postgres_test_settings)
+    alembic_config = build_alembic_config()
+
+    reset_public_schema(engine)
+    monkeypatch.setenv("DATABASE_URL", postgres_test_settings.database_url)
+
+    try:
+        command.upgrade(alembic_config, "20261116_0005")
+
+        with DBSession(engine) as db_session:
+            campaign = Campaign(owner=Owner(email="gm@example.com"), name="Campaign A")
+            source_entity = Entity(campaign=campaign, type="person", name="Tarannon")
+            target_entity = Entity(campaign=campaign, type="person", name="Civu")
+            duplicate_relationships = [
+                Relationship(
+                    campaign=campaign,
+                    source_entity=source_entity,
+                    target_entity=target_entity,
+                    relationship_type="knows",
+                )
+                for _ in range(2)
+            ]
+            inverse_relationship = Relationship(
+                campaign=campaign,
+                source_entity=target_entity,
+                target_entity=source_entity,
+                relationship_type="knows",
+            )
+            db_session.add_all([campaign, *duplicate_relationships, inverse_relationship])
+            db_session.commit()
+            campaign_id = campaign.id
+            source_entity_id = source_entity.id
+            target_entity_id = target_entity.id
+            duplicate_relationship_ids = sorted(str(relationship.id) for relationship in duplicate_relationships)
+            stored_relationship_ids = {
+                *(relationship.id for relationship in duplicate_relationships),
+                inverse_relationship.id,
+            }
+
+        # Act
+        with pytest.raises(RuntimeError) as upgrade_error:
+            command.upgrade(alembic_config, "20261116_0006")
+
+        with engine.connect() as connection:
+            remaining_relationship_ids = set(connection.execute(text("SELECT id FROM entity_relationships")).scalars())
+            current_revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+        # Assert
+        assert str(upgrade_error.value) == (
+            f"Cannot add {DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT}: "
+            "entity_relationships has duplicate directed relationships. "
+            "Resolve them and rerun the migration. Nothing was changed.\n"
+            f"campaign_id={campaign_id} relationship_type=knows "
+            f"source_entity_id={source_entity_id} target_entity_id={target_entity_id} "
+            f"relationship_ids={', '.join(duplicate_relationship_ids)}"
+        )
+        assert remaining_relationship_ids == stored_relationship_ids
+        assert current_revision == "20261116_0005"
+    finally:
+        command.downgrade(alembic_config, "base")
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        engine.dispose()
+
+
 def test_upgrade_from_20260410_backfills_legacy_source_document_into_source_asset_and_parse_result(
     monkeypatch: pytest.MonkeyPatch,
     postgres_test_settings: Settings,
