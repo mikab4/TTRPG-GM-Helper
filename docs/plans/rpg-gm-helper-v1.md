@@ -269,7 +269,7 @@ The completed detailed plans for this task and its workspace UI are retained und
 
 ### Task 9: Hardening before the pipeline
 
-**Status: Next**
+**Status: In Progress**
 
 Fix the problems found in the 2026-11-16 code and security review before new tables and jobs are built on top of them. Each fix includes a test that fails without it. Sources: the review, the former `docs/issues.md`, and the database suggestions the review checked against the code.
 
@@ -301,6 +301,22 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 |---|---------|-------|-----|
 | 13 | Compose publishes PostgreSQL, the API, and the frontend on every network interface, with a default superuser password and no login | `compose.yaml` | Bind published ports to `127.0.0.1`; publish PostgreSQL only if host tools need it |
 | 14 | No CI; checks run only through local hooks | repository root | Optional in this task: a workflow that runs the backend and frontend checks |
+
+**Progress (2026-11-16):** The branch split, merge order, and open decisions for this task are in `docs/plans/task-9-hardening-agent-team.md`.
+
+| # | Status | What was implemented |
+|---|--------|----------------------|
+| 2 | Complete | `create_campaign` and `update_campaign` roll back on `IntegrityError` and raise `ConflictError`. Every integrity error on these two writes is reported as a duplicate name |
+| 3 | Complete | `create_relationship_type` raises `ConflictError` only when the violated constraint is `uq_relationship_type_definitions_campaign_key`; other integrity errors are re-raised. A PostgreSQL test produces the race for real |
+| 6 | Complete | `backend/tests/test_campaign_delete_postgres.py` covers the three cases and checks that a second campaign is untouched. File removal is not covered; that is #1 |
+| 7 | Complete | `backend/tests/test_migrations.py` asserts `compare_metadata` returns no differences at `head`. Models and migrations matched, so no whitelist exists. The check does not see `CHECK` constraints, triggers, or functions. A second test, which needs no database, enforces the `YYYYMMDD_NNNN_slug.py` naming, consecutive sequence numbers, and one linear chain |
+| 10 | Complete | Eleven collections on `Campaign`, `Owner`, `Entity`, and `ExtractionJob` use `lazy="select"`. No query needed an explicit `selectinload`. Entity and campaign delete rely on the database cascade; `backend/tests/test_delete_cascade_postgres.py` covers both on PostgreSQL |
+| 11 | Complete | `UUIDPrimaryKeyMixin` defaults to `uuid7` |
+| 13 | Complete | The three published ports are bound to `127.0.0.1`; PostgreSQL stays published for host-side debugging. Reachability from a Windows browser under WSL has not been checked by hand |
+| 5 | Implemented, not merged | Revision `20261116_0004` adds a row lock to the trigger and a concurrency test shows the race. The lock strength (`FOR SHARE` or `FOR KEY SHARE`) is undecided |
+| 1, 8, 9 | Blocked | Each waits on an engineer decision |
+| 4, 12 | Planned | Wait for #5, because migrations land one at a time |
+| 14 | Planned | Optional |
 
 **Not in this task:**
 
