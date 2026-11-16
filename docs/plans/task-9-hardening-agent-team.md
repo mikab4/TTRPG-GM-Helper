@@ -24,11 +24,11 @@ Last updated 2026-11-16.
 | #13 | `task9/compose-bind` | Merged to `main`. The engineer opened the app from a Windows browser under WSL on 2026-11-16 and it loaded |
 | #5 | `task9/lane-1-trigger-lock` | Merged to `main` with `FOR KEY SHARE` (D6 decided) |
 | #12 | `task9/lane-2-drop-duplicate-indexes` | Merged to `main` |
-| #1 | `task9/campaign-delete-files` | Reviewed (D1 decided); waiting for the engineer's merge |
-| — | `task9/test-harness-cleanup` | Reviewed; stacked on the #1 branch |
+| #1 | `task9/campaign-delete-files` | Merged to `main` (D1 decided) |
+| — | `task9/test-harness-cleanup` | Merged to `main` |
 | #8 | — | Closed without a branch (D3 decided: no auto-ID callback) |
-| #4 | `task9/lane-3-unique-relationships` | Reviewed; stacked on the harness branch. The engineer's local database held no duplicates on 2026-11-16 |
-| #9 | — | Next. D2 decided: status columns only |
+| #4 | `task9/lane-3-unique-relationships` | Merged to `main` |
+| #9 | `task9/lane-4-status-checks` | Reviewed (D2 decided: status columns only); waiting for the engineer's merge |
 | #14 | — | Optional; not started |
 
 The six merged branches were stacked and fast-forwarded in one line, because the engineer merges with `--ff-only`. Later branches are rebased onto `main` before they are handed over.
@@ -325,7 +325,7 @@ The engineer decides these. Agents do not.
 
 | D6 | #5 | Decided 2026-11-16: `FOR KEY SHARE`. Both locks close the race; with `FOR SHARE`, two transactions that each cite an asset and then update its row deadlock | — |
 
-Also undecided for #9: whether `source_assets.truth_status`, `extraction_candidates.candidate_type`, `extraction_jobs.extractor_kind`, `asset_parse_results.parser_kind`, and `relationship_type_definitions.family` get constraints, and whether Task 10 will soon add job statuses that a new `CHECK` would have to be migrated for.
+Left out of #9 and still undecided: whether `source_assets.truth_status`, `extraction_candidates.candidate_type`, `extraction_jobs.extractor_kind`, `asset_parse_results.parser_kind`, and `relationship_type_definitions.family` get constraints, and whether Task 10 will soon add job statuses that a new `CHECK` would have to be migrated for.
 
 ## Not verified
 

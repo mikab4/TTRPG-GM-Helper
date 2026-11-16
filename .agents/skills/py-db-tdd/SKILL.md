@@ -11,7 +11,7 @@ Follow the "Backend Tests" rules in `AGENTS.md`. This skill adds where the test 
 
 | Path | Holds |
 |---|---|
-| `backend/tests/conftest.py` | Factory fixtures (`owner_factory`, `campaign_factory`, `entity_factory`, `relationship_factory`, `session_factory`, `source_asset_factory`), `db_session_factory`, `sqlite_engine`, `api_request`, and the PostgreSQL fixtures `postgres_test_container` and `postgres_test_settings` |
+| `backend/tests/conftest.py` | Factory fixtures (`owner_factory`, `campaign_factory`, `entity_factory`, `relationship_factory`, `session_factory`, `source_asset_factory`), `db_session_factory`, `sqlite_engine`, `api_request`, and the PostgreSQL fixtures `postgres_test_container`, `postgres_test_settings`, and `postgres_engine` (an engine migrated to `head`) |
 | `backend/tests/factories.py` | `factory_boy` model factories (`OwnerFactory`, ...) with `create_in_session()`, used by the factory fixtures |
 | `backend/tests/pg_test_support.py` | Docker container lifecycle, readiness checks, and `upgraded_postgres_test_engine()` |
 
