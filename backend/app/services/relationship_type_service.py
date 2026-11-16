@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Relationship
@@ -17,6 +18,8 @@ from app.services.relationship_catalog import (
     get_relationship_type_descriptor,
     list_relationship_type_descriptors,
 )
+
+_CAMPAIGN_KEY_UNIQUE_CONSTRAINT = "uq_relationship_type_definitions_campaign_key"
 
 
 def list_relationship_types(
@@ -61,7 +64,13 @@ def create_relationship_type(
         allowed_target_types=relationship_type_create.allowed_target_types,
     )
     db_session.add(created_type_definition)
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        if _violates_campaign_key_uniqueness(exc):
+            raise ConflictError("Relationship type already exists for this campaign.") from exc
+        raise
     db_session.refresh(created_type_definition)
     return created_type_definition
 
@@ -168,3 +177,9 @@ def _relationship_type_is_in_use(
         )
     )
     return used_relationship is not None
+
+
+def _violates_campaign_key_uniqueness(integrity_error: IntegrityError) -> bool:
+    driver_diagnostics = getattr(integrity_error.orig, "diag", None)
+    violated_constraint_name = getattr(driver_diagnostics, "constraint_name", None)
+    return violated_constraint_name == _CAMPAIGN_KEY_UNIQUE_CONSTRAINT
