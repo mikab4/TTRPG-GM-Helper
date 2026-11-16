@@ -99,3 +99,29 @@ def test_ensure_postgres_test_container_fails_when_docker_daemon_is_unavailable(
         match="Docker is installed but the daemon is unavailable",
     ):
         pg_test_support.ensure_postgres_test_container()
+
+
+def test_remove_postgres_test_container_also_removes_its_anonymous_volumes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    recorded_commands: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        del check, capture_output, text
+        recorded_commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(pg_test_support.subprocess, "run", fake_run)
+
+    # Act
+    pg_test_support.remove_postgres_test_container("rpg-gm-helper-test-postgres-abc")
+
+    # Assert
+    assert recorded_commands == [["docker", "rm", "--force", "--volumes", "rpg-gm-helper-test-postgres-abc"]]
