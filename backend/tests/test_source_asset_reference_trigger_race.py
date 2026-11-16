@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from uuid import UUID
 
@@ -9,27 +9,14 @@ from sqlalchemy import Connection, Engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
-from app.config import Settings
 from app.models import Campaign, Entity, ExtractionJob, Owner, Relationship, SourceAsset
 from app.schemas.relationships import RelationshipCreate
 from app.services.asset_service import _begin_asset_delete
 from app.services.errors import ConflictError
 from app.services.relationship_service import create_relationship
-from tests.pg_test_support import upgraded_postgres_test_engine, wait_for_backend_lock_wait
+from tests.pg_test_support import wait_for_backend_lock_wait
 
 CONCURRENT_WRITE_TIMEOUT_SECONDS = 10.0
-
-
-@pytest.fixture
-def postgres_engine(
-    monkeypatch: pytest.MonkeyPatch,
-    postgres_test_settings: Settings,
-) -> Iterator[Engine]:
-    with upgraded_postgres_test_engine(
-        monkeypatch=monkeypatch,
-        settings=postgres_test_settings,
-    ) as engine:
-        yield engine
 
 
 def _seed_campaign_with_active_asset(engine: Engine) -> dict[str, UUID]:

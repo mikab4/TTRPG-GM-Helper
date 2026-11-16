@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -9,7 +8,6 @@ import pytest
 from sqlalchemy import Engine, event, func, select
 from sqlalchemy.orm import Session as DBSession
 
-from app.config import Settings
 from app.models import Campaign, Entity, Relationship, Session, SourceAsset
 from app.schemas import AssetCreateFormData
 from app.services import ConflictError, asset_service, campaign_service
@@ -27,19 +25,6 @@ from tests.factories import (
     SessionFactory,
     SourceAssetFactory,
 )
-from tests.pg_test_support import upgraded_postgres_test_engine
-
-
-@pytest.fixture
-def postgres_engine(
-    monkeypatch: pytest.MonkeyPatch,
-    postgres_test_settings: Settings,
-) -> Iterator[Engine]:
-    with upgraded_postgres_test_engine(
-        monkeypatch=monkeypatch,
-        settings=postgres_test_settings,
-    ) as engine:
-        yield engine
 
 
 def _count_campaign_rows(db_session: DBSession, model: type, campaign_id: UUID) -> int:

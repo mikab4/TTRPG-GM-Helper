@@ -21,7 +21,7 @@ Last updated 2026-11-16.
 | #7 | `task9/migration-gate` | Merged to `main`. Models and migrations matched, so no whitelist was needed |
 | #10 | `task9/lazy-collections` | Merged to `main`. No explicit `selectinload` was needed |
 | #11 | `task9/uuid7` | Merged to `main` |
-| #13 | `task9/compose-bind` | Merged to `main`. The engineer's browser check under WSL is still open |
+| #13 | `task9/compose-bind` | Merged to `main`. The engineer opened the app from a Windows browser under WSL on 2026-11-16 and it loaded |
 | #5 | `task9/lane-1-trigger-lock` | Merged to `main` with `FOR KEY SHARE` (D6 decided) |
 | #12 | `task9/lane-2-drop-duplicate-indexes` | Reviewed; waiting for the engineer's merge |
 | #1 | `task9/campaign-delete-files` | Reviewed (D1 decided); stacked on the #12 branch; waiting for the engineer's merge |
@@ -334,4 +334,6 @@ Also undecided for #9: whether `source_assets.truth_status`, `extraction_candida
 
 ## Test harness problem found during this work
 
-Every pytest session leaves one anonymous Docker volume behind. `remove_postgres_test_container` in `backend/tests/pg_test_support.py` runs `docker rm --force` without `--volumes`. Measured on 2026-11-16: one run of the suite raised the count of unattached volumes by one. Proposed fix, not yet made: add `--volumes` to that command.
+Every pytest session leaves one anonymous Docker volume behind. `remove_postgres_test_container` in `backend/tests/pg_test_support.py` runs `docker rm --force` without `--volumes`. Measured on 2026-11-16: one run of the suite raised the count of unattached volumes by one.
+
+Fixed on `task9/test-harness-cleanup`: the command now passes `--volumes`, and a test checks the command. The same branch moves the `postgres_engine` fixture, which three test files had each defined, into `backend/tests/conftest.py`.

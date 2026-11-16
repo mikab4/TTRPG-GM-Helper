@@ -2,29 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session as DBSession
 
-from app.config import Settings
 from app.models import Campaign, Entity, Relationship
 from app.services import campaign_service, entity_service
 from app.services.asset_storage import LocalAssetStorage
 from tests.factories import CampaignFactory, EntityFactory, OwnerFactory, RelationshipFactory
-from tests.pg_test_support import upgraded_postgres_test_engine
-
-
-@pytest.fixture
-def postgres_engine(
-    monkeypatch: pytest.MonkeyPatch,
-    postgres_test_settings: Settings,
-) -> Engine:
-    with upgraded_postgres_test_engine(
-        monkeypatch=monkeypatch,
-        settings=postgres_test_settings,
-    ) as engine:
-        yield engine
 
 
 def test_delete_entity_cascades_its_relationships_on_postgres(postgres_engine: Engine) -> None:

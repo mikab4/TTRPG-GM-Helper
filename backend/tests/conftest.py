@@ -33,6 +33,7 @@ from tests.pg_test_support import (
     ensure_postgres_test_container,
     load_test_settings,
     remove_postgres_test_container,
+    upgraded_postgres_test_engine,
 )
 
 
@@ -311,3 +312,15 @@ def postgres_test_container() -> Iterator[PostgresTestContainer]:
 @pytest.fixture(scope="session")
 def postgres_test_settings(postgres_test_container: PostgresTestContainer) -> Settings:
     return load_test_settings(runtime_database_url=postgres_test_container.database_url)
+
+
+@pytest.fixture
+def postgres_engine(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> Iterator[Engine]:
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        yield engine
