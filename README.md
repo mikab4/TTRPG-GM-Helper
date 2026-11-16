@@ -43,12 +43,15 @@ To add it to your bashrc run:
 echo 'source /absolute/path/to/rpg_gm_helper/.project_env.sh' >> ~/.bashrc
 source ~/.bashrc
 ```
-Tools: 
-- To remove a worktree run:
+
+Tools:
+- To remove a worktree and its Docker containers and volumes, run it with the worktree's path, wherever the worktree is:
 
 ```bash
-git_worktree_remove .worktrees/my-feature
+git_worktree_remove path/to/my-feature
 ```
+
+A worktree's directory name is its Docker Compose project name. If two worktrees share a directory name, `git_worktree_remove` refuses to delete a stack that another checkout started.
 
 ## Debugging
 

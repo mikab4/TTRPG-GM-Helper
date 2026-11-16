@@ -36,6 +36,22 @@ git_worktree_remove() {
   local compose_project_name
   compose_project_name="$(basename "$worktree_path")"
 
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "jq is required. Install it: sudo apt install jq" >&2
+    return 2
+  fi
+
+  # Two worktrees with the same directory name share one Compose project.
+  # Refuse if Docker reports that project as started from a different checkout.
+  local compose_config_files
+  compose_config_files="$(docker compose ls --all --format json --filter "name=^${compose_project_name}\$" 2>/dev/null |
+    jq -r '.[0].ConfigFiles // empty' 2>/dev/null)"
+  if [ -n "$compose_config_files" ] && [ "$compose_config_files" != "$worktree_path/compose.yaml" ]; then
+    echo "Compose project '$compose_project_name' belongs to another checkout: $compose_config_files" >&2
+    echo "Refusing to delete its volumes. Stop it from that checkout instead." >&2
+    return 2
+  fi
+
   echo "This will permanently delete Docker volumes for Compose project '$compose_project_name'."
   echo "It will then remove Git worktree: $worktree_path"
   read -r -p "Continue? [y/N] " confirmation
