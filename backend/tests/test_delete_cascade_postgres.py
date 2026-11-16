@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
@@ -8,6 +10,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.config import Settings
 from app.models import Campaign, Entity, Relationship
 from app.services import campaign_service, entity_service
+from app.services.asset_storage import LocalAssetStorage
 from tests.factories import CampaignFactory, EntityFactory, OwnerFactory, RelationshipFactory
 from tests.pg_test_support import upgraded_postgres_test_engine
 
@@ -69,6 +72,7 @@ def test_delete_entity_cascades_its_relationships_on_postgres(postgres_engine: E
 
 def test_delete_campaign_removes_its_entities_and_relationships_on_postgres(
     postgres_engine: Engine,
+    tmp_path: Path,
 ) -> None:
     # Arrange
     with DBSession(postgres_engine) as arrange_session:
@@ -87,7 +91,11 @@ def test_delete_campaign_removes_its_entities_and_relationships_on_postgres(
 
     # Act
     with DBSession(postgres_engine) as act_session:
-        campaign_service.delete_campaign(act_session, campaign_id)
+        campaign_service.delete_campaign(
+            act_session,
+            campaign_id,
+            asset_storage=LocalAssetStorage(storage_root=tmp_path / "asset-storage"),
+        )
 
     # Assert
     with DBSession(postgres_engine) as assert_session:

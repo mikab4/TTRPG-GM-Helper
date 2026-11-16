@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Campaign, Owner
+from app.enums import SourceAssetLifecycleStatus
+from app.models import Campaign, Owner, SourceAsset
 from app.schemas import CampaignCreate, CampaignUpdate
+from app.services import asset_service
+from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import get_campaign_or_raise
 from app.services.errors import ConflictError, NotFoundError
 
@@ -85,7 +88,40 @@ def update_campaign(
     return stored_campaign
 
 
-def delete_campaign(db_session: Session, campaign_id: UUID) -> None:
-    stored_campaign = get_campaign(db_session, campaign_id)
+CAMPAIGN_ASSETS_ADDED_DURING_DELETE_MESSAGE = (
+    "Assets were added while the campaign was being deleted. Delete the campaign again to finish."
+)
+
+
+def delete_campaign(
+    db_session: Session,
+    campaign_id: UUID,
+    *,
+    asset_storage: AssetStorage,
+) -> None:
+    get_campaign(db_session, campaign_id)
+    asset_service.remove_campaign_asset_files(
+        db_session,
+        campaign_id=campaign_id,
+        asset_storage=asset_storage,
+    )
+
+    # The row lock blocks asset inserts until this transaction ends.
+    stored_campaign = db_session.scalar(select(Campaign).where(Campaign.id == campaign_id).with_for_update())
+    if stored_campaign is None:
+        db_session.rollback()
+        raise NotFoundError("Campaign not found.")
+    asset_added_during_delete = db_session.scalar(
+        select(
+            exists().where(
+                SourceAsset.campaign_id == campaign_id,
+                SourceAsset.lifecycle_status == SourceAssetLifecycleStatus.ACTIVE.value,
+            )
+        )
+    )
+    if asset_added_during_delete:
+        db_session.rollback()
+        raise ConflictError(CAMPAIGN_ASSETS_ADDED_DURING_DELETE_MESSAGE)
+
     db_session.delete(stored_campaign)
     db_session.commit()

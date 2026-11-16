@@ -40,6 +40,18 @@ class DeleteFailingAssetStorage(RecordingAssetStorage):
         raise OSError("storage delete failed")
 
 
+class SelectiveDeleteFailingAssetStorage(RecordingAssetStorage):
+    def __init__(self, *, delegate_storage: LocalAssetStorage, failing_keys: set[str]) -> None:
+        super().__init__(delegate_storage=delegate_storage)
+        self._failing_keys = failing_keys
+
+    def delete(self, *, storage_key: str) -> None:
+        if storage_key in self._failing_keys:
+            self.deleted_keys.append(storage_key)
+            raise OSError("storage delete failed")
+        super().delete(storage_key=storage_key)
+
+
 class DeleteMissingAssetStorage(RecordingAssetStorage):
     def delete(self, *, storage_key: str) -> None:
         self.deleted_keys.append(storage_key)
@@ -52,6 +64,17 @@ def build_recording_asset_storage(*, storage_root: Path) -> RecordingAssetStorag
 
 def build_delete_failing_asset_storage(*, storage_root: Path) -> DeleteFailingAssetStorage:
     return DeleteFailingAssetStorage(delegate_storage=LocalAssetStorage(storage_root=storage_root))
+
+
+def build_selective_delete_failing_asset_storage(
+    *,
+    storage_root: Path,
+    failing_keys: set[str],
+) -> SelectiveDeleteFailingAssetStorage:
+    return SelectiveDeleteFailingAssetStorage(
+        delegate_storage=LocalAssetStorage(storage_root=storage_root),
+        failing_keys=failing_keys,
+    )
 
 
 def build_delete_missing_asset_storage(*, storage_root: Path) -> DeleteMissingAssetStorage:
