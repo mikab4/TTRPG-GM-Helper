@@ -14,7 +14,7 @@
 
 ## Deliberate scope change
 
-This document is the detailed implementation breakdown for Tasks 9–12 in `docs/plans/2026-03-31-rpg-gm-helper-v1.md`. The original synchronous, PostgreSQL-only path was a sound v1 delivery choice. This approved follow-up intentionally adds infrastructure while keeping the source plan's durable product rules.
+This document is the detailed implementation breakdown for Tasks 9–12 in `docs/plans/rpg-gm-helper-v1.md`. The original synchronous, PostgreSQL-only path was a sound v1 delivery choice. This approved follow-up intentionally adds infrastructure while keeping the source plan's durable product rules.
 
 - PostgreSQL is authoritative for asset metadata, job lifecycle, candidates, approvals, entities, relationships, campaign ownership, and provenance.
 - MinIO/S3 owns original assets and optional large artifacts. No code outside the storage adapter relies on local paths.

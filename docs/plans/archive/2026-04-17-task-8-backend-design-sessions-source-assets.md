@@ -356,8 +356,8 @@ Parse/file-dependent operation contract:
 Update all source-of-truth docs that still describe the old shape:
 
 - `README.md`
-- `docs/plans/2026-03-31-rpg-gm-helper-v1.md`
-- `docs/plans/2026-03-31-rpg-gm-helper-v1-reasoning.md`
+- `docs/plans/rpg-gm-helper-v1.md`
+- `docs/plans/rpg-gm-helper-v1-reasoning.md`
 
 ## Test Plan
 
