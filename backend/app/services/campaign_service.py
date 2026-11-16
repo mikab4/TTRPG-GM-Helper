@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Campaign, Owner
@@ -30,7 +31,11 @@ def create_campaign(db_session: Session, campaign_create: CampaignCreate) -> Cam
         description=campaign_create.description,
     )
     db_session.add(created_campaign)
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError("Campaign name already exists for this owner.") from exc
     db_session.refresh(created_campaign)
     return created_campaign
 
@@ -71,7 +76,11 @@ def update_campaign(
     for field_name, field_value in campaign_update_fields.items():
         setattr(stored_campaign, field_name, field_value)
 
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as exc:
+        db_session.rollback()
+        raise ConflictError("Campaign name already exists for this owner.") from exc
     db_session.refresh(stored_campaign)
     return stored_campaign
 
