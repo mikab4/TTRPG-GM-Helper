@@ -58,3 +58,5 @@ def test_list_campaigns_supports_owner_filter(api_request, owner_factory, campai
 
 - Use `api_request` for API tests; a hand-built client hangs on sync FastAPI handlers (`sync_api_test_runtime_shim` in `conftest.py`).
 - Use `sqlite_engine` for SQLite tables; calling `Base.metadata.create_all` directly fails on `'{}'::jsonb` server defaults (`patched_jsonb_defaults` in `conftest.py`).
+- To see the SQL a PostgreSQL test sends, attach a `before_cursor_execute` event listener to the engine; `--log-level` prints nothing for engines from `upgraded_postgres_test_engine` (`pg_test_support.py`).
+- For a deterministic race test, read `pg_backend_pid()` from the second session before handing it to the worker thread, then wait with `wait_for_backend_lock_wait` (`pg_test_support.py`); the API client runs handlers inline and cannot show a race.
