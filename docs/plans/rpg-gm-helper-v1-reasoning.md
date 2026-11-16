@@ -8,7 +8,7 @@
 
 The product must help a Game Master turn campaign material into structured, reviewable, searchable records while preserving where each fact came from. It runs for one local GM today and is being built toward several users, with players who see only part of the campaign data. It is not trying to become a complete worldbuilding suite or an autonomous AI knowledge base.
 
-Tasks 1–8 are implemented. The next step is Task 9, which fixes the problems found in the 2026-11-16 review before the pipeline is built. This reasoning document records the decisions that still govern the current plan; completed implementation details remain authoritative in code, migrations, tests, and archived task plans.
+Tasks 1–9 are implemented. Task 9 fixed the problems found in the 2026-11-16 review before the pipeline is built; the next step is Task 10. This reasoning document records the decisions that still govern the current plan; completed implementation details remain authoritative in code, migrations, tests, and archived task plans.
 
 ## Direction Change On 2026-11-16
 

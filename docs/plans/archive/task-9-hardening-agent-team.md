@@ -12,7 +12,7 @@
 
 ## Progress
 
-Last updated 2026-11-16.
+Last updated 2026-11-17. All required fixes are on `main` and this plan is archived.
 
 | Fix | Branch | Status |
 |-----|--------|--------|
@@ -28,8 +28,8 @@ Last updated 2026-11-16.
 | — | `task9/test-harness-cleanup` | Merged to `main` |
 | #8 | — | Closed without a branch (D3 decided: no auto-ID callback) |
 | #4 | `task9/lane-3-unique-relationships` | Merged to `main` |
-| #9 | `task9/lane-4-status-checks` | Reviewed (D2 decided: status columns only); waiting for the engineer's merge |
-| #14 | — | Optional; not started |
+| #9 | `task9/lane-4-status-checks` | Merged to `main` (D2 decided: status columns only) |
+| #14 | — | Not done (engineer's decision, 2026-11-17) |
 
 The six merged branches were stacked and fast-forwarded in one line, because the engineer merges with `--ff-only`. Later branches are rebased onto `main` before they are handed over.
 

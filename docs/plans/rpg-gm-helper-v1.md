@@ -269,7 +269,7 @@ The completed detailed plans for this task and its workspace UI are retained und
 
 ### Task 9: Hardening before the pipeline
 
-**Status: In Progress**
+**Status: Complete**
 
 Fix the problems found in the 2026-11-16 code and security review before new tables and jobs are built on top of them. Each fix includes a test that fails without it. Sources: the review, the former `docs/issues.md`, and the database suggestions the review checked against the code.
 
@@ -302,11 +302,11 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 13 | Compose publishes PostgreSQL, the API, and the frontend on every network interface, with a default superuser password and no login | `compose.yaml` | Bind published ports to `127.0.0.1`; publish PostgreSQL only if host tools need it |
 | 14 | No CI; checks run only through local hooks | repository root | Optional in this task: a workflow that runs the backend and frontend checks |
 
-**Progress (2026-11-16):** The branch split, merge order, and open decisions for this task are in `docs/plans/task-9-hardening-agent-team.md`.
+**Progress:** Fixes #1 to #13 were merged by 2026-11-17. The branch split, merge order, and decisions are recorded in `docs/plans/archive/task-9-hardening-agent-team.md`.
 
 | # | Status | What was implemented |
 |---|--------|----------------------|
-| 2 | Complete | `create_campaign` and `update_campaign` roll back on `IntegrityError` and raise `ConflictError`. Every integrity error on these two writes is reported as a duplicate name |
+| 2 | Complete | `create_campaign` and `update_campaign` roll back on `IntegrityError` and raise `ConflictError`. Since 2026-11-17 only a violation of `uq_campaign_owner_name` is reported as a duplicate name; any other integrity error is rolled back and re-raised, as in the relationship services |
 | 3 | Complete | `create_relationship_type` raises `ConflictError` only when the violated constraint is `uq_relationship_type_definitions_campaign_key`; other integrity errors are re-raised. A PostgreSQL test produces the race for real |
 | 6 | Complete | `backend/tests/test_campaign_delete_postgres.py` covers the three cases and checks that a second campaign is untouched. File removal is covered by the #1 tests |
 | 7 | Complete | `backend/tests/test_migrations.py` asserts `compare_metadata` returns no differences at `head`. Models and migrations matched, so no whitelist exists. The check does not see `CHECK` constraints, triggers, or functions. A second test, which needs no database, enforces the `YYYYMMDD_NNNN_slug.py` naming, consecutive sequence numbers, and one linear chain |
@@ -317,9 +317,9 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 1 | Complete | Decided 2026-11-16: `delete_campaign` marks the campaign's assets `deleting`, removes the files, then deletes the campaign row. A failed removal leaves the campaign in place with a 409, and repeating the delete finishes it. An asset uploaded while the files are being removed also stops the delete with a 409. Background deletion is deferred in `docs/deferred_design_options.md` |
 | 12 | Complete | Revision `20261116_0005` drops both indexes and the models no longer declare them. `uq_sessions_campaign_number` and `uq_relationship_type_definitions_campaign_key` already start with `campaign_id` |
 | 8 | Complete | Decided 2026-11-16: no auto-ID callback. It would make plain `alembic revision` need a running database. The naming test added with #7 enforces the format instead; keep passing `--rev-id YYYYMMDD_NNNN` |
-| 4 | Complete | Revision `20261116_0006` adds `uq_entity_relationships_campaign_type_source_target`. The migration lists existing duplicates and refuses to run without changing any row. `_commit_relationship_write` maps that constraint's violation to the same 409 as the service check. The inverse pair of a symmetric type is still guarded only by `_validate_duplicates`, so that race stays open. `ix_entity_relationships_campaign_id` is now covered by the new constraint and was left in place |
+| 4 | Complete | Revision `20261116_0006` adds `uq_entity_relationships_campaign_type_source_target`. The migration lists existing duplicates and refuses to run without changing any row. `_commit_relationship_write` maps that constraint's violation to the same 409 as the service check. The inverse pair of a symmetric type is still guarded only by `_validate_duplicates`, so that race stays open. `ix_entity_relationships_campaign_id` became covered by the new constraint; revision `20261117_0008` drops it |
 | 9 | Complete | Decided 2026-11-16: `CHECK` constraints on the status columns only. `entities.type` stays unconstrained while the entity-type compatibility feature exists. Revision `20261116_0007` adds nine `ck_<table>_<column>_allowed` constraints; it lists out-of-range values and refuses to run without changing any row. The models build each constraint from its enum in `backend/app/enums.py`, and tests compare the models with the enums and with the migrated database. Adding a status value to one of these enums needs a migration that replaces the matching constraint. `source_assets.truth_status`, `extraction_candidates.candidate_type`, `extraction_jobs.extractor_kind`, `asset_parse_results.parser_kind`, and `relationship_type_definitions.family` are not constrained |
-| 14 | Planned | Optional |
+| 14 | Complete | Decided 2026-11-17: not done. The fix was optional; checks keep running through the local hooks |
 
 **Not in this task:**
 
@@ -332,7 +332,7 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 
 ### Task 10: PostgreSQL-only parsing pipeline and Google import
 
-**Status: Planned**
+**Status: Next**
 
 Deliver the first real path from a source note to parsed sections, all inside the backend and PostgreSQL.
 
