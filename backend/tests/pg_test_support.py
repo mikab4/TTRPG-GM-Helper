@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,18 +173,25 @@ def wait_for_backend_lock_wait(
     backend_pid: int,
     timeout_seconds: float = 10.0,
     poll_interval_seconds: float = 0.02,
-) -> dict[str, object]:
+    stop_waiting: Callable[[], bool] | None = None,
+) -> dict[str, object] | None:
     """Block until the given PostgreSQL backend is waiting on a heavyweight lock.
 
     Polls ``pg_stat_activity`` from a separate connection. Raises
     ``PostgresTestHarnessError`` with the backend's last observed state when the
     timeout expires, so a race test fails clearly instead of hanging. Returns the
     backend's ``pg_stat_activity`` state at the moment it was seen waiting.
+
+    ``stop_waiting`` lets a caller accept that the statement may not block at
+    all: when it returns true (for example ``future.done``), the helper returns
+    ``None`` instead of waiting for a lock.
     """
     deadline = time.monotonic() + timeout_seconds
     last_observed_state: dict[str, object] | None = None
 
     while True:
+        if stop_waiting is not None and stop_waiting():
+            return None
         with engine.connect() as connection:
             activity_row = (
                 connection.execute(

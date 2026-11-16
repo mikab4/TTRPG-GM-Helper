@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import Settings
-from app.models import Campaign, Entity, Owner, Relationship, SourceAsset
+from app.models import Campaign, Entity, ExtractionJob, Owner, Relationship, SourceAsset
 from app.schemas.relationships import RelationshipCreate
 from app.services.errors import ConflictError
 from app.services.relationship_service import create_relationship
@@ -178,3 +178,60 @@ def test_entity_insert_rejects_asset_whose_delete_commits_while_insert_waits(
             select(func.count()).select_from(Entity).where(Entity.source_asset_id == seeded_ids["source_asset_id"])
         )
     assert citing_entity_count == 0
+
+
+def test_twin_transactions_that_cite_an_asset_and_then_update_it_both_commit(
+    postgres_engine: Engine,
+) -> None:
+    # Arrange: two transactions each insert an extraction job citing the same
+    # asset, so each holds the trigger's lock on the asset row.
+    seeded_ids = _seed_campaign_with_active_asset(postgres_engine)
+    source_asset_id = seeded_ids["source_asset_id"]
+    first_session = DBSession(postgres_engine)
+    second_session = DBSession(postgres_engine)
+    executor = ThreadPoolExecutor(max_workers=2)
+
+    def update_asset_parse_status(citing_session: DBSession) -> None:
+        citing_session.execute(
+            text("UPDATE source_assets SET parse_status = 'running' WHERE id = :asset_id"),
+            {"asset_id": source_asset_id},
+        )
+
+    try:
+        for citing_session in (first_session, second_session):
+            citing_session.add(
+                ExtractionJob(
+                    campaign_id=seeded_ids["campaign_id"],
+                    source_asset_id=source_asset_id,
+                    status="pending",
+                    extractor_kind="rules",
+                )
+            )
+            citing_session.flush()
+        first_backend_pid = first_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
+        second_backend_pid = second_session.connection().execute(text("SELECT pg_backend_pid()")).scalar_one()
+
+        # Act: each transaction updates the asset row before either commits.
+        # The first update may finish or block; the second then runs against it.
+        first_update = executor.submit(update_asset_parse_status, first_session)
+        wait_for_backend_lock_wait(postgres_engine, backend_pid=first_backend_pid, stop_waiting=first_update.done)
+        second_update = executor.submit(update_asset_parse_status, second_session)
+        wait_for_backend_lock_wait(postgres_engine, backend_pid=second_backend_pid, stop_waiting=second_update.done)
+
+        first_update.result(timeout=CITING_WRITE_TIMEOUT_SECONDS)
+        first_session.commit()
+        second_update.result(timeout=CITING_WRITE_TIMEOUT_SECONDS)
+        second_session.commit()
+    finally:
+        executor.shutdown(wait=True)
+        first_session.close()
+        second_session.close()
+
+    # Assert
+    with DBSession(postgres_engine) as verify_session:
+        citing_job_count = verify_session.scalar(
+            select(func.count()).select_from(ExtractionJob).where(ExtractionJob.source_asset_id == source_asset_id)
+        )
+        parse_status = verify_session.scalar(select(SourceAsset.parse_status).where(SourceAsset.id == source_asset_id))
+    assert citing_job_count == 2
+    assert parse_status == "running"

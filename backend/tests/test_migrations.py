@@ -457,6 +457,42 @@ def test_source_asset_delete_is_restricted_when_records_reference_it(
             db_session.rollback()
 
 
+ROW_LOCK_CLAUSE_PATTERN = re.compile(r"\bFOR\s+(?:NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\b", re.IGNORECASE)
+
+
+def read_function_source(connection: Connection, function_name: str) -> str:
+    return connection.execute(
+        text("SELECT prosrc FROM pg_proc WHERE proname = :function_name"),
+        {"function_name": function_name},
+    ).scalar_one()
+
+
+def test_20261116_0004_locks_cited_source_asset_with_key_share_and_downgrade_removes_lock(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    alembic_config = build_alembic_config()
+    previous_revision = ScriptDirectory.from_config(alembic_config).get_revision("20261116_0004").down_revision
+
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            upgraded_function_source = read_function_source(connection, "enforce_active_source_asset_reference")
+
+        # Act
+        command.downgrade(alembic_config, previous_revision)
+
+        with engine.connect() as connection:
+            downgraded_function_source = read_function_source(connection, "enforce_active_source_asset_reference")
+
+    # Assert
+    assert ROW_LOCK_CLAUSE_PATTERN.findall(upgraded_function_source) == ["FOR KEY SHARE"]
+    assert ROW_LOCK_CLAUSE_PATTERN.findall(downgraded_function_source) == []
+
+
 def test_upgrade_from_20260410_backfills_legacy_source_document_into_source_asset_and_parse_result(
     monkeypatch: pytest.MonkeyPatch,
     postgres_test_settings: Settings,

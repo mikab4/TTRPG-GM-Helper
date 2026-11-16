@@ -367,6 +367,10 @@ def _begin_asset_delete(
     campaign_id: UUID,
     asset_id: UUID,
 ) -> SourceAsset:
+    # Any change of lifecycle_status from active to deleting must lock the row
+    # FOR UPDATE before checking references. The reference trigger
+    # (enforce_active_source_asset_reference) takes FOR KEY SHARE, which only
+    # conflicts with this lock, not with a plain UPDATE.
     stored_asset = db_session.scalar(
         select(SourceAsset)
         .where(
