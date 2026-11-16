@@ -14,6 +14,8 @@ from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import get_campaign_or_raise
 from app.services.errors import ConflictError, NotFoundError
 
+CAMPAIGN_NAME_CONFLICT_MESSAGE = "Campaign name already exists for this owner."
+_CAMPAIGN_OWNER_NAME_UNIQUE_CONSTRAINT = "uq_campaign_owner_name"
 CAMPAIGN_ASSETS_ADDED_DURING_DELETE_MESSAGE = (
     "Assets were added while the campaign was being deleted. Delete the campaign again to finish."
 )
@@ -30,7 +32,7 @@ def create_campaign(db_session: Session, campaign_create: CampaignCreate) -> Cam
         )
     )
     if conflicting_campaign is not None:
-        raise ConflictError("Campaign name already exists for this owner.")
+        raise ConflictError(CAMPAIGN_NAME_CONFLICT_MESSAGE)
 
     created_campaign = Campaign(
         owner_id=campaign_create.owner_id,
@@ -42,7 +44,9 @@ def create_campaign(db_session: Session, campaign_create: CampaignCreate) -> Cam
         db_session.commit()
     except IntegrityError as exc:
         db_session.rollback()
-        raise ConflictError("Campaign name already exists for this owner.") from exc
+        if _violates_campaign_owner_name_uniqueness(exc):
+            raise ConflictError(CAMPAIGN_NAME_CONFLICT_MESSAGE) from exc
+        raise
     db_session.refresh(created_campaign)
     return created_campaign
 
@@ -78,7 +82,7 @@ def update_campaign(
             )
         )
         if conflicting_campaign is not None:
-            raise ConflictError("Campaign name already exists for this owner.")
+            raise ConflictError(CAMPAIGN_NAME_CONFLICT_MESSAGE)
 
     for field_name, field_value in campaign_update_fields.items():
         setattr(stored_campaign, field_name, field_value)
@@ -87,7 +91,9 @@ def update_campaign(
         db_session.commit()
     except IntegrityError as exc:
         db_session.rollback()
-        raise ConflictError("Campaign name already exists for this owner.") from exc
+        if _violates_campaign_owner_name_uniqueness(exc):
+            raise ConflictError(CAMPAIGN_NAME_CONFLICT_MESSAGE) from exc
+        raise
     db_session.refresh(stored_campaign)
     return stored_campaign
 
@@ -124,3 +130,9 @@ def delete_campaign(
 
     db_session.delete(stored_campaign)
     db_session.commit()
+
+
+def _violates_campaign_owner_name_uniqueness(integrity_error: IntegrityError) -> bool:
+    driver_diagnostics = getattr(integrity_error.orig, "diag", None)
+    violated_constraint_name = getattr(driver_diagnostics, "constraint_name", None)
+    return violated_constraint_name == _CAMPAIGN_OWNER_NAME_UNIQUE_CONSTRAINT
