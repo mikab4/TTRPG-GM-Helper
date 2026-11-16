@@ -4,7 +4,7 @@ services:
     env_file:
       - .env
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
       - rpg-gm-helper-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
       AUTO_APPLY_MIGRATIONS: "true"
       PYTHONDONTWRITEBYTECODE: "1"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
       - backend-venv:/app/.venv
@@ -39,7 +39,7 @@ services:
     environment:
       VITE_API_BASE_URL: http://localhost:8000/api
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
