@@ -75,7 +75,6 @@ class Relationship(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "target_entity_id",
             name=DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT,
         ),
-        Index("ix_entity_relationships_campaign_id", "campaign_id"),
         Index(
             "ix_entity_relationships_source_entity_id_campaign_id",
             "source_entity_id",

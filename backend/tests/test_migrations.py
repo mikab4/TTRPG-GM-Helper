@@ -547,6 +547,32 @@ def test_20261116_0005_drops_duplicate_campaign_id_indexes_and_downgrade_restore
         assert downgraded_index_columns_by_table[table_name][index_name] == ["campaign_id"]
 
 
+def test_20261117_0008_drops_duplicate_relationship_campaign_id_index_and_downgrade_restores_it(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    alembic_config = build_alembic_config()
+    previous_revision = ScriptDirectory.from_config(alembic_config).get_revision("20261117_0008").down_revision
+
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            upgraded_index_names = set(read_index_columns_by_name(connection, "entity_relationships"))
+
+        # Act
+        command.downgrade(alembic_config, previous_revision)
+
+        with engine.connect() as connection:
+            downgraded_index_columns_by_name = read_index_columns_by_name(connection, "entity_relationships")
+
+    # Assert
+    assert "ix_entity_relationships_campaign_id" not in upgraded_index_names
+    assert downgraded_index_columns_by_name["ix_entity_relationships_campaign_id"] == ["campaign_id"]
+
+
 DIRECTED_RELATIONSHIP_UNIQUE_CONSTRAINT = "uq_entity_relationships_campaign_type_source_target"
 
 
