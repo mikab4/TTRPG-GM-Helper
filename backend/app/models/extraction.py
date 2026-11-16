@@ -69,7 +69,7 @@ class ExtractionJob(UUIDPrimaryKeyMixin, Base):
     )
     candidates: Mapped[list["ExtractionCandidate"]] = relationship(
         back_populates="extraction_job",
-        lazy="selectin",
+        lazy="select",
         overlaps="extraction_candidates",
     )
 

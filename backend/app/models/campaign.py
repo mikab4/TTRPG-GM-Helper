@@ -33,36 +33,36 @@ class Campaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owner: Mapped["Owner"] = relationship(back_populates="campaigns", lazy="select")
     sessions: Mapped[list["Session"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     source_assets: Mapped[list["SourceAsset"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     extraction_jobs: Mapped[list["ExtractionJob"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     extraction_candidates: Mapped[list["ExtractionCandidate"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     entities: Mapped[list["Entity"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     relationships: Mapped[list["Relationship"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )
     relationship_type_definitions: Mapped[list["RelationshipTypeDefinition"]] = relationship(
         back_populates="campaign",
-        lazy="selectin",
+        lazy="select",
         passive_deletes="all",
     )

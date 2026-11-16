@@ -19,5 +19,5 @@ class Owner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     campaigns: Mapped[list["Campaign"]] = relationship(
         back_populates="owner",
-        lazy="selectin",
+        lazy="select",
     )

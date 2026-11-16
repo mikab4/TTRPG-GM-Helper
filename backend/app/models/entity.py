@@ -71,13 +71,13 @@ class Entity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="source_entity",
         cascade="all, delete-orphan",
         foreign_keys="Relationship.source_entity_id",
-        lazy="selectin",
+        lazy="select",
         passive_deletes=True,
     )
     incoming_relationships: Mapped[list["Relationship"]] = relationship(
         back_populates="target_entity",
         cascade="all, delete-orphan",
         foreign_keys="Relationship.target_entity_id",
-        lazy="selectin",
+        lazy="select",
         passive_deletes=True,
     )
