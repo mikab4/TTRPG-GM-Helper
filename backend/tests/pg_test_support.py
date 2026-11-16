@@ -167,6 +167,45 @@ def create_test_engine(settings: Settings) -> Engine:
     return engine
 
 
+def wait_for_backend_lock_wait(
+    engine: Engine,
+    *,
+    backend_pid: int,
+    timeout_seconds: float = 10.0,
+    poll_interval_seconds: float = 0.02,
+) -> dict[str, object]:
+    """Block until the given PostgreSQL backend is waiting on a heavyweight lock.
+
+    Polls ``pg_stat_activity`` from a separate connection. Raises
+    ``PostgresTestHarnessError`` with the backend's last observed state when the
+    timeout expires, so a race test fails clearly instead of hanging. Returns the
+    backend's ``pg_stat_activity`` state at the moment it was seen waiting.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last_observed_state: dict[str, object] | None = None
+
+    while True:
+        with engine.connect() as connection:
+            activity_row = (
+                connection.execute(
+                    text("SELECT state, wait_event_type, wait_event, query FROM pg_stat_activity WHERE pid = :backend_pid"),
+                    {"backend_pid": backend_pid},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if activity_row is not None:
+            last_observed_state = dict(activity_row)
+            if activity_row["wait_event_type"] == "Lock":
+                return last_observed_state
+        if time.monotonic() >= deadline:
+            raise PostgresTestHarnessError(
+                f"Timed out after {timeout_seconds}s waiting for PostgreSQL backend {backend_pid} "
+                f"to wait on a lock. Last observed pg_stat_activity state: {last_observed_state!r}."
+            )
+        time.sleep(poll_interval_seconds)
+
+
 def reset_public_schema(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(text("DROP SCHEMA public CASCADE"))
