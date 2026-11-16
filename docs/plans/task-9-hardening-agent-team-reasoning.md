@@ -27,6 +27,8 @@ Boundary: Alembic autogenerate does not compare `CHECK` constraints, triggers, o
 
 Both own `env.py`. The callback in Task 9's fix does not run for plain `alembic revision` unless `revision_environment = true` is set, which makes revision generation need a database. A static naming test gives the same guarantee without that cost and is added in either case. Auto-generated IDs would not help parallel work: two branches off one head would generate the same ID.
 
+Decided 2026-11-16: the callback is not added. #8 is closed by the naming test.
+
 ## #6 goes before #1 on one branch
 
 #6 adds tests for behavior that works today. They are the safety net for #1, which rewrites the same function, and for #10, which changes entity and campaign deletes from ORM-driven to database-cascade-driven.
@@ -34,6 +36,8 @@ Both own `env.py`. The callback in Task 9's fix does not run for plain `alembic 
 ## #9 is last
 
 It has the most open questions. Constraints declared in the models are enforced in the SQLite tests, where the compatibility tests deliberately insert legacy entity types. A `CHECK` on `entities.type` also makes the entity-type compatibility feature dead code while v1 Task 13 still expects it. And the migration must refuse to run on legacy rows, which stops the backend from starting, so the engineer has to clean the real database first.
+
+Decided 2026-11-16: #9 constrains the status columns only. `entities.type` stays unconstrained until the compatibility feature is retired, which removes the legacy-row and dead-code problems above.
 
 ## Only the integrator edits the v1 plan
 

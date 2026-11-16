@@ -22,10 +22,12 @@ Last updated 2026-11-16.
 | #10 | `task9/lazy-collections` | Merged to `main`. No explicit `selectinload` was needed |
 | #11 | `task9/uuid7` | Merged to `main` |
 | #13 | `task9/compose-bind` | Merged to `main`. The engineer's browser check under WSL is still open |
-| #5 | `task9/lane-1-trigger-lock` | Implemented with `FOR KEY SHARE` (D6 decided) and reviewed; waiting for the engineer's merge |
-| #1 | `task9/campaign-delete-files` | In progress (D1 decided) |
-| #8, #9 | — | Blocked on D3, D2 |
-| #12, #4 | — | Wait for #5 on `main` |
+| #5 | `task9/lane-1-trigger-lock` | Merged to `main` with `FOR KEY SHARE` (D6 decided) |
+| #12 | `task9/lane-2-drop-duplicate-indexes` | Reviewed; waiting for the engineer's merge |
+| #1 | `task9/campaign-delete-files` | Reviewed (D1 decided); stacked on the #12 branch; waiting for the engineer's merge |
+| #8 | — | Closed without a branch (D3 decided: no auto-ID callback) |
+| #4 | — | Next, after #12 is on `main` |
+| #9 | — | After #4. D2 decided: status columns only |
 | #14 | — | Optional; not started |
 
 The six merged branches were stacked and fast-forwarded in one line, because the engineer merges with `--ff-only`. Later branches are rebased onto `main` before they are handed over.
@@ -118,7 +120,7 @@ Wave 0 (all start now, in parallel)
 Wave 1 (schema lane, strictly one at a time)
   #12  →  #4  →  #9
   #12 starts after migration-gate and #5 are merged
-  #9 starts after D2 and the operator check
+  #9 starts after #4; D2 is decided and no operator check is needed
 
 Wave 2 (integrator)
   Task 9 status and summary in rpg-gm-helper-v1.md, full suite on main
@@ -156,7 +158,7 @@ The current Alembic head is `20260502_0003`. Revision IDs are assigned here, in 
 | 1 | #5 | `20261116_0004_lock_source_asset_in_reference_trigger.py` | `20260502_0003` |
 | 2 | #12 | `20261116_0005_drop_duplicate_campaign_id_indexes.py` | `20261116_0004` |
 | 3 | #4 | `20261116_0006_unique_directed_relationships.py` | `20261116_0005` |
-| 4 | #9 | `20261116_0007_status_and_entity_type_checks.py` | `20261116_0006` |
+| 4 | #9 | `20261116_0007_status_checks.py` | `20261116_0006` |
 
 Lane rules:
 
@@ -259,7 +261,7 @@ Run the commands listed in `README.md` under verification: the backend tests, th
    4. Today session A's commit succeeds; that is the bug. Assert it raises.
 2. The test engine uses `NullPool`, so each `connect()` is a separate database connection. The test needs a helper that polls `pg_stat_activity` until session A is blocked on a lock; put it in `pg_test_support.py`.
 3. Entity create does not accept `source_asset_id`, so insert through the ORM or the relationship service.
-4. The migration replaces the function `enforce_active_source_asset_reference` with `FOR SHARE` on its `SELECT`. One function backs three triggers. `downgrade()` restores the old body.
+4. The migration replaces the function `enforce_active_source_asset_reference` with `FOR KEY SHARE` on its `SELECT` (D6). One function backs three triggers. `downgrade()` restores the old body.
 
 **Verify:** the new test file plus `tests/test_migrations.py tests/test_relationship_service.py`.
 
@@ -285,15 +287,14 @@ Test: after upgrade to `head`, `inspector.get_indexes` for `sessions` and `relat
 
 ### Schema lane step 4 — #9
 
-**Blocked on D2 and on the operator check below.** Do not start before both.
+**D2 is decided: status columns only.** `entities.type` gets no constraint, so the entity-type compatibility feature and its tests are not touched.
 
-**Touches:** `__table_args__` in `models/relationship.py`, `source_asset.py`, `asset_parse_result.py`, `extraction.py`, and possibly `entity.py`; new migration `20261116_0007`; `test_migrations.py`; depending on D2, the compatibility service, route, tests, and frontend panel.
+**Touches:** `__table_args__` in `models/relationship.py`, `source_asset.py`, `asset_parse_result.py`, and `extraction.py`; new migration `20261116_0007`; `test_migrations.py`.
 
 Allowed values come from `backend/app/enums.py`:
 
 | Column | Enum |
 |--------|------|
-| `entities.type` | `EntityType` |
 | `entity_relationships.lifecycle_status` | `RelationshipLifecycleStatus` |
 | `entity_relationships.visibility_status` | `RelationshipVisibilityStatus` |
 | `entity_relationships.certainty_status` | `RelationshipCertaintyStatus` |
@@ -305,9 +306,9 @@ Allowed values come from `backend/app/enums.py`:
 
 Tests: per column, a bad value raises on PostgreSQL; upgrading from `20261116_0006` with a bad row fails with a clear message.
 
-**Operator check before merge:** the engineer runs the entity-type compatibility report against the real local database and migrates any legacy types. If legacy rows remain when the Compose backend restarts, the migration fails, the backend does not start, and the API that would fix the rows is unreachable.
+**Before merge:** the migration refuses to run if a status column holds a value outside its enum, and the Compose backend applies migrations at startup. The agent reports a query the engineer can run against the real local database to confirm no such rows exist.
 
-**Verify:** full backend suite; frontend suite if the compatibility panel changes.
+**Verify:** full backend suite.
 
 ---
 
@@ -318,8 +319,8 @@ The engineer decides these. Agents do not.
 | ID | Blocks | Question | Recommendation |
 |----|--------|----------|----------------|
 | D1 | #1 | Decided 2026-11-16: mark the campaign's assets `deleting` and commit, delete the files, then delete the campaign row. If a file removal fails, the campaign stays and issuing the delete again completes it. A file that is already missing counts as removed. Deleting the row first and sweeping the storage folder later was rejected: no worker exists to sweep, and the database would hold no record of files still to remove. A campaign-level deleting state with a background worker is deferred; see "Background campaign deletion" in `docs/deferred_design_options.md` | — |
-| D2 | #9 | Model-declared `CHECK` constraints are also enforced in the SQLite tests, and the compatibility tests need legacy entity types to exist. A `CHECK` on `entities.type` also makes the compatibility report permanently empty, while v1 Task 13 still expects that feature | Leave `entities.type` out of #9 for now and constrain only the status columns. Constrain `entities.type` when the compatibility feature is retired |
-| D3 | #8 | The auto-ID callback needs `revision_environment = true`, so plain `alembic revision` would need a running database | Rely on the static naming test in the #7 brief and skip the callback. The naming rule is then enforced by a test, not by generation |
+| D2 | #9 | Model-declared `CHECK` constraints are also enforced in the SQLite tests, and the compatibility tests need legacy entity types to exist. A `CHECK` on `entities.type` also makes the compatibility report permanently empty, while v1 Task 13 still expects that feature | Decided 2026-11-16: leave `entities.type` out of #9 and constrain only the status columns. Constrain `entities.type` when the compatibility feature is retired |
+| D3 | #8 | The auto-ID callback needs `revision_environment = true`, so plain `alembic revision` would need a running database | Decided 2026-11-16: skip the callback and rely on the static naming test from #7. The naming rule is enforced by a test, not by generation |
 
 | D6 | #5 | Decided 2026-11-16: `FOR KEY SHARE`. Both locks close the race; with `FOR SHARE`, two transactions that each cite an asset and then update its row deadlock | — |
 

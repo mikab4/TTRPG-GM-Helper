@@ -308,15 +308,17 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 |---|--------|----------------------|
 | 2 | Complete | `create_campaign` and `update_campaign` roll back on `IntegrityError` and raise `ConflictError`. Every integrity error on these two writes is reported as a duplicate name |
 | 3 | Complete | `create_relationship_type` raises `ConflictError` only when the violated constraint is `uq_relationship_type_definitions_campaign_key`; other integrity errors are re-raised. A PostgreSQL test produces the race for real |
-| 6 | Complete | `backend/tests/test_campaign_delete_postgres.py` covers the three cases and checks that a second campaign is untouched. File removal is not covered; that is #1 |
+| 6 | Complete | `backend/tests/test_campaign_delete_postgres.py` covers the three cases and checks that a second campaign is untouched. File removal is covered by the #1 tests |
 | 7 | Complete | `backend/tests/test_migrations.py` asserts `compare_metadata` returns no differences at `head`. Models and migrations matched, so no whitelist exists. The check does not see `CHECK` constraints, triggers, or functions. A second test, which needs no database, enforces the `YYYYMMDD_NNNN_slug.py` naming, consecutive sequence numbers, and one linear chain |
 | 10 | Complete | Eleven collections on `Campaign`, `Owner`, `Entity`, and `ExtractionJob` use `lazy="select"`. No query needed an explicit `selectinload`. Entity and campaign delete rely on the database cascade; `backend/tests/test_delete_cascade_postgres.py` covers both on PostgreSQL |
 | 11 | Complete | `UUIDPrimaryKeyMixin` defaults to `uuid7` |
 | 13 | Complete | The three published ports are bound to `127.0.0.1`; PostgreSQL stays published for host-side debugging. Reachability from a Windows browser under WSL has not been checked by hand |
 | 5 | Complete | Revision `20261116_0004` adds `FOR KEY SHARE` to the trigger's asset lookup. A concurrency test reproduces the race and a second one shows that two transactions which each cite an asset and then update its row both commit. `FOR SHARE` was measured to deadlock in that case. The lock depends on the delete path taking `FOR UPDATE` before it checks references; a test fails if `_begin_asset_delete` stops doing that |
-| 1 | In Progress | Decided 2026-11-16: mark the campaign's assets `deleting`, remove the files, then delete the campaign row. A failed removal leaves the campaign in place and repeating the delete finishes it. Background deletion is deferred in `docs/deferred_design_options.md` |
-| 8, 9 | Blocked | Each waits on an engineer decision |
-| 4, 12 | Planned | Migrations land one at a time: #12 next, then #4 |
+| 1 | Complete | Decided 2026-11-16: `delete_campaign` marks the campaign's assets `deleting`, removes the files, then deletes the campaign row. A failed removal leaves the campaign in place with a 409, and repeating the delete finishes it. An asset uploaded while the files are being removed also stops the delete with a 409. Background deletion is deferred in `docs/deferred_design_options.md` |
+| 12 | Complete | Revision `20261116_0005` drops both indexes and the models no longer declare them. `uq_sessions_campaign_number` and `uq_relationship_type_definitions_campaign_key` already start with `campaign_id` |
+| 8 | Complete | Decided 2026-11-16: no auto-ID callback. It would make plain `alembic revision` need a running database. The naming test added with #7 enforces the format instead; keep passing `--rev-id YYYYMMDD_NNNN` |
+| 4 | Next | Revision `20261116_0006` |
+| 9 | Planned | Decided 2026-11-16: `CHECK` constraints on the status columns only. `entities.type` stays unconstrained while the entity-type compatibility feature exists. Lands after #4 |
 | 14 | Planned | Optional |
 
 **Not in this task:**
