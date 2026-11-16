@@ -17,7 +17,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, json_document
+from app.enums import RelationshipCertaintyStatus, RelationshipLifecycleStatus, RelationshipVisibilityStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, allowed_values_check, json_document
 
 if TYPE_CHECKING:
     from app.models.campaign import Campaign
@@ -33,6 +34,21 @@ class Relationship(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
             name="ck_entity_relationships_confidence_between_0_and_1",
+        ),
+        allowed_values_check(
+            "lifecycle_status",
+            RelationshipLifecycleStatus,
+            name="ck_entity_relationships_lifecycle_status_allowed",
+        ),
+        allowed_values_check(
+            "visibility_status",
+            RelationshipVisibilityStatus,
+            name="ck_entity_relationships_visibility_status_allowed",
+        ),
+        allowed_values_check(
+            "certainty_status",
+            RelationshipCertaintyStatus,
+            name="ck_entity_relationships_certainty_status_allowed",
         ),
         ForeignKeyConstraint(
             ["source_entity_id", "campaign_id"],

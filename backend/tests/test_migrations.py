@@ -4,6 +4,7 @@ import ast
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,13 +12,23 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, inspect, select, text
+from sqlalchemy import CheckConstraint, Connection, Engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 from alembic import command
 from app.config import Settings
 from app.db import Base
+from app.enums import (
+    ExtractionCandidateStatus,
+    ExtractionJobStatus,
+    ParseStatus,
+    RelationshipCertaintyStatus,
+    RelationshipLifecycleStatus,
+    RelationshipVisibilityStatus,
+    SourceAssetLifecycleStatus,
+    SourceAssetStorageStatus,
+)
 from app.models import (
     AssetParseResult,
     Campaign,
@@ -682,6 +693,239 @@ def test_upgrade_to_20261116_0006_with_duplicate_relationships_fails_listing_the
         )
         assert remaining_relationship_ids == stored_relationship_ids
         assert current_revision == "20261116_0005"
+    finally:
+        command.downgrade(alembic_config, "base")
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        engine.dispose()
+
+
+STATUS_COLUMN_ENUMS: list[tuple[str, str, type[StrEnum]]] = [
+    ("entity_relationships", "lifecycle_status", RelationshipLifecycleStatus),
+    ("entity_relationships", "visibility_status", RelationshipVisibilityStatus),
+    ("entity_relationships", "certainty_status", RelationshipCertaintyStatus),
+    ("source_assets", "lifecycle_status", SourceAssetLifecycleStatus),
+    ("source_assets", "storage_status", SourceAssetStorageStatus),
+    ("source_assets", "parse_status", ParseStatus),
+    ("asset_parse_results", "parse_status", ParseStatus),
+    ("extraction_jobs", "status", ExtractionJobStatus),
+    ("extraction_candidates", "status", ExtractionCandidateStatus),
+]
+STATUS_COLUMN_IDS = [f"{table_name}.{column_name}" for table_name, column_name, _ in STATUS_COLUMN_ENUMS]
+QUOTED_LITERAL_PATTERN = re.compile(r"'([^']*)'")
+
+
+def status_check_constraint_name(table_name: str, column_name: str) -> str:
+    return f"ck_{table_name}_{column_name}_allowed"
+
+
+def read_model_check_constraint_sql_by_name(table_name: str) -> dict[str, str]:
+    return {
+        constraint.name: str(constraint.sqltext)
+        for constraint in Base.metadata.tables[table_name].constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+
+
+def read_database_check_constraint_sql_by_name(connection: Connection, table_name: str) -> dict[str, str]:
+    database_check_constraints = inspect(connection).get_check_constraints(table_name)
+    return {constraint["name"]: constraint["sqltext"] for constraint in database_check_constraints}
+
+
+@pytest.mark.parametrize(("table_name", "column_name", "status_enum"), STATUS_COLUMN_ENUMS, ids=STATUS_COLUMN_IDS)
+def test_model_status_check_constraint_allows_exactly_the_enum_values(
+    table_name: str,
+    column_name: str,
+    status_enum: type[StrEnum],
+) -> None:
+    # Arrange
+    model_check_sql_by_name = read_model_check_constraint_sql_by_name(table_name)
+
+    # Act
+    status_check_sql = model_check_sql_by_name[status_check_constraint_name(table_name, column_name)]
+
+    # Assert
+    assert status_check_sql.startswith(f"{column_name} IN (")
+    assert set(QUOTED_LITERAL_PATTERN.findall(status_check_sql)) == {member.value for member in status_enum}
+
+
+def test_migrated_check_constraints_match_models_at_head(postgres_engine: Engine) -> None:
+    # Arrange
+    table_names = sorted(Base.metadata.tables)
+
+    # Act
+    with postgres_engine.connect() as connection:
+        database_check_sql_by_table = {
+            table_name: read_database_check_constraint_sql_by_name(connection, table_name) for table_name in table_names
+        }
+    model_check_sql_by_table = {
+        table_name: read_model_check_constraint_sql_by_name(table_name) for table_name in table_names
+    }
+
+    # Assert
+    assert {table_name: set(checks) for table_name, checks in database_check_sql_by_table.items()} == {
+        table_name: set(checks) for table_name, checks in model_check_sql_by_table.items()
+    }
+    for table_name, column_name, _ in STATUS_COLUMN_ENUMS:
+        constraint_name = status_check_constraint_name(table_name, column_name)
+        assert set(QUOTED_LITERAL_PATTERN.findall(database_check_sql_by_table[table_name][constraint_name])) == set(
+            QUOTED_LITERAL_PATTERN.findall(model_check_sql_by_table[table_name][constraint_name])
+        ), constraint_name
+
+
+def store_one_row_in_every_status_table(db_session: DBSession) -> dict[str, object]:
+    campaign = Campaign(owner=Owner(email="gm@example.com"), name="Campaign A")
+    source_asset = build_source_asset(campaign=campaign)
+    parse_result = AssetParseResult(
+        asset=source_asset,
+        parser_kind="text",
+        parser_version="1",
+        source_checksum=source_asset.checksum,
+        parse_status="succeeded",
+    )
+    extraction_job = ExtractionJob(campaign=campaign, source_asset=source_asset, status="completed", extractor_kind="rules")
+    extraction_candidate = ExtractionCandidate(
+        campaign=campaign,
+        extraction_job=extraction_job,
+        candidate_type="entity",
+        payload={"name": "Tarannon"},
+        status="pending",
+    )
+    source_entity = Entity(campaign=campaign, type="person", name="Tarannon")
+    target_entity = Entity(campaign=campaign, type="person", name="Civu")
+    relationship = Relationship(
+        campaign=campaign,
+        source_entity=source_entity,
+        target_entity=target_entity,
+        relationship_type="knows",
+    )
+    db_session.add_all([campaign, parse_result, extraction_candidate, relationship])
+    db_session.commit()
+    return {
+        "entity_relationships": relationship.id,
+        "source_assets": source_asset.id,
+        "asset_parse_results": parse_result.id,
+        "extraction_jobs": extraction_job.id,
+        "extraction_candidates": extraction_candidate.id,
+    }
+
+
+@pytest.mark.parametrize(("table_name", "column_name", "status_enum"), STATUS_COLUMN_ENUMS, ids=STATUS_COLUMN_IDS)
+def test_status_column_rejects_value_outside_its_enum(
+    postgres_engine: Engine,
+    table_name: str,
+    column_name: str,
+    status_enum: type[StrEnum],
+) -> None:
+    with DBSession(postgres_engine) as db_session:
+        # Arrange
+        stored_row_ids_by_table = store_one_row_in_every_status_table(db_session)
+
+        # Act / Assert
+        with pytest.raises(IntegrityError, match=status_check_constraint_name(table_name, column_name)):
+            db_session.execute(
+                text(f"UPDATE {table_name} SET {column_name} = 'archived' WHERE id = :row_id"),
+                {"row_id": stored_row_ids_by_table[table_name]},
+            )
+
+        db_session.rollback()
+
+
+def test_20261116_0007_adds_status_check_constraints_and_downgrade_removes_them(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    alembic_config = build_alembic_config()
+    previous_revision = ScriptDirectory.from_config(alembic_config).get_revision("20261116_0007").down_revision
+    status_constraint_names_by_table: dict[str, set[str]] = {}
+    for table_name, column_name, _ in STATUS_COLUMN_ENUMS:
+        status_constraint_names_by_table.setdefault(table_name, set()).add(
+            status_check_constraint_name(table_name, column_name)
+        )
+
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            upgraded_check_names_by_table = {
+                table_name: set(read_database_check_constraint_sql_by_name(connection, table_name))
+                for table_name in status_constraint_names_by_table
+            }
+
+        # Act
+        command.downgrade(alembic_config, previous_revision)
+
+        with engine.connect() as connection:
+            downgraded_check_names_by_table = {
+                table_name: set(read_database_check_constraint_sql_by_name(connection, table_name))
+                for table_name in status_constraint_names_by_table
+            }
+
+    # Assert
+    for table_name, status_constraint_names in status_constraint_names_by_table.items():
+        assert status_constraint_names <= upgraded_check_names_by_table[table_name]
+        assert status_constraint_names.isdisjoint(downgraded_check_names_by_table[table_name])
+
+
+def test_upgrade_to_20261116_0007_with_out_of_range_statuses_fails_listing_them_and_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    engine = create_test_engine(postgres_test_settings)
+    alembic_config = build_alembic_config()
+
+    reset_public_schema(engine)
+    monkeypatch.setenv("DATABASE_URL", postgres_test_settings.database_url)
+
+    try:
+        command.upgrade(alembic_config, "20261116_0006")
+
+        with DBSession(engine) as db_session:
+            campaign = Campaign(owner=Owner(email="gm@example.com"), name="Campaign A")
+            parsed_assets = [build_source_asset(campaign=campaign) for _ in range(2)]
+            for parsed_asset in parsed_assets:
+                parsed_asset.parse_status = "parsed"
+            queued_job = ExtractionJob(
+                campaign=campaign,
+                source_asset=parsed_assets[0],
+                status="queued",
+                extractor_kind="rules",
+            )
+            db_session.add_all([campaign, *parsed_assets, queued_job])
+            db_session.commit()
+
+        with engine.connect() as connection:
+            check_names_before_upgrade = {
+                table_name: set(read_database_check_constraint_sql_by_name(connection, table_name))
+                for table_name in ("source_assets", "extraction_jobs")
+            }
+
+        # Act
+        with pytest.raises(RuntimeError) as upgrade_error:
+            command.upgrade(alembic_config, "20261116_0007")
+
+        with engine.connect() as connection:
+            stored_parse_statuses = list(connection.execute(text("SELECT parse_status FROM source_assets")).scalars())
+            stored_job_statuses = list(connection.execute(text("SELECT status FROM extraction_jobs")).scalars())
+            check_names_after_failed_upgrade = {
+                table_name: set(read_database_check_constraint_sql_by_name(connection, table_name))
+                for table_name in ("source_assets", "extraction_jobs")
+            }
+            current_revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+        # Assert
+        assert str(upgrade_error.value) == (
+            "Cannot add status CHECK constraints: status columns hold values outside their allowed set. "
+            "Fix those rows and rerun the migration. Nothing was changed.\n"
+            "source_assets.parse_status: 'parsed' in 2 rows (allowed: 'pending', 'running', 'succeeded', 'failed')\n"
+            "extraction_jobs.status: 'queued' in 1 row (allowed: 'pending', 'running', 'completed', 'failed')"
+        )
+        assert stored_parse_statuses == ["parsed", "parsed"]
+        assert stored_job_statuses == ["queued"]
+        assert check_names_after_failed_upgrade == check_names_before_upgrade
+        assert current_revision == "20261116_0006"
     finally:
         command.downgrade(alembic_config, "base")
         monkeypatch.delenv("DATABASE_URL", raising=False)

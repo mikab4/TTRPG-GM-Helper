@@ -16,7 +16,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, UUIDPrimaryKeyMixin, json_document, utcnow
+from app.enums import ExtractionCandidateStatus, ExtractionJobStatus
+from app.models.base import Base, UUIDPrimaryKeyMixin, allowed_values_check, json_document, utcnow
 
 if TYPE_CHECKING:
     from app.models.campaign import Campaign
@@ -33,6 +34,7 @@ class ExtractionJob(UUIDPrimaryKeyMixin, Base):
             ondelete="CASCADE",
             name="fk_extraction_jobs_source_asset_campaign",
         ),
+        allowed_values_check("status", ExtractionJobStatus, name="ck_extraction_jobs_status_allowed"),
         Index("ix_extraction_jobs_campaign_id", "campaign_id"),
         Index(
             "ix_extraction_jobs_source_asset_id_campaign_id",
@@ -83,6 +85,7 @@ class ExtractionCandidate(UUIDPrimaryKeyMixin, Base):
             ondelete="CASCADE",
             name="fk_extraction_candidates_job_campaign",
         ),
+        allowed_values_check("status", ExtractionCandidateStatus, name="ck_extraction_candidates_status_allowed"),
         Index("ix_extraction_candidates_campaign_id", "campaign_id"),
         Index(
             "ix_extraction_candidates_extraction_job_id_campaign_id",

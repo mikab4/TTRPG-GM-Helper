@@ -16,7 +16,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, UUIDPrimaryKeyMixin, json_document, utcnow
+from app.enums import ParseStatus
+from app.models.base import Base, UUIDPrimaryKeyMixin, allowed_values_check, json_document, utcnow
 
 if TYPE_CHECKING:
     from app.models.source_asset import SourceAsset
@@ -38,6 +39,7 @@ class AssetParseResult(UUIDPrimaryKeyMixin, Base):
             "source_checksum",
             name="uq_asset_parse_results_asset_parser_checksum",
         ),
+        allowed_values_check("parse_status", ParseStatus, name="ck_asset_parse_results_parse_status_allowed"),
         Index("ix_asset_parse_results_asset_id", "asset_id"),
     )
 

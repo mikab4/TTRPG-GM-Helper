@@ -17,8 +17,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.enums import SourceAssetLifecycleStatus, SourceAssetStorageStatus
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, json_document
+from app.enums import ParseStatus, SourceAssetLifecycleStatus, SourceAssetStorageStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, allowed_values_check, json_document
 
 if TYPE_CHECKING:
     from app.models.asset_parse_result import AssetParseResult
@@ -39,6 +39,17 @@ class SourceAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
             name="fk_source_assets_session_campaign",
         ),
+        allowed_values_check(
+            "lifecycle_status",
+            SourceAssetLifecycleStatus,
+            name="ck_source_assets_lifecycle_status_allowed",
+        ),
+        allowed_values_check(
+            "storage_status",
+            SourceAssetStorageStatus,
+            name="ck_source_assets_storage_status_allowed",
+        ),
+        allowed_values_check("parse_status", ParseStatus, name="ck_source_assets_parse_status_allowed"),
         Index("ix_source_assets_campaign_id", "campaign_id"),
         Index("ix_source_assets_session_id_campaign_id", "session_id", "campaign_id"),
     )
