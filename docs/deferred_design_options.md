@@ -42,6 +42,16 @@ These are not current technical debt. Reconsider an option only when its trigger
 
 **Consider:** First add schema-level contract coverage that detects new asset references without matching deletion coordination. Consider a reference registry only if explicit foreign keys and checks remain unmanageable; a polymorphic registry would otherwise duplicate ownership information and weaken relational clarity.
 
+## Background campaign deletion
+
+**Trigger:** Original files move to remote storage, where file removal fails often enough that users see campaign-delete errors, or deleting a campaign with many assets takes long enough to make the request slow.
+
+**Decision required:** Decide whether campaign deletion becomes a background operation, and what runs it. Nothing schedules `backend/app/maintenance/retry_asset_deletions.py` today; it is run by hand.
+
+**Current default:** Campaign delete marks the campaign's assets `deleting`, removes their files during the request, and then deletes the campaign row. If a file cannot be removed, the campaign stays and the user repeats the delete to finish it (v1 Task 9, fix #1).
+
+**Consider:** Give `Campaign` its own deleting state: a new column and migration, every campaign query hides deleting campaigns, and a scheduled worker removes the files and then the row. The campaign disappears for the user at once and failures are retried without them. Decide this together with "Hosted processing infrastructure", which covers the worker.
+
 ## Hosted processing infrastructure
 
 **Trigger:** The app is about to be hosted for more than one user, one user's slow parsing or extraction job delays other users, or the PostgreSQL job row and background task can no longer keep up.

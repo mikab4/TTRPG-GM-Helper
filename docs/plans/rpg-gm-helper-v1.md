@@ -314,7 +314,8 @@ Fix the problems found in the 2026-11-16 code and security review before new tab
 | 11 | Complete | `UUIDPrimaryKeyMixin` defaults to `uuid7` |
 | 13 | Complete | The three published ports are bound to `127.0.0.1`; PostgreSQL stays published for host-side debugging. Reachability from a Windows browser under WSL has not been checked by hand |
 | 5 | Complete | Revision `20261116_0004` adds `FOR KEY SHARE` to the trigger's asset lookup. A concurrency test reproduces the race and a second one shows that two transactions which each cite an asset and then update its row both commit. `FOR SHARE` was measured to deadlock in that case. The lock depends on the delete path taking `FOR UPDATE` before it checks references; a test fails if `_begin_asset_delete` stops doing that |
-| 1, 8, 9 | Blocked | Each waits on an engineer decision |
+| 1 | In Progress | Decided 2026-11-16: mark the campaign's assets `deleting`, remove the files, then delete the campaign row. A failed removal leaves the campaign in place and repeating the delete finishes it. Background deletion is deferred in `docs/deferred_design_options.md` |
+| 8, 9 | Blocked | Each waits on an engineer decision |
 | 4, 12 | Planned | Migrations land one at a time: #12 next, then #4 |
 | 14 | Planned | Optional |
 

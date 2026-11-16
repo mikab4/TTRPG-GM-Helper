@@ -23,7 +23,8 @@ Last updated 2026-11-16.
 | #11 | `task9/uuid7` | Merged to `main` |
 | #13 | `task9/compose-bind` | Merged to `main`. The engineer's browser check under WSL is still open |
 | #5 | `task9/lane-1-trigger-lock` | Implemented with `FOR KEY SHARE` (D6 decided) and reviewed; waiting for the engineer's merge |
-| #1, #8, #9 | — | Blocked on D1, D3, D2 |
+| #1 | `task9/campaign-delete-files` | In progress (D1 decided) |
+| #8, #9 | — | Blocked on D3, D2 |
 | #12, #4 | — | Wait for #5 on `main` |
 | #14 | — | Optional; not started |
 
@@ -316,7 +317,7 @@ The engineer decides these. Agents do not.
 
 | ID | Blocks | Question | Recommendation |
 |----|--------|----------|----------------|
-| D1 | #1 | How does campaign delete remove files, and what happens when a file removal fails? | Mark the campaign's assets `deleting` and commit, delete the files, then delete the campaign row. If a file removal fails, the campaign stays and issuing the delete again completes it. This needs no new column and no change to the retry job |
+| D1 | #1 | Decided 2026-11-16: mark the campaign's assets `deleting` and commit, delete the files, then delete the campaign row. If a file removal fails, the campaign stays and issuing the delete again completes it. A file that is already missing counts as removed. Deleting the row first and sweeping the storage folder later was rejected: no worker exists to sweep, and the database would hold no record of files still to remove. A campaign-level deleting state with a background worker is deferred; see "Background campaign deletion" in `docs/deferred_design_options.md` | — |
 | D2 | #9 | Model-declared `CHECK` constraints are also enforced in the SQLite tests, and the compatibility tests need legacy entity types to exist. A `CHECK` on `entities.type` also makes the compatibility report permanently empty, while v1 Task 13 still expects that feature | Leave `entities.type` out of #9 for now and constrain only the status columns. Constrain `entities.type` when the compatibility feature is retired |
 | D3 | #8 | The auto-ID callback needs `revision_environment = true`, so plain `alembic revision` would need a running database | Rely on the static naming test in the #7 brief and skip the callback. The naming rule is then enforced by a test, not by generation |
 
