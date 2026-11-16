@@ -417,6 +417,44 @@ def test_delete_campaign_keeps_campaign_when_asset_is_added_during_file_removal(
         assert assert_session.get(SourceAsset, added_asset_ids[0]).lifecycle_status == "active"
 
 
+def test_delete_campaign_completes_when_retry_job_finalizes_asset_whose_removal_failed(
+    db_session_factory,
+    campaign_factory,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    asset_storage_root = tmp_path / "asset-storage"
+    upload_storage = build_recording_asset_storage(storage_root=asset_storage_root)
+    stored_campaign = campaign_factory(name="Iron Vale")
+
+    class RetryJobWinsRaceAssetStorage(RecordingAssetStorage):
+        def delete(self, *, storage_key: str) -> None:
+            super().delete(storage_key=storage_key)
+            with db_session_factory() as retry_job_session:
+                finalized_asset = retry_job_session.scalars(
+                    select(SourceAsset).where(SourceAsset.storage_key == storage_key)
+                ).one()
+                retry_job_session.delete(finalized_asset)
+                retry_job_session.commit()
+            raise OSError("storage delete timed out")
+
+    racing_storage = RetryJobWinsRaceAssetStorage(delegate_storage=LocalAssetStorage(storage_root=asset_storage_root))
+
+    with db_session_factory() as db_session:
+        finalized_asset = _upload_asset(
+            db_session, campaign_id=stored_campaign.id, filename="map.txt", asset_storage=upload_storage
+        )
+
+        # Act
+        campaign_service.delete_campaign(db_session, stored_campaign.id, asset_storage=racing_storage)
+
+    # Assert
+    assert not (asset_storage_root / finalized_asset.storage_key).exists()
+    with db_session_factory() as assert_session:
+        assert assert_session.get(Campaign, stored_campaign.id) is None
+        assert _count_campaign_assets(assert_session, stored_campaign.id) == 0
+
+
 def test_delete_campaign_api_removes_uploaded_files(
     api_request,
     campaign_factory,

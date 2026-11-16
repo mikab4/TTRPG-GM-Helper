@@ -326,15 +326,20 @@ def remove_campaign_asset_files(
         )
         db_session.commit()
 
+    recorded_failure = False
     for failed_asset_id in failed_asset_ids:
-        _record_delete_failure(
-            db_session,
-            campaign_id=campaign_id,
-            asset_id=failed_asset_id,
-            storage_status=SourceAssetStorageStatus.AVAILABLE,
-            error_message=ASSET_FILE_DELETE_FAILURE_MESSAGE,
-        )
-    if failed_asset_ids:
+        try:
+            _record_delete_failure(
+                db_session,
+                campaign_id=campaign_id,
+                asset_id=failed_asset_id,
+                storage_status=SourceAssetStorageStatus.AVAILABLE,
+                error_message=ASSET_FILE_DELETE_FAILURE_MESSAGE,
+            )
+        except NotFoundError:
+            continue
+        recorded_failure = True
+    if recorded_failure:
         raise ConflictError(CAMPAIGN_ASSET_FILES_DELETE_FAILURE_MESSAGE)
 
 
