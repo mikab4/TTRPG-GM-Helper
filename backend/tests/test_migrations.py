@@ -493,6 +493,49 @@ def test_20261116_0004_locks_cited_source_asset_with_key_share_and_downgrade_rem
     assert ROW_LOCK_CLAUSE_PATTERN.findall(downgraded_function_source) == []
 
 
+DUPLICATE_CAMPAIGN_ID_INDEX_NAMES_BY_TABLE = {
+    "sessions": "ix_sessions_campaign_id",
+    "relationship_type_definitions": "ix_relationship_type_definitions_campaign_id",
+}
+
+
+def read_index_columns_by_name(connection: Connection, table_name: str) -> dict[str, list[str]]:
+    return {index["name"]: index["column_names"] for index in inspect(connection).get_indexes(table_name)}
+
+
+def test_20261116_0005_drops_duplicate_campaign_id_indexes_and_downgrade_restores_them(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Arrange
+    alembic_config = build_alembic_config()
+    previous_revision = ScriptDirectory.from_config(alembic_config).get_revision("20261116_0005").down_revision
+
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            upgraded_index_names_by_table = {
+                table_name: set(read_index_columns_by_name(connection, table_name))
+                for table_name in DUPLICATE_CAMPAIGN_ID_INDEX_NAMES_BY_TABLE
+            }
+
+        # Act
+        command.downgrade(alembic_config, previous_revision)
+
+        with engine.connect() as connection:
+            downgraded_index_columns_by_table = {
+                table_name: read_index_columns_by_name(connection, table_name)
+                for table_name in DUPLICATE_CAMPAIGN_ID_INDEX_NAMES_BY_TABLE
+            }
+
+    # Assert
+    for table_name, index_name in DUPLICATE_CAMPAIGN_ID_INDEX_NAMES_BY_TABLE.items():
+        assert index_name not in upgraded_index_names_by_table[table_name]
+        assert downgraded_index_columns_by_table[table_name][index_name] == ["campaign_id"]
+
+
 def test_upgrade_from_20260410_backfills_legacy_source_document_into_source_asset_and_parse_result(
     monkeypatch: pytest.MonkeyPatch,
     postgres_test_settings: Settings,

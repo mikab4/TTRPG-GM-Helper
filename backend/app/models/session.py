@@ -4,7 +4,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Text, UniqueConstraint, Uuid
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -23,7 +23,6 @@ class Session(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "session_number IS NOT NULL OR session_label IS NOT NULL",
             name="ck_sessions_number_or_label",
         ),
-        Index("ix_sessions_campaign_id", "campaign_id"),
     )
 
     campaign_id: Mapped[UUID] = mapped_column(

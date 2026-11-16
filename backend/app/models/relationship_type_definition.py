@@ -7,7 +7,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
-    Index,
     Text,
     UniqueConstraint,
     Uuid,
@@ -43,10 +42,6 @@ class RelationshipTypeDefinition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             )
             """,
             name="ck_relationship_type_definitions_direction_labels",
-        ),
-        Index(
-            "ix_relationship_type_definitions_campaign_id",
-            "campaign_id",
         ),
     )
 
