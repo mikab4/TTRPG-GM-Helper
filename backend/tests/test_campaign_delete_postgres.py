@@ -29,8 +29,6 @@ from tests.factories import (
 )
 from tests.pg_test_support import upgraded_postgres_test_engine
 
-# The first three tests store no files, so they cover the database cascade alone.
-
 
 @pytest.fixture
 def postgres_engine(

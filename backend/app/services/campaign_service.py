@@ -14,6 +14,10 @@ from app.services.asset_storage import AssetStorage
 from app.services.campaign_lookup import get_campaign_or_raise
 from app.services.errors import ConflictError, NotFoundError
 
+CAMPAIGN_ASSETS_ADDED_DURING_DELETE_MESSAGE = (
+    "Assets were added while the campaign was being deleted. Delete the campaign again to finish."
+)
+
 
 def create_campaign(db_session: Session, campaign_create: CampaignCreate) -> Campaign:
     if db_session.get(Owner, campaign_create.owner_id) is None:
@@ -86,11 +90,6 @@ def update_campaign(
         raise ConflictError("Campaign name already exists for this owner.") from exc
     db_session.refresh(stored_campaign)
     return stored_campaign
-
-
-CAMPAIGN_ASSETS_ADDED_DURING_DELETE_MESSAGE = (
-    "Assets were added while the campaign was being deleted. Delete the campaign again to finish."
-)
 
 
 def delete_campaign(
