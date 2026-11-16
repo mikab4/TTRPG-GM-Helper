@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import ast
+import re
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DBSession
 
 from alembic import command
 from app.config import Settings
+from app.db import Base
 from app.models import (
     AssetParseResult,
     Campaign,
@@ -42,6 +50,94 @@ EXPECTED_TABLES = {
     "entity_relationships",
     "relationship_type_definitions",
 }
+
+ALEMBIC_VERSIONS_DIRECTORY = Path(__file__).resolve().parent.parent / "alembic" / "versions"
+MIGRATION_FILENAME_PATTERN = re.compile(r"^(?P<revision>(?P<date>\d{8})_(?P<sequence>\d{4}))_[a-z0-9]+(?:_[a-z0-9]+)*\.py$")
+
+
+def test_models_match_migrated_schema_at_head(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_test_settings: Settings,
+) -> None:
+    # Same comparison `alembic check` runs. Keep `opts` in step with the
+    # `context.configure(...)` options in `backend/alembic/env.py`.
+    # Autogenerate does not compare CHECK constraints, triggers, or functions,
+    # so this test cannot catch drift in those.
+    with upgraded_postgres_test_engine(
+        monkeypatch=monkeypatch,
+        settings=postgres_test_settings,
+    ) as engine:
+        with engine.connect() as connection:
+            migration_context = MigrationContext.configure(connection, opts={"compare_type": True})
+            schema_differences = compare_metadata(migration_context, Base.metadata)
+
+    assert schema_differences == []
+
+
+def test_migration_files_follow_revision_naming_and_form_one_linear_chain() -> None:
+    migration_paths = sorted(path for path in ALEMBIC_VERSIONS_DIRECTORY.iterdir() if path.is_file())
+    assert migration_paths, f"No migration files found in {ALEMBIC_VERSIONS_DIRECTORY}"
+
+    badly_named_files = [path.name for path in migration_paths if not MIGRATION_FILENAME_PATTERN.match(path.name)]
+    assert badly_named_files == [], "Migration files must be named YYYYMMDD_NNNN_slug.py"
+
+    migrations_by_sequence: dict[int, list[tuple[str, str, str | None]]] = {}
+    for path in migration_paths:
+        filename_match = MIGRATION_FILENAME_PATTERN.match(path.name)
+        assert filename_match is not None
+        datetime.strptime(filename_match["date"], "%Y%m%d")
+        declared_revision, declared_down_revision = read_revision_identifiers(path)
+
+        assert declared_revision == filename_match["revision"], (
+            f"{path.name}: revision {declared_revision!r} must equal the file name prefix {filename_match['revision']!r}"
+        )
+        migrations_by_sequence.setdefault(int(filename_match["sequence"]), []).append(
+            (path.name, declared_revision, declared_down_revision)
+        )
+
+    repeated_sequences = {
+        sequence: [filename for filename, _, _ in migrations]
+        for sequence, migrations in migrations_by_sequence.items()
+        if len(migrations) > 1
+    }
+    assert repeated_sequences == {}, "Migration sequence numbers must not repeat"
+    assert sorted(migrations_by_sequence) == list(range(1, len(migrations_by_sequence) + 1)), (
+        "Migration sequence numbers must be consecutive starting at 0001"
+    )
+
+    previous_revision: str | None = None
+    for sequence in sorted(migrations_by_sequence):
+        [(filename, declared_revision, declared_down_revision)] = migrations_by_sequence[sequence]
+        assert declared_down_revision == previous_revision, (
+            f"{filename}: down_revision {declared_down_revision!r} must be the previous revision {previous_revision!r}"
+        )
+        previous_revision = declared_revision
+
+    assert ScriptDirectory.from_config(build_alembic_config()).get_heads() == [previous_revision]
+
+
+def read_revision_identifiers(migration_path: Path) -> tuple[str, str | None]:
+    declared_values: dict[str, object] = {}
+    for statement in ast.parse(migration_path.read_text()).body:
+        if isinstance(statement, ast.Assign):
+            targets, value = statement.targets, statement.value
+        elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+            targets, value = [statement.target], statement.value
+        else:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in {"revision", "down_revision"}:
+                declared_values[target.id] = ast.literal_eval(value)
+
+    assert "revision" in declared_values, f"{migration_path.name}: no module-level `revision` assignment"
+    assert "down_revision" in declared_values, f"{migration_path.name}: no module-level `down_revision` assignment"
+    declared_revision = declared_values["revision"]
+    declared_down_revision = declared_values["down_revision"]
+    assert isinstance(declared_revision, str), f"{migration_path.name}: `revision` must be a string"
+    assert declared_down_revision is None or isinstance(declared_down_revision, str), (
+        f"{migration_path.name}: `down_revision` must be a single revision string or None"
+    )
+    return declared_revision, declared_down_revision
 
 
 def test_alembic_upgrade_head_creates_expected_tables(
